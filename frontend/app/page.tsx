@@ -67,7 +67,19 @@ export default function Home() {
   const currentChain = chains.find((c) => c.id === chainId);
   const [mounted, setMounted] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+
+  // EIP-6963 surfaces each installed wallet as its own connector. Dedupe by
+  // name and drop the generic "Injected" fallback when named wallets exist, so
+  // the picker lets you choose (e.g. MetaMask on Sepolia vs a local Hardhat wallet).
+  const seenWallets = new Set<string>();
+  const walletConnectors = connectors.filter((c) => {
+    if (c.name === "Injected" && connectors.length > 1) return false;
+    if (seenWallets.has(c.name)) return false;
+    seenWallets.add(c.name);
+    return true;
+  });
 
   // Switch through the *connected* wagmi connector (not the ambiguous
   // window.ethereum, which can point at a different installed wallet). Falls
@@ -131,6 +143,13 @@ export default function Home() {
     window.addEventListener("click", close, { capture: true, once: true });
     return () => window.removeEventListener("click", close, { capture: true });
   }, [networkOpen]);
+
+  useEffect(() => {
+    if (!walletOpen) return;
+    const close = () => setWalletOpen(false);
+    window.addEventListener("click", close, { capture: true, once: true });
+    return () => window.removeEventListener("click", close, { capture: true });
+  }, [walletOpen]);
 
   const TABS = [
     { id: "lp-auth",      label: "LP — Authorize Strike Range" },
@@ -220,14 +239,35 @@ export default function Home() {
               <div className="relative">
                 <button
                   onClick={() => {
-                    const c = connectors.find(c => c.type === "injected") ?? connectors[0];
-                    if (c) connect({ connector: c });
+                    // Single wallet → connect directly; multiple → show picker
+                    if (walletConnectors.length === 1) {
+                      connect({ connector: walletConnectors[0] });
+                    } else {
+                      setWalletOpen((o) => !o);
+                    }
                   }}
-                  disabled={isPending || connectors.length === 0}
+                  disabled={isPending || walletConnectors.length === 0}
                   className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
                   {isPending ? "Connecting…" : "Connect Wallet"}
                 </button>
+                {walletOpen && walletConnectors.length > 1 && (
+                  <div className="absolute right-0 mt-1 w-52 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                    {walletConnectors.map((c) => (
+                      <button
+                        key={c.uid}
+                        onClick={() => { setWalletOpen(false); connect({ connector: c }); }}
+                        className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
+                      >
+                        {c.icon && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.icon} alt="" className="w-4 h-4 rounded" />
+                        )}
+                        <span>{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {error && (
                   <div className="absolute right-0 mt-1 text-xs text-red-400 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 z-10 max-w-60">
                     {error.message}
