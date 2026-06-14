@@ -23,11 +23,13 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 
 ## 🚀 The Thesis
 
-While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer the strategies retail traders actually want: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, or buying butterflies to express a range-bound view cheaply. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain. Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity that retail users cannot provide.
+While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer many strategies retail traders have been increasingly investing in: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, buying butterflies to express a range-bound view on volatility, etc. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain: Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity.
 
-- Liquidity fragmentation across strikes and expiries is remediated by Aqua's non-custodial LP, until a buyer is matched. Makers can offer liquidity across a range of strikes and expiries, increasing net liquidity.
-- Collateral lockup in LPs, and forfeited dividend yield — which is not a problem for standard options writers — is also removed by Aqua's non-custodial LP.
-- Standard options markets work because broker-dealers delta-hedge their books against the spot market, continuously arbitraging away mispricings between options and the underlying. DeFi has had no equivalent. Uniswap and Chainlink offer:
+Smile attempts to 
+- Use Aqua's non-custodial LP to remediate:
+    * Liquidity fragmentation across strikes and expiries, until a buyer is matched. Makers can offer liquidity across a range of strikes and expiries, increasing net liquidity.
+    * Collateral lockup in LPs, and forfeited dividend yield — which is not a limitation of standard options writers — is also removed by Aqua's non-custodial LP.
+- Standard options markets work because broker-dealers delta-hedge their books against the spot market.  Smile attempts to use the trading and settlement functionality provided by Uniswap and Chainlink to allow clever LPs and arbitrageurs to continuously arbitraging away mispricings between options and the underlying. Specifically:
   - Fast trading and premium transfer via Uniswap Trading API
   - Vol surface repricing post-trade via Uniswap v4 Hooks across strikes and expiries
   - Options payoff settlement and redemption via Chainlink CRE
@@ -164,7 +166,7 @@ sequenceDiagram
 
     Holder->>Frontend: Click Close (balance > 0 detected via optionTokens lookup)
     Holder->>Vault: close(optionToken, lp, amount)
-    Vault->>Vault: collateralToRelease = lockedCollateral × amount / totalSupply
+    Vault->>Vault: collateralToRelease = lockedCollateral * amount / totalSupply
     Vault->>Vault: OptionToken.burn(holder, amount)
     Vault->>LP: safeTransfer(collateralToken, lp, collateralToRelease)
     Vault->>Hook: bumpSigma(isBuy=false)
@@ -186,13 +188,13 @@ sequenceDiagram
     Note over Arb: Observes σ_global < market IV<br/>(options underpriced)
     Arb->>Vault: buy(authId, K, S, arb, amount, USDC)
     Note over Vault: σ_global bumped up
-    Arb->>UniPool: Short ETH × Δ to delta-hedge position
+    Arb->>UniPool: Short ETH * delta to delta-hedge position
     Note over Arb: Holds delta-neutral options position
     Note over Arb: σ_global rises toward market IV
     Arb->>Vault: close(optionToken, lp, amount)
     Note over Vault: σ_global decremented
-    Arb->>UniPool: Unwind hedge — buy ETH × Δ
-    Note over Arb: Profit = (σ_market − σ_entry) × vega<br/>LP: earns premium + gets collateral back
+    Arb->>UniPool: Unwind hedge — buy ETH * delta
+    Note over Arb: Profit = (sigma_market - sigma_entry) * vega. LP earns premium + gets collateral back
 ```
 
 ### 5. Secondary Market Swap (Uniswap v4)
@@ -209,7 +211,7 @@ sequenceDiagram
     Seller->>Pool: swap(OptionToken → USDC)
     Pool->>Hook: beforeSwap(params, hookData)
     Hook->>Oracle: fetch S
-    Note over Hook: Veto if |P_exec − P_fair| > 5%
+    Note over Hook: Veto if |P_exec - P_fair| > 5%
     Hook-->>Pool: ✓ OK
     Pool->>Pool: OptionToken transfers to buyer
     Pool->>Hook: afterSwap(params)
@@ -236,7 +238,7 @@ sequenceDiagram
     CRE->>Settlement: settleSeries(seriesId, S_final)
     Note over Settlement: settled=true, S_final recorded
     Holder->>Settlement: redeem(seriesId, amount)
-    Note over Settlement: ITM: payout=(S_final−K)×amount; OTM: 0
+    Note over Settlement: ITM payout=(S_final-K)*amount, OTM=0
     Settlement->>Holder: safeTransfer — payout
     LP->>Settlement: reclaimCollateral(seriesId)
     Settlement->>LP: safeTransfer — remainder
