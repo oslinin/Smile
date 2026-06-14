@@ -95,6 +95,27 @@ DON fetches $n$ prices from Binance, Coinbase, Kraken; trims outliers; writes tr
 
 ## 🔄 Flow Diagrams
 
+### 0. System Overview
+
+```mermaid
+sequenceDiagram
+    participant Trader
+    participant Frontend
+    participant SwapVM as SwapVM (OptionPricingEngine)
+    participant Aqua as 1inch Aqua (AquaCollateralVault)
+    participant Maker as Maker (LP Wallet)
+
+    Trader->>Frontend: Select strike & expiry
+    Frontend->>SwapVM: quote(S, K, T, σ)
+    SwapVM-->>Frontend: Bid / Ask
+    Frontend-->>Trader: Option matrix
+    Trader->>Aqua: buy(strike, amount)
+    Aqua->>SwapVM: validate price
+    Aqua->>Maker: pull collateral JIT
+    Aqua->>Maker: transfer premium
+    Aqua-->>Trader: OptionToken minted
+```
+
 ### 1. Range Authorization (LP)
 
 The LP authorizes a strike range from one collateral pool. No collateral moves at this stage — it stays in the LP's wallet earning yield. The LP also pre-approves the vault to spend up to `maxCollateral` JIT.
