@@ -5,9 +5,15 @@ ANVIL_PID_FILE=/tmp/anvil-options.pid
 NEXT_PID_FILE=/tmp/next-options.pid
 ENV_FILE="$(dirname "$0")/frontend/.env.local"
 
-# Anvil default account 0
+# Anvil default account 0 (LP / deployer) and account 1 (buyer)
 DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 DEPLOYER_ADDR=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+BUYER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+BUYER_ADDR=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
+# Canonical mainnet token addresses (used when forking)
+WETH_MAINNET=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+USDC_MAINNET=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
 
 stop_existing() {
   for pid_file in "$ANVIL_PID_FILE" "$NEXT_PID_FILE"; do
@@ -73,6 +79,23 @@ DEPLOY_OUT=$(PRIVATE_KEY=$DEPLOYER_KEY forge script script/Deploy.s.sol:Deploy \
 
 echo "$DEPLOY_OUT" | grep "NEXT_PUBLIC_"
 
+# ── 3b. Fund fork accounts (forge `deal` cheatcodes do NOT broadcast) ─────────
+# On a mainnet fork the deploy script can't move real tokens, so fund here with
+# real txs: wrap ETH→WETH for collateral, and set USDC balances via storage.
+if [ -n "${FORK_URL:-}" ]; then
+  echo "Funding fork accounts (WETH wrap + USDC storage) …"
+  for pair in "$DEPLOYER_ADDR:$DEPLOYER_KEY" "$BUYER_ADDR:$BUYER_KEY"; do
+    addr="${pair%%:*}"; key="${pair##*:}"
+    cast send "$WETH_MAINNET" 'deposit()' --value 50ether \
+      --private-key "$key" --rpc-url http://localhost:8545 >/dev/null 2>&1 || true
+    # USDC (FiatTokenV2) balances live at storage slot 9 → set 1,000,000 USDC
+    slot=$(cast index address "$addr" 9)
+    cast rpc anvil_setStorageAt "$USDC_MAINNET" "$slot" \
+      "$(cast to-uint256 1000000000000)" --rpc-url http://localhost:8545 >/dev/null 2>&1 || true
+  done
+  echo "  LP/buyer funded: 50 WETH each + 1,000,000 USDC each"
+fi
+
 # ── 4. Parse addresses and write .env.local ───────────────────────────────────
 echo "Writing $ENV_FILE …"
 
@@ -129,9 +152,6 @@ for i in $(seq 1 40); do
 done
 
 echo ""
-BUYER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
-BUYER_ADDR=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Sepolia UI:  http://localhost:3000         (MetaMask)"
 echo " Anvil UI:    http://localhost:3000/anvil   (burner wallet, no MetaMask)"

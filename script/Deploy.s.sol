@@ -41,10 +41,10 @@ contract Deploy is Script, StdCheats {
             // ── Mainnet fork: use real tokens, deal balances ─────────────────
             usdcAddr = USDC_MAINNET;
             wethAddr = WETH_MAINNET;
-            vm.deal(deployer, 100 ether);
-            vm.deal(buyer,     10 ether);
-            deal(usdcAddr, deployer, 1_000_000e6);
-            deal(usdcAddr, buyer,    1_000_000e6);
+            // NOTE: token/ETH funding for the fork is done post-deploy in local.sh
+            // via real `cast` txs (wrap WETH, set USDC storage). forge cheatcodes
+            // like `deal`/`vm.deal` only mutate the script's simulation EVM and do
+            // NOT broadcast to the Anvil node, so they cannot fund accounts here.
         } else {
             // ── Blank Anvil: deploy mock tokens ──────────────────────────────
             vm.startBroadcast(deployerKey);

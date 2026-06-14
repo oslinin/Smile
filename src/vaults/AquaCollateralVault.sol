@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../OptionToken.sol";
@@ -162,6 +163,15 @@ contract AquaCollateralVault is Ownable {
         });
         uint256 premiumPerUnit = pricingEngine.quote(p);
         uint256 totalPremium = (premiumPerUnit * amount) / 1e18;
+
+        // pricingEngine returns premium in 18-dec WAD USD; scale to the premium
+        // token's own decimals (e.g. USDC = 6) before transferring.
+        uint8 premiumDecimals = IERC20Metadata(premiumToken).decimals();
+        if (premiumDecimals < 18) {
+            totalPremium = totalPremium / (10 ** (18 - premiumDecimals));
+        } else if (premiumDecimals > 18) {
+            totalPremium = totalPremium * (10 ** (premiumDecimals - 18));
+        }
 
         // Premium: buyer → LP (direct, no vault intermediary)
         if (totalPremium > 0) {
