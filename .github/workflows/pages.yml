@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/defi-options-marketplace-mvp-72wk65]
+    branches: [main, claude/defi-options-marketplace-mvp-72wk65]
     paths: [frontend/**]
   workflow_dispatch:
 
