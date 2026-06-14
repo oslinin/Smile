@@ -108,59 +108,110 @@ $N(\cdot)$ is approximated using the Abramowitz & Stegun polynomial (26.2.17), w
 
 ## 🔄 Flow Diagrams
 
-### 1. Option Price Quoting (View)
-The frontend polls the stateless pricing engine to render the option matrix with live Bid/Ask spreads across the entire chain without pre-allocated liquidity.
+### 1. Series Registration (LP)
+Before any trade can occur, an LP registers an option series. This records the strike, expiry, collateral token, and LP address on-chain so the settlement contract can resolve it at expiry.
 
 ```mermaid
 sequenceDiagram
-    participant User
+    participant LP
+    participant Frontend
+    participant Settlement as AquaOptionSettlement
+
+    LP->>Frontend: K, DTE, Call/Put, OptionToken address
+    Frontend->>Frontend: seriesId = keccak256(lp, K, DTE)
+    Frontend->>Settlement: registerSeries(seriesId, DTE, K, collateralPerUnit, collateralToken, optionToken, lp, 0)
+    Settlement-->>LP: ✓ SeriesRegistered
+```
+
+### 2. Quote & Primary Market Buy
+The frontend reads live prices from the on-chain engine and renders the option matrix. When the buyer clicks Buy, `BuyPanel` calls `vault.pull()` JIT — LP collateral is pulled only at that moment — and σ is bumped to reflect demand.
+
+```mermaid
+sequenceDiagram
+    participant Buyer
     participant Frontend
     participant Engine as OptionPricingEngine (SwapVM)
-    
-    User->>Frontend: Select Strike (K) / Expiry (T)
-    Frontend->>Engine: getPremium(S, K, T, side, sigma_global)
-    Note over Engine: σ_strike = σ_global * (1 + α * ln(K/S)²)
-    Engine-->>Frontend: Calculated Premium (Bid/Ask)
-    Frontend-->>User: Display Dynamic Option Matrix
+    participant Vault as AquaCollateralVault
+    participant LP as LP Wallet (1inch Aqua)
+    participant Hook as OptionPricingHook
+
+    Buyer->>Frontend: K, DTE
+    Frontend->>Engine: quote(S, K, DTE, σ, α, isBuy)
+    Note over Engine: σ_K = σ · (1 + α · ln(K/S)²)
+    Engine-->>Frontend: Bid / Ask
+    Frontend-->>Buyer: Matrix — Δ, moneyness, IV
+    Buyer->>Vault: pull(optionToken, lp, buyer, amount, collateralToken, collateralAmount)
+    Vault->>LP: safeTransferFrom — JIT pull
+    Vault->>Vault: OptionToken.mint(buyer, amount)
+    Vault->>Hook: bumpSigma(isBuy=true)
+    Note over Hook: σ += γ (0.5%)
+    Vault-->>Buyer: ✓ OptionToken received
 ```
 
-### 2. Trade Execution & JIT Liquidity
-Trades go through Uniswap v4, where hooks validate pricing against the oracle and adjust volatility parameters (local skew) post-trade.
+### 3. Close Position (Holder)
+A holder can unwind before expiry. `ClosePanel` calls `vault.close()`, which burns the holder's tokens and returns collateral to the LP pro-rata, then decrements σ to reflect reduced demand.
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Pool as Uniswap v4 Pool
-    participant Hook as OptionPricingHook
+    participant Holder
+    participant Frontend
     participant Vault as AquaCollateralVault
     participant LP as LP Wallet (1inch Aqua)
+    participant Hook as OptionPricingHook
 
-    User->>Pool: swap()
-    Pool->>Hook: beforeSwap() [Veto if price > spread target]
-    Hook-->>Pool: OK
-    Pool->>Vault: Request JIT Collateral
-    Vault->>LP: Pull Assets via Aqua
-    Vault->>User: Mint OptionToken
-    Pool->>Hook: afterSwap() [Update Local Skew/IV based on demand]
+    Holder->>Frontend: Click Close (balance > 0 detected on-chain)
+    Holder->>Vault: close(optionToken, lp, amount)
+    Vault->>Vault: OptionToken.burn(holder, amount)
+    Vault->>Vault: release = lockedCollateral × amount / totalSupply
+    Vault->>LP: safeTransfer — collateral pro-rata
+    Vault->>Hook: bumpSigma(isBuy=false)
+    Note over Hook: σ -= γ (0.5%)
+    Vault-->>Holder: ✓ Closed
 ```
 
-### 3. Settlement via Chainlink CRE
-At expiry $T$, the decentralized Chainlink workflow reaches a consensus on the spot price and executes the final settlement on-chain.
+### 4. Secondary Market Swap (Uniswap v4)
+Existing OptionTokens can be resold on the Uniswap v4 pool. The hook vetoes mispriced trades and adjusts σ based on buy/sell pressure. Secondary market only — no minting or burning; ERC-20 ownership transfers.
+
+```mermaid
+sequenceDiagram
+    participant Seller
+    participant Pool as Uniswap v4 Pool
+    participant Hook as OptionPricingHook
+    participant Oracle as Chainlink Price Feed
+
+    Seller->>Pool: swap(OptionToken → USDC)
+    Pool->>Hook: beforeSwap(params, hookData)
+    Hook->>Oracle: fetch S
+    Note over Hook: Veto if |P_exec − P_fair| > 5%
+    Hook-->>Pool: ✓ OK
+    Pool->>Pool: swap — OptionToken transfers to buyer
+    Pool->>Hook: afterSwap(params)
+    Note over Hook: σ -= γ (sell pressure)
+    Hook-->>Pool: ✓ σ updated
+```
+
+### 5. Settlement & Redemption (Chainlink CRE)
+At expiry, the Chainlink CRE DON fetches S from multiple CEXs, computes a trimmed-mean consensus, and writes it on-chain. Holders redeem for ITM payouts; LP reclaims remaining collateral.
 
 ```mermaid
 sequenceDiagram
     participant CRE as Chainlink CRE DON
     participant Feeds as Price Feeds (Binance, Coinbase, Kraken)
-    participant Vault as AquaOptionSettlement
-    participant LP as LP Wallet / Option Holder
+    participant Settlement as AquaOptionSettlement
+    participant Holder
+    participant LP
 
-    CRE->>CRE: Triggered at Expiry (T)
-    CRE->>Feeds: Query Spot Prices
-    Feeds-->>CRE: [Price A, Price B, Price C]
-    Note over CRE: Calculate Trimmed Mean Consensus
-    CRE->>Vault: settleSeries(consensusPrice)
-    Note over Vault: Calculate Payouts
-    Vault->>LP: Release collateral (OTM) or Pay holder (ITM)
+    CRE->>CRE: Triggered at DTE=0
+    CRE->>Feeds: fetch S
+    Feeds-->>CRE: [S_a, S_b, S_c]
+    Note over CRE: trimmed mean → S_final
+    CRE->>Settlement: settleSeries(seriesId, S_final)
+    Note over Settlement: settled=true, S_final recorded
+    Holder->>Settlement: redeem(seriesId, amount)
+    Note over Settlement: ITM: payout = (S_final − K) × amount; OTM: 0
+    Settlement->>Holder: safeTransfer — payout
+    LP->>Settlement: reclaimCollateral(seriesId)
+    Settlement->>LP: safeTransfer — remainder
 ```
 
 ## 📍 Deployed Addresses (Sepolia)
@@ -171,7 +222,7 @@ sequenceDiagram
 | **AquaCollateralVault** | [`0x0bD5e1510ACd217E55E6744bb9e98557b4309729`](https://sepolia.etherscan.io/address/0x0bD5e1510ACd217E55E6744bb9e98557b4309729) |
 | **AquaOptionSettlement** | [`0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA`](https://sepolia.etherscan.io/address/0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA) |
 
-> *Live on Sepolia testnet. Frontend deployed at **https://132.145.158.84** (WalletConnect enabled, switch MetaMask to Sepolia to interact).*
+> *Live on Sepolia testnet. Frontend deployed at **https://oslinin.github.io/options** (WalletConnect enabled, switch MetaMask to Sepolia to interact).*
 
 ## ⚠️ Deployment Notes & Failures
 
@@ -185,7 +236,7 @@ During the development and deployment phase, the following challenges were encou
 
 ### 1. View Live Site (GitHub Pages)
 The frontend is automatically deployed via GitHub Actions to GitHub Pages.
-**URL:** `https://<your-username>.github.io/options/`
+**URL:** `https://oslinin.github.io/options`
 
 ### 2. Local Frontend Development
 To run the UI locally:
