@@ -1,0 +1,13 @@
+# Foundry
+out/
+cache/
+broadcast/
+.env
+
+# Node
+node_modules/
+frontend/.next/
+frontend/out/
+
+# OS
+.DS_Store
