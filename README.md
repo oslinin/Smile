@@ -46,6 +46,20 @@ Smile attempts to
 | **Settlement** | `AquaOptionSettlement` + Chainlink CRE | DON consensus (trimmed mean across Binance/Coinbase/Kraken) writes $S_{final}$ on-chain; holders redeem ITM payouts. |
 | **Asset** | `OptionToken` | ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery. |
 
+### Collateralization Model
+
+**V1 (current) — Cash-Secured / Covered (Fully Collateralized)**
+
+The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP backs it with 1 WETH (Covered Call). To mint a Put, the LP backs it with 3,500 USDC (Cash-Secured Put). The collateral is authorized JIT via Aqua — it never leaves the LP's wallet until a buyer matches — but it is always fully present and earmarked.
+
+Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.
+
+**V2 (out of scope) — Margin & Liquidation (Under-Collateralized)**
+
+Advanced platforms like Derive allow LPs to post fractional collateral (e.g., 500 USDC to back a 3,500 ETH Call). As spot moves against the LP, the liability grows. If collateral falls below a safety threshold (e.g., 110% of the option's current market value), external liquidation bots forcibly close the position — buying back the option from the market using the LP's remaining collateral before bad debt accrues.
+
+This model unlocks capital efficiency but requires an on-chain margin engine, a liquidation keeper network, and robust price feeds at sub-second granularity. It is explicitly out of scope for V1.
+
 ---
 
 ## 📐 Mathematical Specification
@@ -95,7 +109,7 @@ DON fetches $n$ prices from Binance, Coinbase, Kraken; trims outliers; writes tr
 
 ## 🔄 Flow Diagrams
 
-> Color key: **green** = 1inch Aqua · **pink** = Uniswap · **blue** = Chainlink
+> Color key: 🟢 1inch Aqua · 🩷 Uniswap · 🔵 Chainlink
 
 ### 0. System Overview
 
@@ -103,23 +117,19 @@ DON fetches $n$ prices from Binance, Coinbase, Kraken; trims outliers; writes tr
 sequenceDiagram
     participant Trader
     participant Frontend
-    participant SwapVM as SwapVM (OptionPricingEngine)
-    participant Aqua as 1inch Aqua (AquaCollateralVault)
-    participant Maker as Maker (LP Wallet)
+    participant SwapVM as 🟢 SwapVM (OptionPricingEngine)
+    participant Aqua as 🟢 1inch Aqua (AquaCollateralVault)
+    participant Maker as 🟢 Maker (LP Wallet)
 
-    rect rgb(220, 250, 235)
     Trader->>Frontend: Select strike & expiry
     Frontend->>SwapVM: quote(S, K, T, σ)
     SwapVM-->>Frontend: Bid / Ask
     Frontend-->>Trader: Option matrix
-    end
-    rect rgb(180, 240, 210)
     Trader->>Aqua: buy(strike, amount)
     Aqua->>SwapVM: validate price
     Aqua->>Maker: pull collateral JIT
     Aqua->>Maker: transfer premium
     Aqua-->>Trader: OptionToken minted
-    end
 ```
 
 ### 1. Range Authorization (LP)
@@ -130,16 +140,14 @@ The LP authorizes a strike range from one collateral pool. No collateral moves a
 sequenceDiagram
     participant LP
     participant Frontend
-    participant Vault as AquaCollateralVault
+    participant Vault as 🟢 AquaCollateralVault
 
-    rect rgb(220, 250, 235)
-    LP->>Frontend: K_min, K_max, DTE, maxCollateral, Call/Put
+    LP->>Frontend: K_min, K_max, DTE, maxCollateral
     Frontend->>LP: ERC20.approve(vault, maxCollateral)
-    Note over LP: Collateral stays in LP wallet — still earns staking/lending yield
-    Frontend->>Vault: authorizeRange(K_min, K_max, DTE, maxCollateral, collateralToken, isCall)
+    Note over LP: collateral stays in wallet — earns yield until matched
+    Frontend->>Vault: authorizeRange(K_min..K_max, DTE, maxCollateral)
     Vault-->>Frontend: authId
-    Frontend-->>LP: ✓ Range active — quoting K_min..K_max
-    end
+    Frontend-->>LP: ✓ range active
 ```
 
 ### 2. Primary Market Buy (Trader)
@@ -149,27 +157,18 @@ Premium payment is routed through the **Uniswap Trading API** (`EXACT_OUTPUT` ET
 ```mermaid
 sequenceDiagram
     participant Buyer
-    participant UniAPI as Uniswap Trading API
-    participant Engine as OptionPricingEngine
-    participant Vault as AquaCollateralVault
-    participant LP as LP Wallet
-    participant Hook as OptionPricingHook
+    participant UniAPI as 🩷 Uniswap Trading API
+    participant Vault as 🟢 AquaCollateralVault
+    participant LP as 🟢 LP Wallet
 
-    rect rgb(255, 225, 240)
-    Buyer->>Engine: quote(S, K, DTE, σ_global, α, isBuy=true)
-    Engine-->>Buyer: Ask price in USDC
-    Buyer->>UniAPI: POST /v1/quote EXACT_OUTPUT ETH→USDC (premium amount)
-    UniAPI-->>Buyer: Universal Router calldata + ETH value
-    end
-    rect rgb(220, 250, 235)
-    Buyer->>Vault: buy(authId, K, S, buyer, amount, USDC)
+    Note over Buyer: PricingEngine returns ask price (σ, K, DTE)
+    Buyer->>UniAPI: EXACT_OUTPUT ETH→USDC
+    UniAPI-->>Buyer: Universal Router calldata
+    Buyer->>Vault: buy(authId, K, amount)
     Vault->>LP: pull collateral JIT
     Vault->>LP: transfer USDC premium
     Vault->>Buyer: mint OptionToken
-    end
-    rect rgb(255, 225, 240)
-    Vault->>Hook: bumpSigma(isBuy=true)
-    end
+    Note over Vault: Hook bumps σ_global post-buy
 ```
 
 ### 3. Close Position / Early Unwind (Holder)
@@ -180,22 +179,18 @@ A holder unwinds before expiry. Vault burns their tokens, returns collateral to 
 sequenceDiagram
     participant Holder
     participant Frontend
-    participant Vault as AquaCollateralVault
-    participant LP as LP Wallet
-    participant Hook as OptionPricingHook
+    participant Vault as 🟢 AquaCollateralVault
+    participant LP as 🟢 LP Wallet
+    participant Hook as 🩷 OptionPricingHook
 
-    rect rgb(220, 250, 235)
-    Holder->>Frontend: Click Close (balance > 0 detected via optionTokens lookup)
+    Holder->>Frontend: Click Close
     Holder->>Vault: close(optionToken, lp, amount)
-    Vault->>Vault: collateralToRelease = lockedCollateral * amount / totalSupply
+    Note over Vault: collateralToRelease = locked * amount / supply
     Vault->>Vault: OptionToken.burn(holder, amount)
-    Vault->>LP: safeTransfer(collateralToken, lp, collateralToRelease)
-    end
-    rect rgb(255, 225, 240)
+    Vault->>LP: transfer collateral pro-rata
     Vault->>Hook: bumpSigma(isBuy=false)
     Note over Hook: σ_global -= γ
-    end
-    Vault-->>Holder: ✓ Closed, collateral returned to LP
+    Vault-->>Holder: ✓ closed
 ```
 
 ### 4. Arbitrageur as Emergent Market Maker
@@ -205,27 +200,17 @@ When on-chain σ diverges from market IV, arbitrageurs can capture the spread by
 ```mermaid
 sequenceDiagram
     participant Arb as Arbitrageur
-    participant Vault as AquaCollateralVault
-    participant UniPool as Uniswap v4 ETH/USDC
-    participant Hook as OptionPricingHook
+    participant Vault as 🟢 AquaCollateralVault
+    participant UniPool as 🩷 Uniswap v4 ETH/USDC
+    participant Hook as 🩷 OptionPricingHook
 
-    Note over Arb: Observes σ_global < market IV (options underpriced)
-    rect rgb(220, 250, 235)
-    Arb->>Vault: buy(authId, K, S, arb, amount, USDC)
-    Note over Vault: σ_global bumped up
-    end
-    rect rgb(255, 225, 240)
-    Arb->>UniPool: Short ETH * delta to delta-hedge position
-    end
+    Note over Arb: σ_global < market IV — options underpriced
+    Arb->>Vault: buy(authId, K, amount)
+    Arb->>UniPool: short ETH delta hedge
     Note over Arb: σ_global rises toward market IV
-    rect rgb(220, 250, 235)
     Arb->>Vault: close(optionToken, lp, amount)
-    Note over Vault: σ_global decremented
-    end
-    rect rgb(255, 225, 240)
-    Arb->>UniPool: Unwind hedge — buy ETH * delta
-    end
-    Note over Arb: Profit = (sigma_market - sigma_entry) * vega. LP earns premium + gets collateral back
+    Arb->>UniPool: unwind delta hedge
+    Note over Arb: profit = (σ_market - σ_entry) * vega
 ```
 
 ### 5. Secondary Market Swap (Uniswap v4)
@@ -235,25 +220,19 @@ Existing OptionTokens can be resold. The hook vetoes mispriced swaps and adjusts
 ```mermaid
 sequenceDiagram
     participant Seller
-    participant Pool as Uniswap v4 Pool
-    participant Hook as OptionPricingHook
-    participant Oracle as Chainlink Price Feed
+    participant Pool as 🩷 Uniswap v4 Pool
+    participant Hook as 🩷 OptionPricingHook
+    participant Oracle as 🔵 Chainlink Price Feed
 
-    rect rgb(255, 225, 240)
     Seller->>Pool: swap(OptionToken → USDC)
     Pool->>Hook: beforeSwap(params, hookData)
-    end
-    rect rgb(225, 235, 255)
     Hook->>Oracle: fetch S
-    end
-    rect rgb(255, 225, 240)
     Note over Hook: Veto if |P_exec - P_fair| > 5%
     Hook-->>Pool: ✓ OK
     Pool->>Pool: OptionToken transfers to buyer
     Pool->>Hook: afterSwap(params)
     Note over Hook: exactIn (sell) → σ -= γ
     Hook-->>Pool: ✓ σ updated
-    end
 ```
 
 ### 6. Settlement & Redemption (Chainlink CRE)
@@ -262,25 +241,23 @@ At expiry, the CRE DON fetches $S$ from multiple CEXs, computes trimmed-mean con
 
 ```mermaid
 sequenceDiagram
-    participant CRE as Chainlink CRE DON
-    participant Feeds as Price Feeds (Binance, Coinbase, Kraken)
+    participant CRE as 🔵 Chainlink CRE DON
+    participant Feeds as 🔵 Price Feeds (Binance, Coinbase, Kraken)
     participant Settlement as AquaOptionSettlement
     participant Holder
     participant LP
 
-    rect rgb(225, 235, 255)
-    CRE->>CRE: Triggered at DTE=0 (cron 0 */6 * * *)
+    Note over CRE: triggered at DTE=0
     CRE->>Feeds: fetch S
     Feeds-->>CRE: [S_a, S_b, S_c]
     Note over CRE: trimmed mean → S_final
     CRE->>Settlement: settleSeries(seriesId, S_final)
-    end
-    Note over Settlement: settled=true, S_final recorded
+    Note over Settlement: settled=true
     Holder->>Settlement: redeem(seriesId, amount)
-    Note over Settlement: ITM payout=(S_final-K)*amount, OTM=0
-    Settlement->>Holder: safeTransfer — payout
+    Note over Settlement: ITM: payout = (S_final-K)*amount
+    Settlement->>Holder: transfer payout
     LP->>Settlement: reclaimCollateral(seriesId)
-    Settlement->>LP: safeTransfer — remainder
+    Settlement->>LP: transfer remainder
 ```
 
 ---

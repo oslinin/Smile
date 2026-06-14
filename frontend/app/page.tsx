@@ -134,6 +134,7 @@ export default function Home() {
             activeAuth={activeAuth}
             onSwapTx={setSwapTx}
             onBuyConfirmed={(leg) => setConfirmedLegs(prev => [...prev, leg])}
+            onSellConfirmed={(leg) => setConfirmedLegs(prev => [...prev, leg])}
           />
         </section>
 

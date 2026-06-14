@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import type { Leg } from "@/components/PayoffBuilder";
 import { CONTRACTS } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
-import { USDC_SEPOLIA } from "@/components/AuthorizeRange";
+import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
 
 const PRICING_ENGINE_ABI = [
@@ -32,6 +32,37 @@ const PRICING_ENGINE_ABI = [
 ] as const;
 
 const VAULT_ABI = [
+  {
+    name: "authorizations",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "authId", type: "uint256" }],
+    outputs: [
+      { name: "lp", type: "address" },
+      { name: "strikeMin", type: "uint256" },
+      { name: "strikeMax", type: "uint256" },
+      { name: "expiry", type: "uint256" },
+      { name: "maxCollateral", type: "uint256" },
+      { name: "usedCollateral", type: "uint256" },
+      { name: "collateralToken", type: "address" },
+      { name: "isCall", type: "bool" },
+      { name: "active", type: "bool" },
+    ],
+  },
+  {
+    name: "authorizeRange",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "strikeMin", type: "uint256" },
+      { name: "strikeMax", type: "uint256" },
+      { name: "expiry", type: "uint256" },
+      { name: "maxCollateral", type: "uint256" },
+      { name: "collateralToken", type: "address" },
+      { name: "isCall", type: "bool" },
+    ],
+    outputs: [{ name: "authId", type: "uint256" }],
+  },
   {
     name: "buy",
     type: "function",
@@ -135,6 +166,216 @@ function useOptionQuote(spot: number, strike: number, expiry: number, isBuy: boo
 function formatWAD(val: bigint | undefined): string {
   if (val === undefined) return "…";
   return `$${(Number(val) / 1e18).toFixed(2)}`;
+}
+
+// ── LP Summary Bar ────────────────────────────────────────────────────────────
+
+function LPSummaryBar({ auth }: { auth: ActiveAuth }) {
+  const { data } = useReadContract({
+    address: CONTRACTS.aquaVault as `0x${string}`,
+    abi: VAULT_ABI,
+    functionName: "authorizations",
+    args: [auth.authId],
+    query: { enabled: !!CONTRACTS.aquaVault, refetchInterval: 6000 },
+  });
+
+  const maxCollateral = data?.[4];
+  const usedCollateral = data?.[5];
+  const isCall = auth.isCall;
+  const decimals = isCall ? 1e18 : 1e6;
+  const symbol = isCall ? "WETH" : "USDC";
+
+  const usedNum = usedCollateral !== undefined ? Number(usedCollateral) / decimals : null;
+  const maxNum = maxCollateral !== undefined ? Number(maxCollateral) / decimals : null;
+  const pct = usedNum !== null && maxNum !== null && maxNum > 0 ? usedNum / maxNum : 0;
+
+  const daysLeft = Math.max(0, Math.round((auth.expiry - Date.now() / 1000) / 86400));
+  const isSingle = auth.strikeMin === auth.strikeMax;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 bg-gray-900/60 border-b border-gray-800 text-xs flex-wrap">
+      <span className={auth.isCall ? "text-blue-400 font-semibold" : "text-orange-400 font-semibold"}>
+        {auth.isCall ? "Covered Calls" : "Cash-Secured Puts"}
+      </span>
+      <span className="text-gray-400">
+        {isSingle
+          ? <>single strike <span className="text-white font-mono">${auth.strikeMin.toLocaleString()}</span></>
+          : <><span className="text-white font-mono">${auth.strikeMin.toLocaleString()}</span>
+              <span className="text-gray-600"> – </span>
+              <span className="text-white font-mono">${auth.strikeMax.toLocaleString()}</span></>
+        }
+      </span>
+      <span className="text-gray-600">·</span>
+      {usedNum !== null && maxNum !== null ? (
+        <span className="flex items-center gap-1.5">
+          <span className="text-gray-400">
+            <span className="text-white font-mono">{usedNum.toFixed(2)}</span>
+            <span className="text-gray-600"> / </span>
+            <span className="font-mono">{maxNum.toFixed(2)} {symbol}</span>
+          </span>
+          <span className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <span
+              className="h-full block rounded-full bg-blue-500 transition-all"
+              style={{ width: `${Math.min(pct * 100, 100).toFixed(1)}%` }}
+            />
+          </span>
+          <span className="text-gray-600">{(pct * 100).toFixed(0)}% used</span>
+        </span>
+      ) : (
+        <span className="text-gray-700">capacity loading…</span>
+      )}
+      <span className="text-gray-600">·</span>
+      <span className={daysLeft <= 3 ? "text-red-400" : "text-gray-400"}>
+        {daysLeft}d left
+      </span>
+    </div>
+  );
+}
+
+// ── SellPanel ─────────────────────────────────────────────────────────────────
+
+interface SellPanelProps {
+  strike: number;
+  spot: number;
+  bidWAD: bigint | undefined;
+  defaultIsCall: boolean;
+  defaultExpiry: number;
+  onClose: () => void;
+  onSellConfirmed?: (leg: Omit<Leg, "id">) => void;
+}
+
+function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose, onSellConfirmed }: SellPanelProps) {
+  const { address } = useAccount();
+  const [kMin, setKMin] = useState(strike);
+  const [kMax, setKMax] = useState(strike);
+  const [amount, setAmount] = useState("1");
+  const [isCall, setIsCall] = useState(defaultIsCall);
+  const [expiryOffset, setExpiryOffset] = useState(
+    Math.max(86400, defaultExpiry - Math.floor(Date.now() / 1000))
+  );
+  const [step, setStep] = useState<"idle" | "approving" | "authorizing" | "done">("idle");
+  const firedRef = useRef(false);
+
+  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const amountNum = Math.max(0.001, Number(amount));
+
+  // Calls: collateral = amount WETH (18 dec). Puts: collateral = amount × K_max USDC (6 dec)
+  const maxCollateral = isCall
+    ? BigInt(Math.round(amountNum * 1e18))
+    : BigInt(Math.round(amountNum * kMax * 1e6 / 1e18));
+
+  const isSingle = kMin === kMax;
+  const premiumPerContract = bidWAD !== undefined ? Number(bidWAD) / 1e18 : null;
+  const totalPremium = premiumPerContract !== null ? (premiumPerContract * amountNum).toFixed(2) : "…";
+
+  const expiry = BigInt(Math.floor(Date.now() / 1000) + expiryOffset);
+  const kMinWAD = BigInt(Math.round(kMin * 1e18));
+  const kMaxWAD = BigInt(Math.round(kMax * 1e18));
+
+  const { writeContract: approve, data: approveTxHash, isPending: approvePending } = useWriteContract();
+  const { isLoading: approveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
+
+  const { writeContract: authorize, data: authTxHash, isPending: authPending } = useWriteContract();
+  const { isLoading: authConfirming, isSuccess: authSuccess } = useWaitForTransactionReceipt({ hash: authTxHash });
+
+  useEffect(() => {
+    if (approveSuccess && step === "approving") {
+      setStep("authorizing");
+      authorize({
+        address: CONTRACTS.aquaVault as `0x${string}`,
+        abi: VAULT_ABI,
+        functionName: "authorizeRange",
+        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, isCall],
+      });
+    }
+  }, [approveSuccess]);
+
+  useEffect(() => {
+    if (authSuccess && !firedRef.current) {
+      firedRef.current = true;
+      setStep("done");
+      onSellConfirmed?.({ direction: "sell", isCall, strike: kMin, amount: amountNum });
+    }
+  }, [authSuccess]);
+
+  const handleStart = () => {
+    if (!address || !CONTRACTS.aquaVault) return;
+    setStep("approving");
+    approve({
+      address: collateralToken as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [CONTRACTS.aquaVault as `0x${string}`, maxCollateral],
+    });
+  };
+
+  const isWorking = step !== "idle" && step !== "done";
+  const canSubmit = !!CONTRACTS.aquaVault && !!address && kMin <= kMax && amountNum > 0 && !isWorking && step !== "done";
+
+  return (
+    <tr className="bg-orange-950/20 border-b border-gray-800">
+      <td colSpan={7} className="px-4 py-3">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* Call / Put toggle */}
+            {([true, false] as const).map(c => (
+              <button key={String(c)} onClick={() => setIsCall(c)} disabled={isWorking}
+                className={`px-2 py-1 rounded font-semibold transition-colors disabled:opacity-50 ${
+                  isCall === c ? (c ? "bg-blue-700 text-white" : "bg-orange-700 text-white") : "bg-gray-800 text-gray-500 hover:text-white"
+                }`}>
+                {c ? "Call" : "Put"}
+              </button>
+            ))}
+            <span className="text-gray-600">K_min</span>
+            <input type="number" value={kMin} step={50} disabled={isWorking}
+              onChange={e => { const v = Number(e.target.value); setKMin(v); if (kMax < v) setKMax(v); }}
+              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white font-mono focus:outline-none focus:border-orange-600 disabled:opacity-50" />
+            <span className="text-gray-600">K_max</span>
+            <input type="number" value={kMax} step={50} disabled={isWorking}
+              onChange={e => { const v = Number(e.target.value); setKMax(v); if (kMin > v) setKMin(v); }}
+              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white font-mono focus:outline-none focus:border-orange-600 disabled:opacity-50" />
+            <span className="text-gray-600">×</span>
+            <input type="number" value={amount} min="0.01" step="0.01" disabled={isWorking}
+              onChange={e => setAmount(e.target.value)}
+              className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white font-mono focus:outline-none focus:border-orange-600 disabled:opacity-50" />
+            <span className="text-gray-700 font-mono">
+              receive ~${totalPremium} USDC
+              {isCall
+                ? `, lock ${amountNum.toFixed(2)} WETH`
+                : `, lock $${(amountNum * kMax / 1e18 * 1e6 / 1e6).toLocaleString(undefined, {maximumFractionDigits: 0})} USDC`}
+            </span>
+            <button onClick={onClose} className="ml-auto text-gray-500 hover:text-white text-xs">Cancel</button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* Expiry presets */}
+            {[{ label: "1d", s: 86400 }, { label: "7d", s: 7*86400 }, { label: "30d", s: 30*86400 }].map(p => (
+              <button key={p.s} onClick={() => setExpiryOffset(p.s)} disabled={isWorking}
+                className={`px-2 py-1 rounded transition-colors disabled:opacity-50 ${expiryOffset === p.s ? "bg-orange-700 text-white" : "bg-gray-800 text-gray-500 hover:text-white"}`}>
+                {p.label}
+              </button>
+            ))}
+            <span className="text-gray-700">
+              {isSingle ? "single-strike write" : `range write · ${isCall ? "WETH" : "USDC"} collateral splits across ${Math.round((kMax - kMin) / 50)} strikes`}
+            </span>
+
+            {step !== "idle" && (
+              <span className="text-orange-400 font-semibold">
+                {step === "approving" ? (approvePending ? "Confirm approval…" : approveConfirming ? "Approving…" : "…")
+                  : step === "authorizing" ? (authPending ? "Confirm…" : authConfirming ? "Authorizing…" : "…")
+                  : "✓ Written"}
+              </span>
+            )}
+
+            <button onClick={handleStart} disabled={!canSubmit}
+              className="px-3 py-1.5 rounded-lg bg-orange-700 hover:bg-orange-600 disabled:opacity-40 text-white font-semibold transition-colors">
+              {step === "done" ? "✓ Written" : `Write ${isCall ? "Call" : "Put"}`}
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
 // ── BuyPanel ──────────────────────────────────────────────────────────────────
@@ -387,10 +628,11 @@ interface StrikeRowProps {
   activeAuth?: ActiveAuth | null;
   onSwapTx?: (hash: string) => void;
   onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
+  onSellConfirmed?: (leg: Omit<Leg, "id">) => void;
 }
 
-function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed }: StrikeRowProps) {
-  const [panel, setPanel] = useState<"buy" | "close" | null>(null);
+function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }: StrikeRowProps) {
+  const [panel, setPanel] = useState<"buy" | "sell" | "close" | null>(null);
   const { address } = useAccount();
   const bid = useOptionQuote(spot, strike, expiry, false);
   const ask = useOptionQuote(spot, strike, expiry, true);
@@ -446,8 +688,16 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed 
           {ask.data ? `${(sigma * 100).toFixed(1)}%` : "–"}
         </td>
         <td className="py-2 px-3 text-center">
-          {isTradeable ? (
-            <div className="flex gap-1 justify-center">
+          <div className="flex gap-1 justify-center">
+            <button
+              onClick={() => setPanel(panel === "sell" ? null : "sell")}
+              className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                panel === "sell" ? "bg-gray-700 text-gray-300" : "bg-orange-700 hover:bg-orange-600 text-white"
+              }`}
+            >
+              Sell
+            </button>
+            {isTradeable && (
               <button
                 onClick={() => setPanel(panel === "buy" ? null : "buy")}
                 className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
@@ -456,22 +706,31 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed 
               >
                 Buy
               </button>
-              {hasPosition && hasToken && (
-                <button
-                  onClick={() => setPanel(panel === "close" ? null : "close")}
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                    panel === "close" ? "bg-gray-700 text-gray-300" : "bg-red-700 hover:bg-red-600 text-white"
-                  }`}
-                >
-                  Close
-                </button>
-              )}
-            </div>
-          ) : (
-            <span className="text-gray-700 text-xs">–</span>
-          )}
+            )}
+            {hasPosition && hasToken && (
+              <button
+                onClick={() => setPanel(panel === "close" ? null : "close")}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                  panel === "close" ? "bg-gray-700 text-gray-300" : "bg-red-700 hover:bg-red-600 text-white"
+                }`}
+              >
+                Close
+              </button>
+            )}
+          </div>
         </td>
       </tr>
+      {panel === "sell" && (
+        <SellPanel
+          strike={strike}
+          spot={spot}
+          bidWAD={bid.data as bigint | undefined}
+          defaultIsCall={activeAuth?.isCall ?? true}
+          defaultExpiry={activeAuth?.expiry ?? Math.floor(Date.now() / 1000) + 30 * 86400}
+          onClose={() => setPanel(null)}
+          onSellConfirmed={onSellConfirmed}
+        />
+      )}
       {panel === "buy" && activeAuth && (
         <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
       )}
@@ -494,9 +753,10 @@ interface OptionMatrixProps {
   activeAuth?: ActiveAuth | null;
   onSwapTx?: (hash: string) => void;
   onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
+  onSellConfirmed?: (leg: Omit<Leg, "id">) => void;
 }
 
-export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed }: OptionMatrixProps) {
+export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }: OptionMatrixProps) {
   const [expiry, setExpiry] = useState(0);
 
   useEffect(() => {
@@ -517,7 +777,9 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed }: Opt
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-800">
+    <div className="rounded-xl border border-gray-800 overflow-hidden">
+      {activeAuth && <LPSummaryBar auth={activeAuth} />}
+      <div className="overflow-x-auto">
       <table className="w-full text-white">
         <thead>
           <tr className="border-b border-gray-700 bg-gray-900 text-gray-400 text-xs uppercase">
@@ -533,10 +795,11 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed }: Opt
         <tbody>
           {expiry > 0 &&
             strikes.map((k) => (
-              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
+              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} onSellConfirmed={onSellConfirmed} />
             ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
