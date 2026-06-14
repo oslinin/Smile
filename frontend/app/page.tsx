@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
@@ -10,6 +10,10 @@ export default function Home() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
+  const chainId = useChainId();
+  const chains = useChains();
+  const { data: balance } = useBalance({ address });
+  const currentChain = chains.find((c) => c.id === chainId);
   const [mounted, setMounted] = useState(false);
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
@@ -33,7 +37,17 @@ export default function Home() {
           </button>
         ) : isConnected ? (
           <div className="flex items-center gap-3">
-            <span className="text-gray-400 text-sm font-mono">
+            {currentChain && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                {currentChain.name}
+              </span>
+            )}
+            {balance && (
+              <span className="text-gray-400 text-sm font-mono">
+                {(Number(balance.value) / 1e18).toFixed(4)} ETH
+              </span>
+            )}
+            <span className="text-gray-500 text-sm font-mono">
               {address?.slice(0, 6)}…{address?.slice(-4)}
             </span>
             <button
