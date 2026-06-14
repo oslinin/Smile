@@ -1,0 +1,17 @@
+{
+  "name": "cre-workflow",
+  "version": "1.0.0",
+  "description": "Chainlink CRE settlement workflow for the options marketplace",
+  "main": "option-settlement.ts",
+  "scripts": {
+    "simulate": "ts-node option-settlement.ts --simulate"
+  },
+  "dependencies": {
+    "ethers": "^6.0.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
