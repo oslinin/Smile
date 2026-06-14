@@ -130,7 +130,8 @@ export default function Home() {
       <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/smile-icon.svg" alt="Smile" height={36} className="block" style={{ height: 36 }} />
+          <img src="/smile-wordmark.svg" alt="Smile" height={34} className="block" style={{ height: 34 }} />
+          <span className="hidden sm:block h-5 w-px bg-gray-800" aria-hidden />
           <p className="text-gray-500 text-xs">
             Non-custodial · 1inch Aqua JIT · Uniswap v4 Hooks · Chainlink CRE
           </p>

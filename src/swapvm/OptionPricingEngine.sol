@@ -56,6 +56,12 @@ contract OptionPricingEngine {
         uint256 sqrtT = _sqrtWad((T * WAD) / 365 days);
         uint256 timeValue = (spot * sigmaStrike) / WAD;
         timeValue = (timeValue * sqrtT) / WAD;
+        // Moneyness damping: time value peaks at-the-money, falls off for OTM/deep-ITM.
+        // factor = min(S,K)/max(S,K)  ∈ (0,1], equals 1 when S==K.
+        uint256 moneyFactor = spot < strike
+            ? (spot * WAD) / strike   // OTM call: S/K < 1
+            : (strike * WAD) / spot;  // ITM call: K/S < 1
+        timeValue = (timeValue * moneyFactor) / WAD;
         uint256 raw = intrinsic + timeValue;
         // BUY rounds up → Ask; SELL rounds down → Bid. Same strike, consistent spread.
         premium = isBuy ? raw + 1 : raw;
@@ -76,13 +82,13 @@ contract OptionPricingEngine {
     }
 
     /// @dev Integer sqrt returning WAD-scaled result given a WAD-scaled input.
+    /// sqrt(x/WAD) in WAD = sqrt(x * WAD). Newton converges to this directly.
     function _sqrtWad(uint256 x) internal pure returns (uint256) {
         if (x == 0) return 0;
-        // sqrt(x * 1e18) via Newton, then divide by 1e9 to stay in WAD
         uint256 s = x * WAD;
         uint256 z = (s + 1) / 2;
         uint256 y = s;
         while (z < y) { y = z; z = (s / z + z) / 2; }
-        return y / 1e9;
+        return y;
     }
 }

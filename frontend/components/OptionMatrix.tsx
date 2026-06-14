@@ -157,18 +157,24 @@ function callDelta(spot: number, strike: number, sigma: number, T: number): numb
   return normalCDF(d1);
 }
 
-function useOptionQuote(spot: number, strike: number, expiry: number, isBuy: boolean) {
-  const spotWAD = BigInt(Math.round(spot * 1e18));
-  const strikeWAD = BigInt(Math.round(strike * 1e18));
-  const expiryBig = BigInt(expiry);
+function blackScholesCall(spot: number, strike: number, sigma: number, T: number): number {
+  if (T <= 0) return Math.max(0, spot - strike);
+  if (sigma <= 0 || spot <= 0 || strike <= 0) return Math.max(0, spot - strike);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(spot / strike) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  return spot * normalCDF(d1) - strike * normalCDF(d2);
+}
 
-  return useReadContract({
-    address: CONTRACTS.pricingEngine as `0x${string}`,
-    abi: PRICING_ENGINE_ABI,
-    functionName: "quote",
-    args: [{ spot: spotWAD, strike: strikeWAD, expiry: expiryBig, sigmaGlobal: SIGMA_GLOBAL, alpha: ALPHA, isBuy }],
-    query: { enabled: !!CONTRACTS.pricingEngine && spot > 0 },
-  });
+function optionPriceWAD(spot: number, strike: number, expiry: number, isBuy: boolean): bigint {
+  const T = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
+  const sigma = smileVol(spot, strike);
+  const price = blackScholesCall(spot, strike, sigma, T);
+  const priceWAD = BigInt(Math.round(Math.max(0, price) * 1e12)) * BigInt(1e6);
+  // 1% bid/ask spread
+  return isBuy
+    ? (priceWAD * BigInt(101)) / BigInt(100)
+    : (priceWAD * BigInt(99)) / BigInt(100);
 }
 
 function formatWAD(val: bigint | undefined): string {
@@ -657,8 +663,8 @@ interface StrikeRowProps {
 function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }: StrikeRowProps) {
   const [panel, setPanel] = useState<"buy" | "sell" | "close" | null>(null);
   const { address } = useAccount();
-  const bid = useOptionQuote(spot, strike, expiry, false);
-  const ask = useOptionQuote(spot, strike, expiry, true);
+  const bidWAD = spot > 0 && expiry > 0 ? optionPriceWAD(spot, strike, expiry, false) : undefined;
+  const askWAD = spot > 0 && expiry > 0 ? optionPriceWAD(spot, strike, expiry, true) : undefined;
   const moneyness = ((strike - spot) / spot) * 100;
   const T = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
   const sigma = smileVol(spot, strike);
@@ -724,7 +730,7 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
               : "text-green-400 hover:bg-orange-950/50 hover:text-orange-300"
           }`}
         >
-          {bid.isLoading ? "…" : bid.error ? "–" : formatWAD(bid.data as bigint)}
+          {formatWAD(bidWAD)}
         </td>
         <td
           onClick={() => isTradeable && setPanel(panel === "buy" ? null : "buy")}
@@ -738,17 +744,17 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
               : "text-red-400 opacity-50"
           }`}
         >
-          {ask.isLoading ? "…" : ask.error ? "–" : formatWAD(ask.data as bigint)}
+          {formatWAD(askWAD)}
         </td>
         <td className="py-2 px-3 text-right text-xs text-gray-500">
-          {ask.data ? `${(sigma * 100).toFixed(1)}%` : "–"}
+          {askWAD ? `${(sigma * 100).toFixed(1)}%` : "–"}
         </td>
       </tr>
       {panel === "sell" && (
         <SellPanel
           strike={strike}
           spot={spot}
-          bidWAD={bid.data as bigint | undefined}
+          bidWAD={bidWAD}
           defaultIsCall={activeAuth?.isCall ?? true}
           defaultExpiry={activeAuth?.expiry ?? Math.floor(Date.now() / 1000) + 30 * 86400}
           onClose={() => setPanel(null)}
@@ -756,7 +762,7 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
         />
       )}
       {panel === "buy" && activeAuth && (
-        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
+        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={askWAD} onClose={() => setPanel(null)} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
       )}
       {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
         <ClosePanel
