@@ -19,6 +19,12 @@
       "skillPath": "packages/plugins/uniswap-cca/skills/deployer/SKILL.md",
       "computedHash": "73b54e9f79855c470fb2e8ea61ff21fab631e19d011c6fdedc27a41fc0c98f8d"
     },
+    "develop-userscripts": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/develop-userscripts/SKILL.md",
+      "computedHash": "fe21aae92e5d399ad75c62ce76af27c79493d2d0badf382aa029e41fd955662b"
+    },
     "dispatching-parallel-agents": {
       "source": "obra/superpowers",
       "sourceType": "github",
@@ -37,11 +43,29 @@
       "skillPath": "skills/finishing-a-development-branch/SKILL.md",
       "computedHash": "932d23af11a3eb2b758f5b1d9aec7b6d28ddd26658328414f87f34dff7179d19"
     },
+    "github-actions-docs": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/github-actions-docs/SKILL.md",
+      "computedHash": "e9ac24e79715ef3060bd4ae376052f8d863b830604e69cb513b39764bf47ee53"
+    },
     "liquidity-planner": {
       "source": "Uniswap/uniswap-ai",
       "sourceType": "github",
       "skillPath": "packages/plugins/uniswap-driver/skills/liquidity-planner/SKILL.md",
       "computedHash": "42facfb96be928b35effd960093b1b05ee34c9e5254ed3a2086bf25b4d379cae"
+    },
+    "openclaw-secure-linux-cloud": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/openclaw-secure-linux-cloud/SKILL.md",
+      "computedHash": "405b7ea93f5de195fda67b26bb4d409fa76b1b7ef5d0b1809366e18e54b134e3"
+    },
+    "opensource-guide-coach": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/opensource-guide-coach/SKILL.md",
+      "computedHash": "71ed130d355df51a91940a28c313d09930876c3d70974fbb255a970c6a4dcbcc"
     },
     "pay-with-any-token": {
       "source": "Uniswap/uniswap-ai",
@@ -55,6 +79,12 @@
       "skillPath": "packages/plugins/uniswap-trading/skills/pay-with-app/SKILL.md",
       "computedHash": "7aae9175732c4a4ca1ed4fca020e60f59648d1126c7ef2c3ec6982dd51b3c130"
     },
+    "readme-i18n": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/readme-i18n/SKILL.md",
+      "computedHash": "667e1a9ec1be5d8cd28113558740af67861e372792587bf0e65d14ddebbcf38e"
+    },
     "receiving-code-review": {
       "source": "obra/superpowers",
       "sourceType": "github",
@@ -66,6 +96,24 @@
       "sourceType": "github",
       "skillPath": "skills/requesting-code-review/SKILL.md",
       "computedHash": "874f3786b05007a8b4a60452a4cd89b9917c645d34b6b1e40ea05037d12f0e67"
+    },
+    "running-claude-code-via-litellm-copilot": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/running-claude-code-via-litellm-copilot/SKILL.md",
+      "computedHash": "875aabcfa359c28195974ef40210cbb9b904e4392d2ff46b71a84a37127f553c"
+    },
+    "secure-linux-web-hosting": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/secure-linux-web-hosting/SKILL.md",
+      "computedHash": "49e4837b94e43d1c9e50f7e73063a3c5ffa0fc6d1a0708145f50c432cafac2d4"
+    },
+    "skills-cli": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/skills-cli/SKILL.md",
+      "computedHash": "cc2d2556e7ef3e8466e5ff562c2966ecc7a9948b02f87ffc35950973722a7970"
     },
     "subagent-driven-development": {
       "source": "obra/superpowers",
@@ -96,6 +144,18 @@
       "sourceType": "github",
       "skillPath": "skills/test-driven-development/SKILL.md",
       "computedHash": "126f1ebf6ccd414f42544f6e83d8cc5adb089e1108eaffb7c400701e37eecd9f"
+    },
+    "tzst": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/tzst/SKILL.md",
+      "computedHash": "2354ceeef87452a7c6c31540612646462ad60c3794ccab64f60c5fbd17018778"
+    },
+    "use-my-browser": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/use-my-browser/SKILL.md",
+      "computedHash": "e965eaf987b2528e670dde074509b155e3b1f118dc9c1c489c3a856d6000cd88"
     },
     "using-git-worktrees": {
       "source": "obra/superpowers",
@@ -150,6 +210,18 @@
       "sourceType": "github",
       "skillPath": "skills/writing-skills/SKILL.md",
       "computedHash": "c0a92e629e39ea91b1f54da67a6aa92723008a8ef5b500c6de078f55485937c7"
+    },
+    "xdrop": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/xdrop/SKILL.md",
+      "computedHash": "923fd2291fd4c5ef6b6f7a8a303db4fab838728b99e92b07d20d7c2995671cc3"
+    },
+    "xget": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/xget/SKILL.md",
+      "computedHash": "35cbfe31fba221c36856887b5f6ee35eae534916e98b81256f9a9a84fa595f06"
     }
   }
 }
