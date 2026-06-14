@@ -1,8 +1,8 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useSwitchChain } from "wagmi";
-import { sepolia } from "wagmi/chains";
 import { OptionMatrix } from "@/components/OptionMatrix";
+import { TARGET_CHAIN_ID } from "@/config/wagmi";
 import { LPDashboard } from "@/components/LPDashboard";
 import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
 import { TxProof } from "@/components/TxProof";
@@ -19,11 +19,11 @@ export default function Home() {
   const { data: balance } = useBalance({ address });
   const { switchChain } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
-  const isWrongChain = isConnected && chainId !== sepolia.id;
+  const isWrongChain = isConnected && chainId !== TARGET_CHAIN_ID;
 
   useEffect(() => {
-    if (isConnected && chainId !== sepolia.id) {
-      switchChain({ chainId: sepolia.id });
+    if (isConnected && chainId !== TARGET_CHAIN_ID) {
+      switchChain({ chainId: TARGET_CHAIN_ID });
     }
   }, [isConnected, chainId]);
   const [mounted, setMounted] = useState(false);
@@ -54,10 +54,10 @@ export default function Home() {
           <div className="flex items-center gap-3">
             {isWrongChain ? (
               <button
-                onClick={() => switchChain({ chainId: sepolia.id })}
+                onClick={() => switchChain({ chainId: TARGET_CHAIN_ID })}
                 className="text-xs font-semibold px-2 py-0.5 rounded bg-red-900 text-red-300 border border-red-700 hover:bg-red-800"
               >
-                Wrong Network — Switch to Sepolia
+                Wrong Network — Switch to {TARGET_CHAIN_ID === 31337 ? "Anvil" : "Sepolia"}
               </button>
             ) : currentChain && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">

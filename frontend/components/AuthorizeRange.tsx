@@ -4,8 +4,12 @@ import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadCont
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS } from "@/config/wagmi";
 
-export const USDC_SEPOLIA = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as const;
-export const WETH_SEPOLIA = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14" as const;
+export const USDC_SEPOLIA = (
+  process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+) as `0x${string}`;
+export const WETH_SEPOLIA = (
+  process.env.NEXT_PUBLIC_WETH_ADDRESS ?? "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+) as `0x${string}`;
 
 const VAULT_ABI = [
   {

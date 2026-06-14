@@ -243,9 +243,9 @@ At expiry, the CRE DON fetches $S$ from multiple CEXs, computes trimmed-mean con
 sequenceDiagram
     participant CRE as 🔵 Chainlink CRE DON
     participant Feeds as 🔵 Price Feeds (Binance, Coinbase, Kraken)
-    participant Settlement as AquaOptionSettlement
-    participant Holder
-    participant LP
+    participant Settlement as 🟢 AquaOptionSettlement
+    participant Maker as 🟢 Maker (LP)
+    participant Holder as Trader (Holder)
 
     Note over CRE: triggered at DTE=0
     CRE->>Feeds: fetch S
@@ -256,8 +256,8 @@ sequenceDiagram
     Holder->>Settlement: redeem(seriesId, amount)
     Note over Settlement: ITM: payout = (S_final-K)*amount
     Settlement->>Holder: transfer payout
-    LP->>Settlement: reclaimCollateral(seriesId)
-    Settlement->>LP: transfer remainder
+    Maker->>Settlement: reclaimCollateral(seriesId)
+    Settlement->>Maker: transfer remainder
 ```
 
 ---
@@ -359,6 +359,8 @@ cast call 0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA \
 ### DeFi Terms
 
 - **LP (Liquidity Provider):** A participant who backs trades. Here, LPs authorize the vault to pull collateral JIT — they are yield-seeking covered-option writers, not market makers.
+- **Maker:** The option writer (LP). Authorizes a strike range, provides collateral JIT, receives premiums, reclaims collateral at expiry.
+- **Trader:** The option buyer. Pays premium, receives an OptionToken representing the long position, redeems ITM payout at settlement.
 - **CEX (Centralized Exchange):** Off-chain exchange (Binance, Coinbase, Kraken). Used as price sources for CRE settlement consensus.
 - **DEX (Decentralized Exchange):** On-chain exchange. Uniswap v4 provides secondary-market trading for OptionTokens.
 - **DON (Decentralized Oracle Network):** A tamper-resistant network of node operators that securely delivers external data to smart contracts (Chainlink).

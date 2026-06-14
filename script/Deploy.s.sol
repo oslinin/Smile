@@ -2,45 +2,63 @@
 pragma solidity ^0.8.24;
 
 import "forge-std/Script.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "../src/swapvm/OptionPricingEngine.sol";
-import "../src/OptionToken.sol";
+import "../src/hooks/OptionPricingHook.sol";
 import "../src/vaults/AquaCollateralVault.sol";
 import "../src/vaults/AquaOptionSettlement.sol";
+
+contract MockERC20 is ERC20 {
+    uint8 private _dec;
+    constructor(string memory name, string memory symbol, uint8 dec_) ERC20(name, symbol) { _dec = dec_; }
+    function decimals() public view override returns (uint8) { return _dec; }
+    function mint(address to, uint256 amount) external { _mint(to, amount); }
+}
 
 contract Deploy is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerKey);
-        address creForwarder = vm.envOr("CRE_FORWARDER", deployer); // default to deployer for local testing
+        address deployer    = vm.addr(deployerKey);
+        // Second Anvil account — acts as a buyer in manual testing
+        address buyer       = vm.envOr("BUYER_ADDRESS", address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8));
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Pricing engine (stateless — no owner needed)
+        // ── Mock tokens ──────────────────────────────────────────────────────
+        MockERC20 usdc = new MockERC20("USD Coin",      "USDC", 6);
+        MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
+
+        // Mint to deployer (LP) and buyer
+        usdc.mint(deployer, 1_000_000e6);
+        weth.mint(deployer,       100e18);
+        usdc.mint(buyer,    1_000_000e6);
+        weth.mint(buyer,          10e18);
+
+        // ── Core contracts ───────────────────────────────────────────────────
         OptionPricingEngine engine = new OptionPricingEngine();
 
-        // 2. Aqua collateral vault
+        uint256 initialSigma = 0.8e18;
+        // poolManager is unused on Anvil (no live Uniswap v4); pass address(1) as placeholder
+        OptionPricingHook hook = new OptionPricingHook(address(engine), address(1), initialSigma);
+
         AquaCollateralVault vault = new AquaCollateralVault(address(engine), deployer);
 
-        // 3. Settlement contract (CRE forwarder writes final price)
-        AquaOptionSettlement settlement = new AquaOptionSettlement(creForwarder, deployer);
+        // deployer also acts as CRE forwarder in local testing
+        AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer);
 
-        // 4. Example option: ETH $3500 CALL, 30 days from now
-        OptionToken exampleOption = new OptionToken(
-            "ETH-3500-CALL-30D",
-            "oETH-C-3500",
-            vm.envOr("WETH_ADDRESS", address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)),
-            3500e6,                         // strike: $3500 USDC (6 dec)
-            block.timestamp + 30 days,
-            true,                           // isCall
-            address(vault)                  // vault is the owner → can mint/burn
-        );
+        // ── Wire hook ↔ vault ────────────────────────────────────────────────
+        vault.setHook(address(hook));
+        hook.setVault(address(vault));
 
         vm.stopBroadcast();
 
-        // Print addresses for .env.local
-        console.log("NEXT_PUBLIC_PRICING_ENGINE=%s", address(engine));
-        console.log("NEXT_PUBLIC_AQUA_VAULT=%s", address(vault));
-        console.log("NEXT_PUBLIC_SETTLEMENT=%s", address(settlement));
-        console.log("EXAMPLE_OPTION_TOKEN=%s", address(exampleOption));
+        // ── Output — grep-friendly for shell parsing ──────────────────────
+        console.log("NEXT_PUBLIC_USDC_ADDRESS=%s",    address(usdc));
+        console.log("NEXT_PUBLIC_WETH_ADDRESS=%s",    address(weth));
+        console.log("NEXT_PUBLIC_PRICING_ENGINE=%s",  address(engine));
+        console.log("NEXT_PUBLIC_PRICING_HOOK=%s",    address(hook));
+        console.log("NEXT_PUBLIC_AQUA_VAULT=%s",      address(vault));
+        console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
+        console.log("NEXT_PUBLIC_CHAIN_ID=31337");
     }
 }
