@@ -5,6 +5,7 @@ import { sepolia } from "wagmi/chains";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
 import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
+import { TxProof } from "@/components/TxProof";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
 import { useState, useEffect } from "react";
 
@@ -26,6 +27,7 @@ export default function Home() {
   }, [isConnected, chainId]);
   const [mounted, setMounted] = useState(false);
   const [activeAuth, setActiveAuth] = useState<ActiveAuth | null>(null);
+  const [swapTx, setSwapTx] = useState<string | undefined>();
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -125,7 +127,7 @@ export default function Home() {
           <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
             Live Bid / Ask — Parametric Volatility Smile
           </h2>
-          <OptionMatrix spot={spotPrice ?? 3420} activeAuth={activeAuth} />
+          <OptionMatrix spot={spotPrice ?? 3420} activeAuth={activeAuth} onSwapTx={setSwapTx} />
         </section>
 
         <section>
@@ -133,6 +135,10 @@ export default function Home() {
             LP Position
           </h2>
           <LPDashboard />
+        </section>
+
+        <section>
+          <TxProof recentSwapTx={swapTx} />
         </section>
       </div>
     </main>

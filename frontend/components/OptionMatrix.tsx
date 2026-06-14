@@ -142,11 +142,12 @@ interface BuyPanelProps {
   auth: ActiveAuth;
   strike: number;
   spot: number;
-  askWAD: bigint | undefined;  // premium per contract from PricingEngine (18 dec)
+  askWAD: bigint | undefined;
   onClose: () => void;
+  onSwapTx?: (hash: string) => void;
 }
 
-function BuyPanel({ auth, strike, spot, askWAD, onClose }: BuyPanelProps) {
+function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx }: BuyPanelProps) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("1");
   const [swapQuote, setSwapQuote] = useState<UniswapSwapQuote | null>(null);
@@ -176,7 +177,9 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose }: BuyPanelProps) {
   }, [address, totalUsdcPremium?.toString()]);
 
   // Uniswap swap: ETH → USDC via Universal Router
-  const { sendTransaction: sendSwap, data: swapTxHash, isPending: swapPending, error: swapError } = useSendTransaction();
+  const { sendTransaction: sendSwap, data: swapTxHash, isPending: swapPending, error: swapError } = useSendTransaction({
+    mutation: { onSuccess: (hash) => onSwapTx?.(hash) },
+  });
   const { isLoading: swapConfirming, isSuccess: swapSuccess } = useWaitForTransactionReceipt({ hash: swapTxHash });
 
   // Step 2: Approve USDC for vault
@@ -372,9 +375,10 @@ interface StrikeRowProps {
   strike: number;
   expiry: number;
   activeAuth?: ActiveAuth | null;
+  onSwapTx?: (hash: string) => void;
 }
 
-function StrikeRow({ spot, strike, expiry, activeAuth }: StrikeRowProps) {
+function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx }: StrikeRowProps) {
   const [panel, setPanel] = useState<"buy" | "close" | null>(null);
   const { address } = useAccount();
   const bid = useOptionQuote(spot, strike, expiry, false);
@@ -458,7 +462,7 @@ function StrikeRow({ spot, strike, expiry, activeAuth }: StrikeRowProps) {
         </td>
       </tr>
       {panel === "buy" && activeAuth && (
-        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} />
+        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} onSwapTx={onSwapTx} />
       )}
       {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
         <ClosePanel
@@ -477,9 +481,10 @@ function StrikeRow({ spot, strike, expiry, activeAuth }: StrikeRowProps) {
 interface OptionMatrixProps {
   spot: number;
   activeAuth?: ActiveAuth | null;
+  onSwapTx?: (hash: string) => void;
 }
 
-export function OptionMatrix({ spot, activeAuth }: OptionMatrixProps) {
+export function OptionMatrix({ spot, activeAuth, onSwapTx }: OptionMatrixProps) {
   const [expiry, setExpiry] = useState(0);
 
   useEffect(() => {
@@ -516,7 +521,7 @@ export function OptionMatrix({ spot, activeAuth }: OptionMatrixProps) {
         <tbody>
           {expiry > 0 &&
             strikes.map((k) => (
-              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} />
+              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} />
             ))}
         </tbody>
       </table>
