@@ -4,6 +4,7 @@ import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalanc
 import { sepolia } from "wagmi/chains";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
+import { RegisterSeries, type ActiveSeries } from "@/components/RegisterSeries";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
 import { useState, useEffect } from "react";
 
@@ -24,6 +25,7 @@ export default function Home() {
     }
   }, [isConnected, chainId]);
   const [mounted, setMounted] = useState(false);
+  const [activeSeries, setActiveSeries] = useState<ActiveSeries | null>(null);
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -114,9 +116,16 @@ export default function Home() {
 
         <section>
           <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
+            LP — Register Option Series
+          </h2>
+          <RegisterSeries spot={spotPrice ?? 3420} onRegistered={setActiveSeries} />
+        </section>
+
+        <section>
+          <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
             Live Bid / Ask — Parametric Volatility Smile
           </h2>
-          <OptionMatrix spot={spotPrice ?? 3420} />
+          <OptionMatrix spot={spotPrice ?? 3420} activeSeries={activeSeries} />
         </section>
 
         <section>

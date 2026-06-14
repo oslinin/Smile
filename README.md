@@ -2,6 +2,30 @@
 
 A non-custodial, parametric options marketplace designed to solve the low-liquidity problem in decentralized options. By combining **1inch Aqua**, **Uniswap v4 Hooks**, and **Chainlink CRE**, this platform allows LPs to provide "Just-In-Time" (JIT) liquidity across an entire option chain without fragmenting capital.
 
+---
+
+## Table of Contents
+
+1. [The Thesis](#-the-thesis)
+2. [Architecture](#%EF%B8%8F-architecture)
+3. [Mathematical Specification](#-mathematical-specification)
+4. [Flow Diagrams](#-flow-diagrams)
+5. [Deployed Addresses (Sepolia)](#-deployed-addresses-sepolia)
+6. [Deployment Notes & Failures](#%EF%B8%8F-deployment-notes--failures)
+7. [How to Run the Project](#%EF%B8%8F-how-to-run-the-project)
+   - [Live Site](#1-view-live-site-github-pages)
+   - [Local Frontend](#2-local-frontend-development)
+   - [Smart Contracts](#3-smart-contract-development-foundry)
+   - [CRE Workflow — Local Simulation](#4-chainlink-cre-workflow--local-simulation)
+   - [CRE Workflow — Live Deployment on Sepolia](#5-chainlink-cre-workflow--live-deployment-on-sepolia)
+8. [End-to-End Demo Walkthrough](#end-to-end-demo-walkthrough)
+9. [Glossary](#-glossary)
+10. [Project Structure](#%EF%B8%8F-project-structure)
+11. [Technical Stack](#technical-stack)
+12. [Foundry Usage](#foundry-usage)
+
+---
+
 ## 🚀 The Thesis
 Liquidity in options markets is typically thin because capital is locked per strike and expiry. Our marketplace uses:
 - **1inch Aqua / SwapVM**: LP capital stays in the LP's wallet and is pulled only when a trade matches.
@@ -183,16 +207,109 @@ Run the test suite:
 forge test
 ```
 
-### 4. Chainlink CRE Workflow
-To simulate the settlement workflow:
+### 4. Chainlink CRE Workflow — Local Simulation
+
+The CRE workflow (`cre-workflow/workflow.ts`) is compiled to WASM and run by the Chainlink DON. You can simulate it locally with no keys or live chain required.
+
+**Prerequisites:**
+
 ```bash
-cd cre-workflow
-export RPC_URL=<your_rpc_url>
-export CRE_PRIVATE_KEY=<your_key>
-export SETTLEMENT_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-export SERIES_ID=<series_bytes32>
-npx ts-node option-settlement.ts --simulate
+# Chainlink CRE CLI (requires a Chainlink account at cre.chain.link)
+npm install -g @chainlink/cre-cli
+
+# Bun (used by cre-compile to build the WASM binary)
+curl -fsSL https://bun.sh/install | bash
+
+cd cre-workflow && npm install
 ```
+
+**Step 1 — Set your series ID in `cre-workflow/config.json`:**
+
+After registering a series in the UI (see [End-to-End Demo](#end-to-end-demo-walkthrough)), copy the `seriesId` shown on screen and paste it here:
+
+```json
+{
+  "schedule": "0 */6 * * *",
+  "seriesId": "<paste seriesId from UI registration step>",
+  "settlement": {
+    "chainSelectorName": "ethereum-sepolia",
+    "contractAddress": "0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA"
+  }
+}
+```
+
+**Step 2 — Run the local simulation:**
+
+```bash
+npm run simulate
+# → cre workflow simulate --target local-simulation --config config.json workflow.ts
+```
+
+Expected output:
+
+```
+[CRE] Consensus ETH/USD: $3421.50
+[CRE] Report ID: 0xabc…
+[CRE] settleSeries(seriesId=0x…, spot=3421500000) submitted
+```
+
+**Step 3 (optional) — Simulate with DON broadcast:**
+
+Hits real DON nodes for consensus but does not write on-chain:
+
+```bash
+npm run simulate:broadcast
+```
+
+### 5. Chainlink CRE Workflow — Live Deployment on Sepolia
+
+**Step 1 — Compile the workflow to WASM:**
+
+```bash
+npm run compile
+# → bun x cre-compile workflow.ts dist/workflow.wasm
+```
+
+**Step 2 — Authenticate:**
+
+```bash
+cre login
+```
+
+**Step 3 — Deploy to the CRE network:**
+
+```bash
+npm run deploy
+# → cre workflow deploy dist/workflow.wasm
+```
+
+The DON triggers the workflow on the cron schedule (`0 */6 * * *` — every 6 hours). To trigger it immediately:
+
+```bash
+cre workflow trigger <workflow-id>
+```
+
+**Step 4 — Verify settlement on-chain:**
+
+```bash
+cast call 0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA \
+  "series(bytes32)(uint256,uint256,uint256,address,address,address,uint256,bool,uint256)" \
+  <seriesId> \
+  --rpc-url $SEPOLIA_RPC_URL
+# settled (index 7) should be true
+# settlementPrice (index 8) should be non-zero
+```
+
+## End-to-End Demo Walkthrough
+
+| Step | Actor | Action | Contract call |
+|---|---|---|---|
+| 1 | LP | Connect wallet → fill out _Register Option Series_ → sign tx | `AquaOptionSettlement.registerSeries()` |
+| 2 | LP | Copy the `seriesId` shown in the UI | — |
+| 3 | Trader | Click **Buy** on the matching strike row → enter amount → sign tx | `AquaCollateralVault.pull()` |
+| 4 | — | Paste `seriesId` into `cre-workflow/config.json`, run `npm run simulate` | `AquaOptionSettlement.settleSeries()` via CRE |
+| 5 | Trader | Call `redeem()` to collect payout (ITM) | `AquaOptionSettlement.redeem()` |
+| 6 | LP | Call `reclaimCollateral()` to recover remaining collateral | `AquaOptionSettlement.reclaimCollateral()` |
 
 ## 📖 Glossary
 
@@ -234,12 +351,13 @@ npx ts-node option-settlement.ts --simulate
 
 ```text
 ├── cre-workflow/             # Chainlink CRE Logic (TypeScript)
-│   ├── option-settlement.ts  # Settlement simulation script
-│   └── workflow.ts           # DON capability definition
+│   ├── config.json           # Series ID + settlement contract config
+│   ├── option-settlement.ts  # Legacy simulation script (ethers.js)
+│   └── workflow.ts           # DON workflow (CRE SDK, compiled to WASM)
 ├── frontend/                 # Next.js Application
-│   ├── components/           # UI Components (Matrix, TradeButton, Dashboard)
+│   ├── components/           # UI Components (Matrix, RegisterSeries, TradeButton, Dashboard)
 │   ├── config/               # Wagmi, Viem and Contract ABIs
-│   └── pages/                # Next.js routing & main application
+│   └── app/                  # Next.js App Router
 ├── src/                      # Smart Contracts (Solidity)
 │   ├── hooks/                # Uniswap v4 Hooks (OptionPricingHook)
 │   ├── swapvm/               # Pricing Engine (OptionPricingEngine)
@@ -256,7 +374,7 @@ npx ts-node option-settlement.ts --simulate
 ## Technical Stack
 - **Smart Contracts**: Solidity 0.8.26 (Foundry)
 - **Frontend**: Next.js, Tailwind CSS, Wagmi/Viem
-- **Oracle/Settlement**: Chainlink CRE
+- **Oracle/Settlement**: Chainlink CRE SDK v1.11.0
 - **DEX Infrastructure**: Uniswap v4, 1inch Aqua
 
 ---
@@ -272,9 +390,6 @@ npx ts-node option-settlement.ts --simulate
 
 ### Deploy
 `forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>`
-
-### Help
-`forge --help`
 
 ### Help
 

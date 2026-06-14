@@ -3,6 +3,6 @@
   "seriesId": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "settlement": {
     "chainSelectorName": "ethereum-sepolia",
-    "contractAddress": "0x0000000000000000000000000000000000000000"
+    "contractAddress": "0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA"
   }
 }
