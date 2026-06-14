@@ -35,6 +35,7 @@ jobs:
         working-directory: frontend
         run: npm run build
         env:
+          NEXT_PUBLIC_BASE_PATH: /Smile
           NEXT_PUBLIC_WC_PROJECT_ID: ${{ vars.WC_PROJECT_ID }}
           NEXT_PUBLIC_UNISWAP_API_KEY: ${{ vars.UNISWAP_API_KEY }}
           NEXT_PUBLIC_PRICING_ENGINE: ${{ vars.PRICING_ENGINE_ADDRESS }}
