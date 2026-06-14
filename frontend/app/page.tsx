@@ -11,7 +11,6 @@ export default function Home() {
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const [mounted, setMounted] = useState(false);
-  const [showConnectors, setShowConnectors] = useState(false);
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -46,35 +45,22 @@ export default function Home() {
           </div>
         ) : (
           <div className="relative">
-            <button
-              onClick={() => setShowConnectors((v) => !v)}
-              disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              {isPending ? "Connecting…" : "Connect Wallet"}
-            </button>
-
-            {showConnectors && (
-              <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden">
-                {connectors.length === 0 && (
-                  <div className="px-4 py-3 text-sm text-gray-400">
-                    No wallet detected.<br />
-                    <a href="https://metamask.io" target="_blank" rel="noreferrer"
-                       className="text-blue-400 underline">Install MetaMask</a>
-                  </div>
-                )}
-                {connectors.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { connect({ connector: c }); setShowConnectors(false); }}
-                    className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-0"
-                  >
-                    {c.name}
-                  </button>
-                ))}
-                {error && (
-                  <div className="px-4 py-2 text-xs text-red-400">{error.message}</div>
-                )}
+            {connectors.length === 0 ? (
+              <div className="text-xs text-gray-500 text-right max-w-[200px]">
+                WalletConnect project ID not set
+              </div>
+            ) : (
+              <button
+                onClick={() => connect({ connector: connectors[0] })}
+                disabled={isPending}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                {isPending ? "Connecting…" : "Connect Wallet"}
+              </button>
+            )}
+            {error && (
+              <div className="absolute right-0 mt-1 text-xs text-red-400 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 z-10 max-w-[240px]">
+                {error.message}
               </div>
             )}
           </div>
