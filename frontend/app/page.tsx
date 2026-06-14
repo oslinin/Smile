@@ -1,6 +1,7 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useSwitchChain } from "wagmi";
+import { sepolia } from "wagmi/chains";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
@@ -13,7 +14,15 @@ export default function Home() {
   const chainId = useChainId();
   const chains = useChains();
   const { data: balance } = useBalance({ address });
+  const { switchChain } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
+  const isWrongChain = isConnected && chainId !== sepolia.id;
+
+  useEffect(() => {
+    if (isConnected && chainId !== sepolia.id) {
+      switchChain({ chainId: sepolia.id });
+    }
+  }, [isConnected, chainId]);
   const [mounted, setMounted] = useState(false);
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
@@ -37,7 +46,14 @@ export default function Home() {
           </button>
         ) : isConnected ? (
           <div className="flex items-center gap-3">
-            {currentChain && (
+            {isWrongChain ? (
+              <button
+                onClick={() => switchChain({ chainId: sepolia.id })}
+                className="text-xs font-semibold px-2 py-0.5 rounded bg-red-900 text-red-300 border border-red-700 hover:bg-red-800"
+              >
+                Wrong Network — Switch to Sepolia
+              </button>
+            ) : currentChain && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
                 {currentChain.name}
               </span>
