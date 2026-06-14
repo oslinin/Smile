@@ -1,7 +1,8 @@
 "use client";
 
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useAccount } from "wagmi";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import type { Leg } from "@/components/PayoffBuilder";
 import { CONTRACTS } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 import { USDC_SEPOLIA } from "@/components/AuthorizeRange";
@@ -145,9 +146,10 @@ interface BuyPanelProps {
   askWAD: bigint | undefined;
   onClose: () => void;
   onSwapTx?: (hash: string) => void;
+  onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
 }
 
-function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx }: BuyPanelProps) {
+function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirmed }: BuyPanelProps) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("1");
   const [swapQuote, setSwapQuote] = useState<UniswapSwapQuote | null>(null);
@@ -189,6 +191,14 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx }: BuyPanelPro
   // Step 3: vault.buy()
   const { writeContract: buyTx, data: buyTxHash, isPending: buyPending, error: buyError } = useWriteContract();
   const { isLoading: buyConfirming, isSuccess: buySuccess } = useWaitForTransactionReceipt({ hash: buyTxHash });
+  const buyFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (buySuccess && !buyFiredRef.current) {
+      buyFiredRef.current = true;
+      onBuyConfirmed?.({ direction: "buy", isCall: auth.isCall, strike, amount: Number(amount) });
+    }
+  }, [buySuccess]);
 
   const canTrade = !!CONTRACTS.aquaVault && !!address;
 
@@ -376,9 +386,10 @@ interface StrikeRowProps {
   expiry: number;
   activeAuth?: ActiveAuth | null;
   onSwapTx?: (hash: string) => void;
+  onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
 }
 
-function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx }: StrikeRowProps) {
+function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed }: StrikeRowProps) {
   const [panel, setPanel] = useState<"buy" | "close" | null>(null);
   const { address } = useAccount();
   const bid = useOptionQuote(spot, strike, expiry, false);
@@ -462,7 +473,7 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx }: StrikeRowProp
         </td>
       </tr>
       {panel === "buy" && activeAuth && (
-        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} onSwapTx={onSwapTx} />
+        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
       )}
       {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
         <ClosePanel
@@ -482,9 +493,10 @@ interface OptionMatrixProps {
   spot: number;
   activeAuth?: ActiveAuth | null;
   onSwapTx?: (hash: string) => void;
+  onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
 }
 
-export function OptionMatrix({ spot, activeAuth, onSwapTx }: OptionMatrixProps) {
+export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed }: OptionMatrixProps) {
   const [expiry, setExpiry] = useState(0);
 
   useEffect(() => {
@@ -521,7 +533,7 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx }: OptionMatrixProps) 
         <tbody>
           {expiry > 0 &&
             strikes.map((k) => (
-              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} />
+              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
             ))}
         </tbody>
       </table>
