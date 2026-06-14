@@ -1,7 +1,6 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
 import { useState } from "react";
@@ -10,9 +9,10 @@ const DEMO_SPOT = 3420;
 
 export default function Home() {
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const [lastTx, setLastTx] = useState<string | null>(null);
+  const [showConnectors, setShowConnectors] = useState(false);
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
@@ -36,12 +36,28 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => connect({ connector: injected() })}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            Connect Wallet
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowConnectors((v) => !v)}
+              disabled={isPending}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              {isPending ? "Connecting…" : "Connect Wallet"}
+            </button>
+            {showConnectors && (
+              <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden">
+                {connectors.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { connect({ connector: c }); setShowConnectors(false); }}
+                    className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-800 transition-colors"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </header>
 
