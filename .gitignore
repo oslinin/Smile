@@ -5,6 +5,9 @@ cache/
 broadcast/
 .env
 
+# Skills (auto-installed from skills-lock.json via `npx skills add`)
+.agents/
+
 # Node
 node_modules/
 frontend/.next/
