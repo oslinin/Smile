@@ -3,9 +3,8 @@
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
+import { useUniswapSpot } from "@/hooks/useUniswapSpot";
 import { useState, useEffect } from "react";
-
-const DEMO_SPOT = 3420;
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -13,6 +12,8 @@ export default function Home() {
   const { disconnect } = useDisconnect();
   const [mounted, setMounted] = useState(false);
   const [showConnectors, setShowConnectors] = useState(false);
+  const spot = useUniswapSpot();
+  const spotPrice = spot.status === "loading" ? null : spot.price;
 
   // Only render wallet UI after hydration — avoids empty connectors on static pre-render
   useEffect(() => { setMounted(true); }, []);
@@ -82,15 +83,24 @@ export default function Home() {
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-center gap-4">
-          <div className="text-3xl font-mono font-bold">${DEMO_SPOT.toLocaleString()}</div>
+          <div className="text-3xl font-mono font-bold">
+            {spotPrice == null ? (
+              <span className="text-gray-600 animate-pulse">$—</span>
+            ) : (
+              <>${spotPrice.toLocaleString()}</>
+            )}
+          </div>
           <div className="text-gray-500 text-sm">ETH/USD · 30d expiry</div>
+          {spot.status === "ok" && (
+            <span className="text-green-500 text-xs font-mono">● Uniswap API</span>
+          )}
         </div>
 
         <section>
           <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
             Live Bid / Ask — Parametric Volatility Smile
           </h2>
-          <OptionMatrix spot={DEMO_SPOT} />
+          <OptionMatrix spot={spotPrice ?? 3420} />
         </section>
 
         <section>

@@ -36,6 +36,7 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_WC_PROJECT_ID: ${{ vars.WC_PROJECT_ID }}
+          NEXT_PUBLIC_UNISWAP_API_KEY: ${{ vars.UNISWAP_API_KEY }}
           NEXT_PUBLIC_PRICING_ENGINE: ${{ vars.PRICING_ENGINE_ADDRESS }}
           NEXT_PUBLIC_AQUA_VAULT: ${{ vars.AQUA_VAULT_ADDRESS }}
           NEXT_PUBLIC_SETTLEMENT: ${{ vars.SETTLEMENT_ADDRESS }}
