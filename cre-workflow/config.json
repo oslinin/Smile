@@ -1,0 +1,8 @@
+{
+  "schedule": "0 */6 * * *",
+  "seriesId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "settlement": {
+    "chainSelectorName": "ethereum-sepolia",
+    "contractAddress": "0x0000000000000000000000000000000000000000"
+  }
+}

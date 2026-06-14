@@ -1,17 +1,17 @@
 {
   "name": "cre-workflow",
   "version": "1.0.0",
-  "description": "Chainlink CRE settlement workflow for the options marketplace",
-  "main": "option-settlement.ts",
+  "description": "Chainlink CRE settlement workflow — fetches ETH/USD consensus, settles expired options on-chain",
+  "type": "module",
   "scripts": {
-    "simulate": "ts-node option-settlement.ts --simulate"
+    "compile": "bun x cre-compile workflow.ts dist/workflow.wasm",
+    "simulate": "cre workflow simulate --target local-simulation --config config.json workflow.ts",
+    "simulate:broadcast": "cre workflow simulate --target local-simulation --broadcast --config config.json workflow.ts",
+    "deploy": "cre workflow deploy dist/workflow.wasm"
   },
   "dependencies": {
-    "ethers": "^6.0.0"
-  },
-  "devDependencies": {
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "@chainlink/cre-sdk": "^1.11.0",
+    "viem": "^2.0.0",
+    "zod": "^3.0.0"
   }
 }
