@@ -82,7 +82,7 @@ contract AquaCollateralVault is Ownable {
         address collateralToken,
         bool isCall
     ) external returns (uint256 authId) {
-        require(strikeMin < strikeMax, "invalid range");
+        require(strikeMin <= strikeMax, "invalid range");
         require(expiry > block.timestamp, "expiry in past");
         require(maxCollateral > 0, "zero capacity");
 

@@ -55,7 +55,31 @@ contract AquaCollateralVaultTest is Test {
     function test_authorizeRange_invalidRangeReverts() public {
         vm.prank(lp);
         vm.expectRevert("invalid range");
+        // strikeMin strictly greater than strikeMax is still invalid
         vault.authorizeRange(STRIKE_MAX, STRIKE_MIN, expiry, 1e18, address(weth), true);
+    }
+
+    function test_authorizeRange_singleStrike() public {
+        // K_min == K_max is valid: write a covered call at exactly one strike
+        weth.mint(lp, 1e18);
+        vm.prank(lp);
+        weth.approve(address(vault), 1e18);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE, STRIKE, expiry, 1e18, address(weth), true);
+
+        (address storedLp,, uint256 sMax,,,,, bool isCall, bool active) = vault.authorizations(authId);
+        assertEq(storedLp, lp);
+        assertEq(sMax, STRIKE);
+        assertTrue(isCall);
+        assertTrue(active);
+
+        // Can buy at exactly that strike
+        usdc.mint(buyer, type(uint256).max / 2);
+        vm.prank(buyer);
+        usdc.approve(address(vault), type(uint256).max);
+        vm.prank(buyer);
+        vault.buy(authId, STRIKE, 3000e18, buyer, 1e18, address(usdc));
+        assertEq(OptionToken(vault.optionTokens(authId, STRIKE)).balanceOf(buyer), 1e18);
     }
 
     function test_revokeAuthorization() public {

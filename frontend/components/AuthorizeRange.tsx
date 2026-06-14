@@ -306,7 +306,7 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
 
       <button
         onClick={handleStart}
-        disabled={isWorking || !CONTRACTS.aquaVault || strikeMin >= strikeMax || Number(maxCollateral) <= 0}
+        disabled={isWorking || !CONTRACTS.aquaVault || strikeMin > strikeMax || Number(maxCollateral) <= 0}
         className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
       >
         {step === "idle" ? "Authorize Range"
