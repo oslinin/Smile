@@ -177,16 +177,38 @@ npx ts-node option-settlement.ts --simulate
 
 ## 📖 Glossary
 
+### Ethereum / Blockchain Terms
+
+- **EOA (Externally Owned Account):** A standard Ethereum wallet address controlled by a private key (e.g., MetaMask). Contrasts with smart contract accounts, which are controlled by code. LPs and traders interact with this protocol using EOAs.
+- **ERC-20:** A standard interface for fungible tokens on Ethereum. `OptionToken` follows this standard so option positions can be traded on any compatible DEX or held in any wallet.
+- **Non-custodial:** A design where users retain control of their assets at all times. The protocol never holds user funds; collateral stays in LP wallets until a trade occurs.
+
+### DeFi Terms
+
+- **LP (Liquidity Provider):** A participant who supplies capital to back trades. In this protocol, LPs authorize the Aqua vault to pull collateral from their wallet JIT — their funds are never locked in a pool beforehand.
+- **CEX (Centralized Exchange):** A traditional exchange operated by a company (e.g., Binance, Coinbase, Kraken). Used here as off-chain price sources for the Chainlink CRE settlement consensus.
+- **DEX (Decentralized Exchange):** An on-chain exchange where trades are executed by smart contracts with no central operator. Uniswap v4 is the DEX layer used for price discovery in this protocol.
 - **DON (Decentralized Oracle Network):** A network of independent, tamper-resistant node operators (like Chainlink) that securely provide external data and off-chain computation to smart contracts.
 - **CRE (Chainlink Runtime Environment):** A decentralized off-chain computation environment allowing developers to build custom workflows and consensus mechanisms executed by a DON (replacing older products like Functions).
-- **JIT (Just-In-Time) Liquidity:** A model where capital is securely pulled from a Liquidity Provider's (LP) wallet at the exact moment a trade occurs, preventing capital from sitting idle or fragmented across multiple contracts.
-- **OTM (Out-of-The-Money):** An option that has no intrinsic value at expiry (e.g., a call option where the spot price is lower than the strike price). In our vault, OTM settlements return 100% of the locked collateral to the LP.
-- **ITM (In-The-Money):** An option that possesses intrinsic value at expiry. During settlement, the holder is paid out their profit, and the remaining collateral is returned to the LP.
-- **IV (Implied Volatility / $\sigma$):** A metric reflecting the market's forecast of price movement. Our engine dynamically reprices IV (`σ_global`) based on real-time buy/sell pressure.
+- **JIT (Just-In-Time) Liquidity:** A model where capital is securely pulled from an LP's wallet at the exact moment a trade occurs, preventing capital from sitting idle or fragmented across multiple contracts.
+
+### Options Terms
+
+- **Strike Price (K):** The price at which an option holder has the right to buy (call) or sell (put) the underlying asset at expiry.
+- **Spot Price (S):** The current market price of the underlying asset (ETH/USDC here), sourced from Chainlink oracles.
+- **Expiry (T):** The date/time at which an option contract settles and the holder's profit or loss is calculated.
+- **OTM (Out-of-The-Money):** An option with no intrinsic value at expiry (e.g., a call where the spot price is below the strike). OTM settlements return 100% of locked collateral to the LP.
+- **ITM (In-The-Money):** An option with intrinsic value at expiry. The holder is paid their profit; remaining collateral is returned to the LP.
+- **IV (Implied Volatility / σ):** A metric reflecting the market's forecast of price movement. This engine dynamically reprices IV (`σ_global`) based on real-time buy/sell pressure via the Uniswap hook.
+- **Volatility Smile:** The observed pattern where options at strikes far from the current spot price trade at higher implied volatility than at-the-money options, forming a U-shaped curve. The `α` parameter controls this curve's curvature.
+- **Black-Scholes:** A mathematical model for pricing options contracts. This protocol uses a parametric approximation of Black-Scholes (swapping a closed-form integral for `S · σ · √T`) to keep gas costs low.
+
+### Protocol-Specific Terms
+
 - **SwapVM:** A highly optimized virtual machine by 1inch designed for executing custom matching and pricing logic seamlessly within their ecosystem.
 - **1inch Aqua:** A 1inch protocol primitive that facilitates the JIT transfer of assets directly from an LP's self-custodial wallet to back trades on demand.
 - **Uniswap v4 Hooks:** Customizable smart contracts that run at specific stages of a Uniswap v4 pool's lifecycle (e.g., `beforeSwap` to veto toxic flow, `afterSwap` to adjust IV).
-- **Trimmed Mean:** A consensus algorithm used in our CRE workflow that drops the highest and lowest reported spot prices before calculating the average, protecting settlement from isolated exchange flash crashes.
+- **Trimmed Mean:** A consensus algorithm used in the CRE workflow that drops the highest and lowest reported spot prices before averaging, protecting settlement from flash crashes on a single exchange.
 
 ## 🏗️ Project Structure
 
