@@ -301,7 +301,7 @@ sequenceDiagram
 | **USDC** (Circle Sepolia) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) |
 | **WETH** (canonical Sepolia) | [`0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9`](https://sepolia.etherscan.io/address/0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9) |
 
-> _Live on Sepolia testnet. Frontend deployed at **https://oslinin.github.io/options** (WalletConnect enabled — switch MetaMask to Sepolia to interact)._
+> _Live on Sepolia testnet. Frontend deployed at **https://oslinin.github.io/Smile** (WalletConnect enabled — switch MetaMask to Sepolia to interact)._
 
 ---
 
@@ -318,7 +318,7 @@ sequenceDiagram
 
 ### 1. View Live Site (GitHub Pages)
 
-**URL:** `https://oslinin.github.io/options`
+**URL:** `https://oslinin.github.io/Smile`
 
 ### 2. Local Frontend Development
 
