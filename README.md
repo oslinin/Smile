@@ -23,13 +23,13 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 
 ## 🚀 The Thesis
 
-While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer the strategies retail traders actually want: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, or buying butterflies to express a range-bound view cheaply. These instruments require a functioning options market with real liquidity across strikes and expiries. That market has never materialized on-chain. 1inch Aqua solves this by allowing liquidity to be pooled across strikes and expiries, enabling options quotes and mints of options traded on Uniswap. Uniswap Hooks update the volatility surface so that the pricing engine can reprice after trades. Chainlink CRE is used for settlement of the minted options.
+While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer the strategies retail traders actually want: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, or buying butterflies to express a range-bound view cheaply. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain. Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity that retail users cannot provide.
 
-- Liquidity fragmentation across strikes and expiries is remediated by Aqua's non-custodial LP, until a buyer is matched. This can only increase liquidity.
-- Collateral lockup, and forfeited dividend yield — which is not a problem for standard options writers — is also removed by Aqua's non-custodial LP.
+- Liquidity fragmentation across strikes and expiries is remediated by Aqua's non-custodial LP, until a buyer is matched. Makers can offer liquidity across a range of strikes and expiries, increasing net liquidity.
+- Collateral lockup in LPs, and forfeited dividend yield — which is not a problem for standard options writers — is also removed by Aqua's non-custodial LP.
 - Standard options markets work because broker-dealers delta-hedge their books against the spot market, continuously arbitraging away mispricings between options and the underlying. DeFi has had no equivalent. Uniswap and Chainlink offer:
-  - Premium transfer via Uniswap Trading API
-  - Vol surface repricing post-trade via Uniswap v4 Hooks
+  - Fast trading and premium transfer via Uniswap Trading API
+  - Vol surface repricing post-trade via Uniswap v4 Hooks across strikes and expiries
   - Options payoff settlement and redemption via Chainlink CRE
 
 ---
