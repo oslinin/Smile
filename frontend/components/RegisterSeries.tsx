@@ -6,6 +6,7 @@ import { keccak256, encodePacked } from "viem";
 
 const SETTLEMENT_ADDRESS = "0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA" as const;
 export const USDC_SEPOLIA = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as const;
+export const WETH_SEPOLIA = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14" as const;
 
 const SETTLEMENT_ABI = [
   {
@@ -38,6 +39,8 @@ export interface ActiveSeries {
   expiry: number;
   optionToken: string;
   lp: string;
+  isCall: boolean;
+  collateralToken: string;
 }
 
 interface RegisterSeriesProps {
@@ -50,6 +53,13 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
   const [strike, setStrike] = useState(Math.round(spot / 50) * 50);
   const [expiryOffset, setExpiryOffset] = useState(7 * 86_400);
   const [optionToken, setOptionToken] = useState("");
+  const [isCall, setIsCall] = useState(true);
+
+  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  // Call: 1 WETH per contract (18 dec). Put: strike USDC per contract (6 dec).
+  const collateralPerUnit = isCall
+    ? BigInt("1000000000000000000")
+    : BigInt(Math.round(strike * 1e6));
   const [registered, setRegistered] = useState<ActiveSeries | null>(null);
   const firedRef = useRef(false);
 
@@ -67,7 +77,7 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
   useEffect(() => {
     if (isSuccess && seriesId && !firedRef.current && address) {
       firedRef.current = true;
-      const series: ActiveSeries = { seriesId, strike, expiry, optionToken, lp: address };
+      const series: ActiveSeries = { seriesId, strike, expiry, optionToken, lp: address, isCall, collateralToken };
       setRegistered(series);
       onRegistered(series);
     }
@@ -83,8 +93,8 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
         seriesId,
         expiryBig,
         strikeWAD,
-        BigInt(Math.round(strike * 1e6)),
-        USDC_SEPOLIA,
+        collateralPerUnit,
+        collateralToken as `0x${string}`,
         (optionToken || "0x0000000000000000000000000000000000000000") as `0x${string}`,
         address,
         BigInt(0),
@@ -113,8 +123,12 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
           </button>
         </div>
         <div className="text-xs text-gray-400">
-          Strike <span className="text-white font-mono">${registered.strike.toLocaleString()}</span>
+          <span className={registered.isCall ? "text-blue-400" : "text-orange-400"}>
+            {registered.isCall ? "Call" : "Put"}
+          </span>
+          {" · "}Strike <span className="text-white font-mono">${registered.strike.toLocaleString()}</span>
           {" · "}expires {new Date(registered.expiry * 1000).toLocaleDateString()}
+          {" · "}collateral <span className="text-white font-mono">{registered.isCall ? "WETH" : "USDC"}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 font-mono truncate">{registered.seriesId}</span>
@@ -132,6 +146,22 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-4">
       <h3 className="text-white font-semibold text-sm">Register Option Series</h3>
+
+      <div className="flex gap-2">
+        {[true, false].map((c) => (
+          <button
+            key={String(c)}
+            onClick={() => setIsCall(c)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              isCall === c
+                ? c ? "bg-blue-600 text-white" : "bg-orange-700 text-white"
+                : "bg-gray-800 text-gray-400 hover:text-white"
+            }`}
+          >
+            {c ? "Call (WETH collateral)" : "Put (USDC collateral)"}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -3,8 +3,8 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
 import { useEffect, useState } from "react";
 import { CONTRACTS } from "@/config/wagmi";
-import type { ActiveSeries } from "@/components/RegisterSeries";
-import { USDC_SEPOLIA } from "@/components/RegisterSeries";
+import type { ActiveAuth } from "@/components/AuthorizeRange";
+import { USDC_SEPOLIA } from "@/components/AuthorizeRange";
 
 const PRICING_ENGINE_ABI = [
   {
@@ -31,18 +31,59 @@ const PRICING_ENGINE_ABI = [
 
 const VAULT_ABI = [
   {
-    name: "pull",
+    name: "buy",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "authId", type: "uint256" },
+      { name: "strike", type: "uint256" },
+      { name: "spot", type: "uint256" },
+      { name: "buyer", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "premiumToken", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "close",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
       { name: "optionToken", type: "address" },
       { name: "lp", type: "address" },
-      { name: "buyer", type: "address" },
       { name: "amount", type: "uint256" },
-      { name: "collateralToken", type: "address" },
-      { name: "collateralAmount", type: "uint256" },
     ],
     outputs: [],
+  },
+  {
+    name: "optionTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "authId", type: "uint256" },
+      { name: "strike", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
+const ERC20_ABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
   },
 ] as const;
 
@@ -94,39 +135,60 @@ function formatWAD(val: bigint | undefined): string {
   return `$${(Number(val) / 1e18).toFixed(2)}`;
 }
 
+// ── BuyPanel ──────────────────────────────────────────────────────────────────
+
 interface BuyPanelProps {
-  series: ActiveSeries;
+  auth: ActiveAuth;
   strike: number;
+  spot: number;
   onClose: () => void;
 }
 
-function BuyPanel({ series, strike, onClose }: BuyPanelProps) {
+function BuyPanel({ auth, strike, spot, onClose }: BuyPanelProps) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("1");
+  const [approveStep, setApproveStep] = useState(false);
   const amountWAD = BigInt(Math.round(Number(amount) * 1e18));
-  const collateralAmount = BigInt(Math.round(strike * Number(amount) * 1e6));
 
-  const { writeContract, data: txHash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+  const { writeContract: approveUsdc, data: approveTxHash, isPending: approvePending, error: approveError } = useWriteContract();
+  const { isLoading: approveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
+
+  const { writeContract: buyTx, data: buyTxHash, isPending: buyPending, error: buyError } = useWriteContract();
+  const { isLoading: buyConfirming, isSuccess: buySuccess } = useWaitForTransactionReceipt({ hash: buyTxHash });
 
   const canTrade = !!CONTRACTS.aquaVault && !!address;
 
+  const handleApprove = () => {
+    if (!canTrade) return;
+    setApproveStep(true);
+    // Approve a large USDC amount for premium payment
+    approveUsdc({
+      address: USDC_SEPOLIA as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [CONTRACTS.aquaVault as `0x${string}`, BigInt("1000000000000")], // 1M USDC headroom
+    });
+  };
+
   const handleBuy = () => {
     if (!canTrade) return;
-    writeContract({
+    buyTx({
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
-      functionName: "pull",
+      functionName: "buy",
       args: [
-        series.optionToken as `0x${string}`,
-        series.lp as `0x${string}`,
+        auth.authId,
+        BigInt(Math.round(strike * 1e18)),
+        BigInt(Math.round(spot * 1e18)),
         address!,
         amountWAD,
-        USDC_SEPOLIA,
-        collateralAmount,
+        USDC_SEPOLIA as `0x${string}`,
       ],
     });
   };
+
+  const isApproved = approveSuccess;
+  const isWorking = approvePending || approveConfirming || buyPending || buyConfirming;
 
   return (
     <tr className="bg-blue-950/20 border-b border-gray-800">
@@ -142,18 +204,84 @@ function BuyPanel({ series, strike, onClose }: BuyPanelProps) {
             className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs font-mono focus:outline-none focus:border-blue-600"
           />
           <span className="text-xs text-gray-500">
-            Strike ${strike.toLocaleString()} · Collateral {(strike * Number(amount)).toLocaleString()} USDC
+            {auth.isCall ? "Call" : "Put"} · K ${strike.toLocaleString()} · premium in USDC
           </span>
           {!canTrade && (
             <span className="text-xs text-yellow-500">Set NEXT_PUBLIC_AQUA_VAULT to enable trading</span>
           )}
-          {canTrade && (
+          {canTrade && !isApproved && (
+            <button
+              onClick={handleApprove}
+              disabled={isWorking}
+              className="px-4 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+            >
+              {approvePending ? "Confirm…" : approveConfirming ? "Approving…" : "1. Approve USDC"}
+            </button>
+          )}
+          {canTrade && isApproved && (
             <button
               onClick={handleBuy}
-              disabled={isPending || isConfirming || isSuccess}
+              disabled={isWorking || buySuccess}
               className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
             >
-              {isPending ? "Confirm…" : isConfirming ? "Confirming…" : isSuccess ? "✓ Filled" : `Buy ${amount} ETH Call`}
+              {buyPending ? "Confirm…" : buyConfirming ? "Confirming…" : buySuccess ? "✓ Filled" : `2. Buy ${amount} ${auth.isCall ? "Call" : "Put"}`}
+            </button>
+          )}
+          {(approveError || buyError) && (
+            <span className="text-xs text-red-400">
+              {(approveError || buyError)?.message.split("\n")[0]}
+            </span>
+          )}
+          <button onClick={onClose} className="text-xs text-gray-500 hover:text-white ml-auto">
+            Cancel
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── ClosePanel ────────────────────────────────────────────────────────────────
+
+interface ClosePanelProps {
+  optionToken: string;
+  lp: string;
+  balance: bigint;
+  onClose: () => void;
+}
+
+function ClosePanel({ optionToken, lp, balance, onClose }: ClosePanelProps) {
+  const { writeContract, data: txHash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+  const canClose = !!CONTRACTS.aquaVault && balance > BigInt(0);
+
+  const handleClose = () => {
+    if (!canClose) return;
+    writeContract({
+      address: CONTRACTS.aquaVault as `0x${string}`,
+      abi: VAULT_ABI,
+      functionName: "close",
+      args: [optionToken as `0x${string}`, lp as `0x${string}`, balance],
+    });
+  };
+
+  return (
+    <tr className="bg-red-950/20 border-b border-gray-800">
+      <td colSpan={7} className="px-4 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-gray-400">
+            Close position · {(Number(balance) / 1e18).toFixed(4)} contracts
+          </span>
+          <span className="text-xs text-gray-500">
+            Burns OptionToken · releases LP collateral · decrements σ
+          </span>
+          {canClose && (
+            <button
+              onClick={handleClose}
+              disabled={isPending || isConfirming || isSuccess}
+              className="px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+            >
+              {isPending ? "Confirm…" : isConfirming ? "Confirming…" : isSuccess ? "✓ Closed" : "Close Position"}
             </button>
           )}
           {error && <span className="text-xs text-red-400">{error.message.split("\n")[0]}</span>}
@@ -166,15 +294,18 @@ function BuyPanel({ series, strike, onClose }: BuyPanelProps) {
   );
 }
 
+// ── StrikeRow ─────────────────────────────────────────────────────────────────
+
 interface StrikeRowProps {
   spot: number;
   strike: number;
   expiry: number;
-  activeSeries?: ActiveSeries | null;
+  activeAuth?: ActiveAuth | null;
 }
 
-function StrikeRow({ spot, strike, expiry, activeSeries }: StrikeRowProps) {
-  const [buying, setBuying] = useState(false);
+function StrikeRow({ spot, strike, expiry, activeAuth }: StrikeRowProps) {
+  const [panel, setPanel] = useState<"buy" | "close" | null>(null);
+  const { address } = useAccount();
   const bid = useOptionQuote(spot, strike, expiry, false);
   const ask = useOptionQuote(spot, strike, expiry, true);
   const moneyness = ((strike - spot) / spot) * 100;
@@ -182,7 +313,34 @@ function StrikeRow({ spot, strike, expiry, activeSeries }: StrikeRowProps) {
   const sigma = smileVol(spot, strike);
   const delta = callDelta(spot, strike, sigma, T);
   const isATM = Math.abs(moneyness) < 1;
-  const isTradeable = activeSeries && Math.abs(activeSeries.strike - strike) < 1;
+
+  // Strike is tradeable if it falls within the LP's authorized range
+  const isTradeable = activeAuth &&
+    strike >= activeAuth.strikeMin &&
+    strike <= activeAuth.strikeMax;
+
+  const strikeWAD = BigInt(Math.round(strike * 1e18));
+
+  // Look up whether an OptionToken exists for this (authId, strike)
+  const { data: optionTokenAddr } = useReadContract({
+    address: CONTRACTS.aquaVault as `0x${string}`,
+    abi: VAULT_ABI,
+    functionName: "optionTokens",
+    args: [activeAuth?.authId ?? BigInt(0), strikeWAD],
+    query: { enabled: !!isTradeable && !!CONTRACTS.aquaVault && !!activeAuth },
+  });
+
+  const hasToken = optionTokenAddr && optionTokenAddr !== "0x0000000000000000000000000000000000000000";
+
+  const { data: holderBalance } = useReadContract({
+    address: (hasToken ? optionTokenAddr : "0x0000000000000000000000000000000000000000") as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: [(address ?? "0x0000000000000000000000000000000000000000") as `0x${string}`],
+    query: { enabled: !!hasToken && !!address },
+  });
+
+  const hasPosition = holderBalance !== undefined && holderBalance > BigInt(0);
 
   return (
     <>
@@ -203,37 +361,60 @@ function StrikeRow({ spot, strike, expiry, activeSeries }: StrikeRowProps) {
         </td>
         <td className="py-2 px-3 text-center">
           {isTradeable ? (
-            <button
-              onClick={() => setBuying((v) => !v)}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                buying ? "bg-gray-700 text-gray-300" : "bg-blue-600 hover:bg-blue-500 text-white"
-              }`}
-            >
-              {buying ? "Cancel" : "Buy"}
-            </button>
+            <div className="flex gap-1 justify-center">
+              <button
+                onClick={() => setPanel(panel === "buy" ? null : "buy")}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                  panel === "buy" ? "bg-gray-700 text-gray-300" : "bg-blue-600 hover:bg-blue-500 text-white"
+                }`}
+              >
+                Buy
+              </button>
+              {hasPosition && hasToken && (
+                <button
+                  onClick={() => setPanel(panel === "close" ? null : "close")}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                    panel === "close" ? "bg-gray-700 text-gray-300" : "bg-red-700 hover:bg-red-600 text-white"
+                  }`}
+                >
+                  Close
+                </button>
+              )}
+            </div>
           ) : (
             <span className="text-gray-700 text-xs">–</span>
           )}
         </td>
       </tr>
-      {buying && activeSeries && (
-        <BuyPanel series={activeSeries} strike={strike} onClose={() => setBuying(false)} />
+      {panel === "buy" && activeAuth && (
+        <BuyPanel auth={activeAuth} strike={strike} spot={spot} onClose={() => setPanel(null)} />
+      )}
+      {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
+        <ClosePanel
+          optionToken={optionTokenAddr as string}
+          lp={activeAuth.lp}
+          balance={holderBalance}
+          onClose={() => setPanel(null)}
+        />
       )}
     </>
   );
 }
 
+// ── OptionMatrix ──────────────────────────────────────────────────────────────
+
 interface OptionMatrixProps {
   spot: number;
-  activeSeries?: ActiveSeries | null;
+  activeAuth?: ActiveAuth | null;
 }
 
-export function OptionMatrix({ spot, activeSeries }: OptionMatrixProps) {
+export function OptionMatrix({ spot, activeAuth }: OptionMatrixProps) {
   const [expiry, setExpiry] = useState(0);
 
   useEffect(() => {
-    setExpiry(Math.floor(Date.now() / 1000) + 30 * 24 * 3600);
-  }, []);
+    // Use LP's expiry if authorized, otherwise default to 30 days
+    setExpiry(activeAuth?.expiry ?? Math.floor(Date.now() / 1000) + 30 * 24 * 3600);
+  }, [activeAuth?.expiry]);
 
   const strikes = STRIKES_OFFSETS.map((pct) =>
     Math.round((spot * (1 + pct / 100)) / 50) * 50
@@ -264,7 +445,7 @@ export function OptionMatrix({ spot, activeSeries }: OptionMatrixProps) {
         <tbody>
           {expiry > 0 &&
             strikes.map((k) => (
-              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeSeries={activeSeries} />
+              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} />
             ))}
         </tbody>
       </table>

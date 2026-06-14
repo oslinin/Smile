@@ -14,75 +14,172 @@ contract MockERC20 is ERC20 {
 
 contract AquaCollateralVaultTest is Test {
     AquaCollateralVault vault;
-    OptionToken optionToken;
     OptionPricingEngine engine;
     MockERC20 usdc;
+    MockERC20 weth;
 
     address owner = address(this);
-    address lp = address(0x1111);
+    address lp    = address(0x1111);
     address buyer = address(0x2222);
 
-    uint256 constant STRIKE = 2000e6;  // $2000 USDC (6 dec)
-    uint256 constant EXPIRY_OFFSET = 30 days;
+    uint256 constant STRIKE     = 3000e18; // $3000 WAD
+    uint256 constant STRIKE_MIN = 2500e18;
+    uint256 constant STRIKE_MAX = 3500e18;
+    uint256 expiry;
 
     function setUp() public {
         engine = new OptionPricingEngine();
-        vault = new AquaCollateralVault(address(engine), owner);
-        usdc = new MockERC20("USD Coin", "USDC");
-
-        optionToken = new OptionToken(
-            "ETH-2000-CALL-DEC24", "oETH-C-2000",
-            address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2),
-            STRIKE,
-            block.timestamp + EXPIRY_OFFSET,
-            true,
-            address(vault)  // vault is owner → can mint/burn
-        );
+        vault  = new AquaCollateralVault(address(engine), owner);
+        usdc   = new MockERC20("USD Coin", "USDC");
+        weth   = new MockERC20("Wrapped Ether", "WETH");
+        expiry = block.timestamp + 30 days;
     }
 
-    function test_pull_mintsOptionAndLocksCollateral() public {
-        uint256 collateral = 2000e6; // 1 covered call @ $2000 strike
-        usdc.mint(lp, collateral);
+    // ── authorizeRange ────────────────────────────────────────────────────────
+
+    function test_authorizeRange_storesAuthorization() public {
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), true);
+
+        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active) =
+            vault.authorizations(authId);
+
+        assertEq(storedLp, lp);
+        assertEq(sMin, STRIKE_MIN);
+        assertEq(sMax, STRIKE_MAX);
+        assertEq(exp, expiry);
+        assertTrue(isCall);
+        assertTrue(active);
+    }
+
+    function test_authorizeRange_invalidRangeReverts() public {
+        vm.prank(lp);
+        vm.expectRevert("invalid range");
+        vault.authorizeRange(STRIKE_MAX, STRIKE_MIN, expiry, 1e18, address(weth), true);
+    }
+
+    function test_revokeAuthorization() public {
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), true);
 
         vm.prank(lp);
-        usdc.approve(address(vault), collateral);
+        vault.revokeAuthorization(authId);
 
-        vault.pull(address(optionToken), lp, buyer, 1e18, address(usdc), collateral);
-
-        assertEq(optionToken.balanceOf(buyer), 1e18);
-
-        (uint256 locked,) = vault.positions(address(optionToken), lp);
-        assertEq(locked, collateral);
-        assertEq(usdc.balanceOf(address(vault)), collateral);
+        (,,,,,,,, bool active) = vault.authorizations(authId);
+        assertFalse(active);
     }
 
-    function test_pull_zeroAmountReverts() public {
-        vm.expectRevert("zero amount");
-        vault.pull(address(optionToken), lp, buyer, 0, address(usdc), 0);
-    }
+    // ── buy ───────────────────────────────────────────────────────────────────
 
-    function test_pull_zeroBuyerReverts() public {
-        vm.expectRevert("zero buyer");
-        vault.pull(address(optionToken), lp, address(0), 1e18, address(usdc), 0);
-    }
+    function test_buy_mintsOptionAndLocksCollateral() public {
+        uint256 maxCollateral = 5e18; // 5 WETH
+        weth.mint(lp, maxCollateral);
+        usdc.mint(buyer, type(uint256).max / 2);
 
-    function test_releaseCollateral() public {
-        uint256 collateral = 2000e6;
-        usdc.mint(lp, collateral);
         vm.prank(lp);
-        usdc.approve(address(vault), collateral);
-        vault.pull(address(optionToken), lp, buyer, 1e18, address(usdc), collateral);
+        weth.approve(address(vault), maxCollateral);
 
-        vault.releaseCollateral(address(optionToken), lp, collateral);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, maxCollateral, address(weth), true);
 
-        (uint256 locked,) = vault.positions(address(optionToken), lp);
-        assertEq(locked, 0);
-        assertEq(usdc.balanceOf(lp), collateral);
-    }
-
-    function test_nonOwnerCannotPull() public {
         vm.prank(buyer);
-        vm.expectRevert();
-        vault.pull(address(optionToken), lp, buyer, 1e18, address(usdc), 0);
+        usdc.approve(address(vault), type(uint256).max);
+
+        uint256 spot = 3000e18;
+        uint256 amount = 1e18; // 1 contract
+
+        vm.prank(buyer);
+        vault.buy(authId, STRIKE, spot, buyer, amount, address(usdc));
+
+        // OptionToken deployed and minted
+        address optionToken = vault.optionTokens(authId, STRIKE);
+        assertTrue(optionToken != address(0));
+        assertEq(OptionToken(optionToken).balanceOf(buyer), amount);
+
+        // Collateral locked (1 WETH for 1 call contract)
+        (uint256 locked,) = vault.positions(optionToken, lp);
+        assertEq(locked, amount);
+    }
+
+    function test_buy_strikeOutOfRangeReverts() public {
+        weth.mint(lp, 5e18);
+        vm.prank(lp);
+        weth.approve(address(vault), 5e18);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), true);
+
+        usdc.mint(buyer, 10_000e6);
+        vm.prank(buyer);
+        usdc.approve(address(vault), 10_000e6);
+
+        vm.prank(buyer);
+        vm.expectRevert("strike out of range");
+        vault.buy(authId, 5000e18, 3000e18, buyer, 1e18, address(usdc));
+    }
+
+    function test_buy_capacityExceededReverts() public {
+        uint256 maxCollateral = 1e18; // only 1 WETH
+        weth.mint(lp, maxCollateral);
+        vm.prank(lp);
+        weth.approve(address(vault), maxCollateral);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, maxCollateral, address(weth), true);
+
+        usdc.mint(buyer, type(uint256).max / 2);
+        vm.prank(buyer);
+        usdc.approve(address(vault), type(uint256).max);
+
+        // Try to buy 2 contracts with only 1 WETH capacity
+        vm.prank(buyer);
+        vm.expectRevert("capacity exceeded");
+        vault.buy(authId, STRIKE, 3000e18, buyer, 2e18, address(usdc));
+    }
+
+    function test_buy_deploysNewTokenPerStrike() public {
+        weth.mint(lp, 10e18);
+        vm.prank(lp);
+        weth.approve(address(vault), 10e18);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 10e18, address(weth), true);
+
+        usdc.mint(buyer, type(uint256).max / 2);
+        vm.prank(buyer);
+        usdc.approve(address(vault), type(uint256).max);
+
+        vm.prank(buyer);
+        vault.buy(authId, 2800e18, 3000e18, buyer, 1e18, address(usdc));
+        vm.prank(buyer);
+        vault.buy(authId, 3200e18, 3000e18, buyer, 1e18, address(usdc));
+
+        address token2800 = vault.optionTokens(authId, 2800e18);
+        address token3200 = vault.optionTokens(authId, 3200e18);
+        assertTrue(token2800 != address(0));
+        assertTrue(token3200 != address(0));
+        assertTrue(token2800 != token3200);
+    }
+
+    // ── close ─────────────────────────────────────────────────────────────────
+
+    function test_close_burnsTokenAndReleasesCollateral() public {
+        weth.mint(lp, 5e18);
+        vm.prank(lp);
+        weth.approve(address(vault), 5e18);
+        vm.prank(lp);
+        uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), true);
+
+        usdc.mint(buyer, type(uint256).max / 2);
+        vm.prank(buyer);
+        usdc.approve(address(vault), type(uint256).max);
+        vm.prank(buyer);
+        vault.buy(authId, STRIKE, 3000e18, buyer, 1e18, address(usdc));
+
+        address optionToken = vault.optionTokens(authId, STRIKE);
+        uint256 lpWethBefore = weth.balanceOf(lp);
+
+        vm.prank(buyer);
+        vault.close(optionToken, lp, 1e18);
+
+        assertEq(OptionToken(optionToken).balanceOf(buyer), 0);
+        assertGt(weth.balanceOf(lp), lpWethBefore); // LP got collateral back
     }
 }

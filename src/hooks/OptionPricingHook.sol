@@ -29,10 +29,28 @@ contract OptionPricingHook is IHooks {
     /// @dev Oracle price tolerance: 5% band around the engine's fair value.
     uint256 public constant PRICE_TOLERANCE = 0.05e18;
 
+    address public vault;
+
     constructor(address pricingEngine_, address poolManager_, uint256 initialSigma_) {
         pricingEngine = OptionPricingEngine(pricingEngine_);
         poolManager = poolManager_;
         sigmaGlobal = initialSigma_;
+    }
+
+    /// @notice One-time registration of the vault that can drive σ updates on primary mints.
+    function setVault(address vault_) external {
+        require(vault == address(0), "already set");
+        vault = vault_;
+    }
+
+    /// @notice Called by the vault on every primary-market mint to update demand-driven IV.
+    function bumpSigma(bool isBuy) external {
+        require(msg.sender == vault, "only vault");
+        if (isBuy) {
+            sigmaGlobal = sigmaGlobal + GAMMA;
+        } else {
+            sigmaGlobal = sigmaGlobal > GAMMA ? sigmaGlobal - GAMMA : 0;
+        }
     }
 
     // ── IHooks required stubs ─────────────────────────────────────────────────
