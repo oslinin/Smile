@@ -133,7 +133,11 @@ sequenceDiagram
     participant SwapVM as 🟢 SwapVM (OptionPricingEngine)
     participant Aqua as 🟢 1inch Aqua (AquaCollateralVault)
     participant Maker as 🟢 Maker (LP Wallet)
+    participant CRE as 🔵 Chainlink CRE DON
+    participant Settle as 🟢 AquaOptionSettlement
 
+    rect rgba(60,80,120,0.12)
+    Note over Trader,Maker: Trade (pre-expiry) — no Chainlink CRE involved
     Trader->>Frontend: Select strike & expiry
     Frontend->>SwapVM: quote(S, K, T, σ)
     SwapVM-->>Frontend: Bid / Ask
@@ -143,6 +147,16 @@ sequenceDiagram
     Aqua->>Maker: pull collateral JIT
     Aqua->>Maker: transfer premium
     Aqua-->>Trader: OptionToken minted
+    end
+
+    rect rgba(40,90,140,0.18)
+    Note over CRE,Settle: Expiry settlement (DTE = 0) — Chainlink CRE
+    CRE->>CRE: cron trigger → read Chainlink ETH/USD feed → DON consensus
+    CRE->>Settle: settleSeries(seriesId, S_final) · onlyCRE
+    Note over Settle: series settled=true → redemption unlocked
+    Trader->>Settle: redeem() → ITM payout
+    Maker->>Settle: reclaimCollateral() → remainder
+    end
 ```
 
 ### 1. Range Authorization (LP)
@@ -260,12 +274,13 @@ sequenceDiagram
     participant Maker as 🟢 Maker (LP)
     participant Holder as Trader (Holder)
 
+    Note over CRE,Settlement: Expiry settlement runs only through Chainlink CRE
     Note over CRE: cron trigger at DTE=0
     CRE->>Feed: latestRoundData() @ finalized block
     Feed-->>CRE: answer (8-dec)
     Note over CRE: DON consensus → S_final (→ USDC 6-dec)
-    CRE->>Settlement: settleSeries(seriesId, S_final)
-    Note over Settlement: settled=true
+    CRE->>Settlement: settleSeries(seriesId, S_final) · onlyCRE forwarder
+    Note over Settlement: settled=true (redemption was blocked until now)
     Holder->>Settlement: redeem(seriesId, amount)
     Note over Settlement: ITM: payout = (S_final-K)*amount
     Settlement->>Holder: transfer payout
@@ -375,7 +390,7 @@ last finalized block, reaches consensus, and the DON-signed report calls
 | ---- | ---- |
 | [`cre-workflow/settlement/workflow.ts`](cre-workflow/settlement/workflow.ts) | The workflow itself — cron trigger → `callContract(latestRoundData)` on the Chainlink feed → DON consensus → DON-signed `writeReport` → `settleSeries()`. Compiles to WASM. |
 | [`cre-workflow/settlement/config.json`](cre-workflow/settlement/config.json) | Runtime config: `schedule`, `seriesId`, target `settlementAddress`, `priceFeedAddress` (Chainlink ETH/USD), `gasLimit`, and chain selector. |
-| [`cre-workflow/settlement/package.json`](cre-workflow/settlement/package.json) | Deps + `typecheck` script. Build/simulate/deploy run via the **`cre` CLI** (`cre workflow build\|simulate\|deploy settlement`). |
+| [`cre-workflow/settlement/package.json`](cre-workflow/settlement/package.json) | Deps + `typecheck` script. Build + simulate run via the **`cre` CLI** (`cre workflow build\|simulate settlement`). |
 
 > **Access control.** `settleSeries()` carries an `onlyCRE` modifier
 > ([AquaOptionSettlement.sol:38](src/vaults/AquaOptionSettlement.sol#L38)) — only the
@@ -385,104 +400,117 @@ last finalized block, reaches consensus, and the DON-signed report calls
 
 #### Prerequisites
 
-```bash
-# 1. CRE CLI — installed via Chainlink's official script (NOT an npm package).
-#    Installs to ~/.cre/bin and appends it to your PATH in ~/.bashrc.
-curl -sSL https://app.chain.link/cre/install.sh | bash
-source ~/.bashrc          # or open a new shell, so `cre` is on PATH
-cre version               # → CRE CLI version v1.20.0
+The current CRE CLI (v1.20.x) reworks several commands; this workflow is pinned to
+**v1.11.0** to match `@chainlink/cre-sdk@^1.11.0`. The CLI is a binary installed via
+Chainlink's official script (it is **not** an npm package).
 
-# 2. Bun (used by cre-compile to build the WASM target)
+```bash
+# 1. CRE CLI v1.11.0 — installs to ~/.cre/bin and appends it to PATH in ~/.bashrc.
+curl -sSL https://app.chain.link/cre/install.sh | bash -s -- v1.11.0
+source ~/.bashrc          # or open a new shell, so `cre` is on PATH
+cre version               # → CRE CLI version v1.11.0
+
+# 2. Bun ≥ 1.0 — cre-compile uses it to build the WASM target.
 curl -fsSL https://bun.sh/install | bash
 
 # 3. Authenticate — required even for local simulation.
 cre login                 # opens a browser; or, non-interactively:
-# export CRE_API_KEY=<key from Account Settings at https://app.chain.link>
+# echo 'CRE_API_KEY=<key from Account Settings at https://app.chain.link>' >> cre-workflow/.env
 
-# 4. Workflow dependencies
-cd cre-workflow && npm install
+# 4. Install workflow + contract-binding deps (each folder has its own package.json).
+cd cre-workflow
+( cd settlement && bun install )
+( cd contracts  && bun install )
+
+# 5. (Optional) Regenerate the typed contract binding from the Foundry ABI.
+#    Already committed under contracts/evm/ts/generated/; only needed if the ABI changes.
+cp ../out/AquaOptionSettlement.sol/AquaOptionSettlement.json contracts/evm/src/abi/
+cre generate-bindings evm --language typescript
 ```
 
 Edit [`cre-workflow/settlement/config.json`](cre-workflow/settlement/config.json) so `seriesId` matches the
 series you registered on-chain (copy it from the **On-Chain Proof** tab or from the
-`forge script` deploy logs) and `evm.settlementAddress` points at your deployed
-`AquaOptionSettlement` (and `evm.priceFeedAddress` at the Chainlink ETH/USD feed for the chain).
+`forge script` deploy logs), `evm.settlementAddress` points at your deployed
+`AquaOptionSettlement`, and `evm.priceFeedAddress` is the Chainlink ETH/USD feed for the
+chain (Sepolia: `0x694AA1769357215DE4FAC081bf1f309aDC325306`). The active CRE target is
+read from `CRE_TARGET` in `cre-workflow/.env` (`staging-settings` → Sepolia RPC in
+[`project.yaml`](cre-workflow/project.yaml)).
+
+> **Build needs no auth; simulate does.** `cre workflow build` compiles the WASM
+> locally. `cre workflow simulate` gates on auth — run `cre login` (or set
+> `CRE_API_KEY`) first.
 
 ---
 
-### 6a. Demonstrate a successful CRE CLI simulation
+### 6a. Demonstrate a successful CRE CLI simulation (the verified path)
 
-The simulator runs the compiled workflow against a local CRE runtime — DON consensus,
-report signing, and the EVM write are all exercised without touching a live network.
+First confirm it compiles (no auth needed):
 
 ```bash
 cd cre-workflow
-npm run simulate
-# = cre workflow simulate --target local-simulation --config config.json workflow.ts
+cre workflow build settlement
+# ✓ Workflow compiled successfully
+# ✓ Build output written to settlement/binary.wasm
 ```
 
-Expected output (a successful run prints the consensus price, a report ID, and the
-encoded `settleSeries` call):
+Then run the simulation. The simulator spins up a local CRE runtime, fires the cron
+trigger, runs the workflow's on-chain feed read + DON consensus, and signs the report —
+all against the Sepolia RPC from `project.yaml`:
+
+```bash
+cre workflow simulate settlement --non-interactive --trigger-index 0
+# `--non-interactive --trigger-index 0` selects the single cron trigger;
+# omit both to pick it from an interactive menu.
+```
+
+Verified output (CLI v1.11.0, reading the live Sepolia ETH/USD feed — exit code `0`):
 
 ```text
-[CRE] Consensus ETH/USD: $3421.50
-[CRE] Report ID: 0x9f2c…a17b
-[CRE] settleSeries(seriesId=0x0000…0001, spot=3421500000) submitted
-✔ Simulation completed successfully
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite report=50kb gas=10000000 | WASM binary=100mb compressed=20mb
+  Binary hash: 9d57d352ac4d3e6ca2e4540cd52e22875e93e15e96f557c8a6c9bfc35fe24b38
+  Config hash: 09b81d8b718c888f7c668324102c18f369f49391a15adee7cbc76e576aea9331
+2026-06-14T07:00:26Z [SIMULATION] Simulator Initialized
+
+2026-06-14T07:00:26Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-06-14T07:00:26Z [USER LOG] [CRE] Option settlement workflow triggered
+2026-06-14T07:00:26Z [USER LOG] [CRE] Chainlink ETH/USD: $1675.28
+2026-06-14T07:00:26Z [USER LOG] [CRE] settleSeries(0x0000…0001, 1675280000) submitted — tx 0x0000…0000
+
+✓ Workflow Simulation Result:
+"1675280000"
+
+2026-06-14T07:00:26Z [SIMULATION] Execution finished signal received
+2026-06-14T07:00:26Z [SIMULATION] Skipping WorkflowEngineV2
+2026-06-14T07:00:26Z [SIMULATION] Failed to cleanup beholder error=BeholderClient has not been started: cannot stop unstarted service
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
 ```
 
-To also broadcast the simulated report to a chain configured in `config.json` (e.g. a
-local Anvil fork or a testnet RPC) and observe the real `settleSeries` transaction:
+`1675280000` is the feed price ($1,675.28) in USDC 6-decimal fixed-point. Notes on the
+output:
 
-```bash
-npm run simulate:broadcast
-# = cre workflow simulate --target local-simulation --broadcast --config config.json workflow.ts
-```
+- **The tx hash is zero** because a plain simulation routes the EVM write through a
+  **mock** forwarder rather than broadcasting — the trigger → feed read → DON consensus →
+  report-signing path is fully exercised, which is what the CRE CLI simulation verifies.
+- **`Failed to cleanup beholder …`** is a benign teardown log printed *after* the result;
+  the simulator stops a telemetry client it never started in local mode. The run still
+  exits `0`. Filter it for a clean demo: `… | grep -v "Failed to cleanup beholder"`.
 
-> **Tip — see the on-chain effect end-to-end:** start Anvil and deploy with
-> `./local.sh`, register + expire a series, point `config.json` at that contract, then
-> run `npm run simulate:broadcast`. Confirm the write with the `cast call` in §6c.
-
----
-
-### 6b. Live deployment on the CRE network
-
-```bash
-cd cre-workflow
-
-# 1. Build the workflow to WASM
-npm run build            # cre workflow build settlement
-
-# 2. Authenticate the CRE CLI with your account
-cre login
-
-# 3. Deploy + register the workflow (binds the cron trigger + config)
-npm run deploy           # cre workflow deploy dist/workflow.wasm
-
-# 4. Confirm it is live and scheduled
-cre workflow list
-```
-
-Once registered, the DON runs on the `schedule` from `config.json` (default
-`0 */6 * * *`), and each fire that finds an expired, unsettled series writes the
-consensus price on-chain via the forwarder.
-
----
-
-### 6c. Verify the on-chain state change
-
-Either path (broadcast simulation or live deployment) ends in a real `settleSeries`
-write. Inspect the series — `settled` flips to `true` and `settlementPrice` holds the
-CRE consensus value (USDC 6-decimal fixed-point):
-
-```bash
-cast call <SETTLEMENT_ADDRESS> \
-  "series(bytes32)(uint256,uint256,uint256,address,address,address,uint256,bool,uint256)" \
-  <seriesId> --rpc-url "$RPC_SEPOLIA"
-# → … true 3421500000   (settled=true, settlementPrice=$3,421.50)
-```
-
-Holders can then `redeem()` ITM payouts and the LP can `reclaimCollateral()`.
+> **Note — live broadcast is out of scope here.** CRE delivers DON-signed reports through
+> a KeystoneForwarder that calls `onReport(bytes,bytes)` on the receiver, whereas
+> `AquaOptionSettlement` exposes a plain `settleSeries(bytes32,uint256)` guarded by
+> `onlyCRE`. Wiring the live on-chain write (an `onReport` entrypoint + registered
+> forwarder) is a follow-up; the CRE CLI **simulation above** is the demonstrated path.
 
 ---
 
