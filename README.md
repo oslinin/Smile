@@ -39,7 +39,7 @@ DeFi options have never worked at scale. Three compounding failures explain why:
 | :--- | :--- | :--- |
 | **Pricing** | `OptionPricingEngine` | Stateless parametric premium: $\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$. |
 | **Liquidity** | `AquaCollateralVault` | LP calls `authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})`. On `buy()`, collateral is pulled JIT from LP wallet; premium flows buyer → LP directly. OptionToken deployed lazily per strike. |
-| **Market** | `OptionPricingHook` | Uniswap v4 Hook: `beforeSwap` vetoes mispriced trades via Chainlink oracle bounds; `afterSwap` adjusts $\sigma_{global}$. Also exposes `bumpSigma()` called by the vault on every primary-market buy/close. |
+| **Market** | `OptionPricingHook` + **Uniswap Trading API** | v4 Hook: `beforeSwap` vetoes mispriced trades; `afterSwap` adjusts $\sigma_{global}$. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer's ETH→USDC premium swap via the Universal Router on each trade. |
 | **Settlement** | `AquaOptionSettlement` + Chainlink CRE | DON consensus (trimmed mean across Binance/Coinbase/Kraken) writes $S_{final}$ on-chain; holders redeem ITM payouts. |
 | **Asset** | `OptionToken` | ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery. |
 
@@ -110,24 +110,34 @@ sequenceDiagram
     Frontend-->>LP: ✓ Range active — quoting K_min..K_max
 ```
 
-### 2. Primary Market Buy (Trader)
+### 2. Primary Market Buy (Trader) — Uniswap Trading API
 
-The frontend queries live prices from the on-chain engine. When a buyer hits a strike within the LP's range, `vault.buy()` pulls collateral JIT, mints an OptionToken lazily, transfers premium directly to the LP, and bumps σ_global.
+The frontend uses the **Uniswap Trading API** (`trade-api.gateway.uniswap.org/v1/quote`) for two purposes: (1) live ETH/USD spot price displayed in the header, and (2) routing the premium payment on-chain when a buyer purchases an option. The buyer pays in ETH; the Trading API finds the optimal route to deliver the exact USDC amount needed, then the Universal Router executes the swap on-chain. This gives a real Uniswap transaction hash as evidence of execution.
 
 ```mermaid
 sequenceDiagram
     participant Buyer
     participant Frontend
+    participant UniAPI as Uniswap Trading API
+    participant UniRouter as Universal Router (on-chain)
     participant Engine as OptionPricingEngine
     participant Vault as AquaCollateralVault
     participant LP as LP Wallet
     participant Hook as OptionPricingHook
 
     Buyer->>Frontend: Select K in [K_min, K_max]
-    Frontend->>Engine: quote(S, K, DTE, σ_global, α, isBuy)
+    Frontend->>Engine: quote(S, K, DTE, σ_global, α, isBuy=true)
     Note over Engine: σ_K = σ_global · (1 + α · ln(K/S)²)<br/>P = intrinsic + S · σ_K · √T
-    Engine-->>Frontend: Bid / Ask
-    Frontend-->>Buyer: Matrix — Δ, moneyness, IV
+    Engine-->>Frontend: Ask price (USDC, 18-dec WAD)
+
+    Note over Frontend,UniAPI: Step 1 — Route premium payment via Uniswap Trading API
+    Frontend->>UniAPI: POST /v1/quote {type:EXACT_OUTPUT, tokenIn:ETH, tokenOut:USDC, amount:premium}
+    UniAPI-->>Frontend: {methodParameters: {calldata, to, value}} + quoteId
+    Buyer->>UniRouter: sendTransaction(calldata, value=ETH)
+    UniRouter-->>Buyer: USDC arrives in buyer wallet  ← on-chain Uniswap tx
+
+    Note over Frontend,Vault: Step 2 — Approve + buy
+    Buyer->>Frontend: Approve USDC for vault
     Buyer->>Vault: buy(authId, K, S, buyer, amount, USDC)
     Vault->>Vault: validate K ∈ [K_min, K_max] & capacity
     Vault->>Buyer: USDC.transferFrom(buyer → LP)  ← premium paid directly
