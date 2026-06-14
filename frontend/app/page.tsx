@@ -27,7 +27,11 @@ export default function Home() {
           </p>
         </div>
 
-        {!mounted ? null : isConnected ? (
+        {!mounted ? (
+          <button disabled className="bg-blue-600 opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+            Connect Wallet
+          </button>
+        ) : isConnected ? (
           <div className="flex items-center gap-3">
             <span className="text-gray-400 text-sm font-mono">
               {address?.slice(0, 6)}…{address?.slice(-4)}
