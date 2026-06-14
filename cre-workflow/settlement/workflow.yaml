@@ -1,0 +1,21 @@
+# ==========================================================================
+# CRE WORKFLOW SETTINGS — Option Series Settlement
+# ==========================================================================
+# Per-target workflow settings. Overrides project.yaml values.
+# ==========================================================================
+
+staging-settings:
+  user-workflow:
+    workflow-name: "smile-option-settlement"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: ""
+
+production-settings:
+  user-workflow:
+    workflow-name: "smile-option-settlement"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: ""

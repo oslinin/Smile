@@ -1,0 +1,10 @@
+{
+  "schedule": "0 0 */6 * * *",
+  "seriesId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "evm": {
+    "chainName": "ethereum-testnet-sepolia",
+    "settlementAddress": "0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA",
+    "priceFeedAddress": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+    "gasLimit": "500000"
+  }
+}

@@ -11,7 +11,8 @@
   <circle cx="18" cy="25" r="2.7" fill="#dfe3ec"></circle>
   <circle cx="30" cy="25" r="2.7" fill="#dfe3ec"></circle>
   <path d="M13 31 Q24 43 35 31" stroke="url(#wmMouth)" stroke-width="3.2" stroke-linecap="round" fill="none"></path>
-  <circle cx="24" cy="37.2" r="1.8" fill="#3ad99b"></circle>
+  <path d="M13.31 33.38 L13 31 L15.35 31.52" stroke="url(#wmMouth)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  <path d="M32.65 31.52 L35 31 L34.69 33.38" stroke="url(#wmMouth)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
   
   <text x="60" y="40" font-family="Geist, -apple-system, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.8" fill="#f3f5fa">Smile</text>
 </svg>

@@ -1,0 +1,19 @@
+# ==========================================================================
+# CRE PROJECT SETTINGS
+# ==========================================================================
+# Project-wide settings per CRE CLI target. Each target may define
+# account + rpcs groups. Workflow-level overrides live in workflow.yaml.
+#
+# Pin the CRE CLI to v1.11.0 (matches @chainlink/cre-sdk ^1.11.0):
+#   curl -sSL https://app.chain.link/cre/install.sh | bash -s -- v1.11.0
+# ==========================================================================
+
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://ethereum-sepolia-rpc.publicnode.com
+
+production-settings:
+  rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://ethereum-rpc.publicnode.com

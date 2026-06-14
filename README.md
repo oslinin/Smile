@@ -45,7 +45,7 @@ Smile attempts to overcome these limitations to on-chain standard opions trading
 | **Pricing**    | `OptionPricingEngine`                         | Stateless parametric premium: $\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$.                                                                    |
 | **Liquidity**  | `AquaCollateralVault`                         | LP calls `authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})`. On `buy()`, collateral is pulled JIT from LP wallet; premium flows buyer → LP directly. OptionToken deployed lazily per strike.                   |
 | **Market**     | `OptionPricingHook` + **Uniswap Trading API** | v4 Hook: `beforeSwap` vetoes mispriced trades; `afterSwap` adjusts $\sigma_{global}$. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer's ETH→USDC premium swap via the Universal Router on each trade. |
-| **Settlement** | `AquaOptionSettlement` + Chainlink CRE        | DON consensus (trimmed mean across Binance/Coinbase/Kraken) writes $S_{final}$ on-chain; holders redeem ITM payouts.                                                                                                             |
+| **Settlement** | `AquaOptionSettlement` + Chainlink CRE        | At expiry a scheduled CRE DON reads the canonical Chainlink ETH/USD feed (the same feed the app shows for spot), reaches consensus on the finalized value, and writes $S_{final}$ on-chain via `settleSeries()`; holders redeem ITM payouts.                                                                                                             |
 | **Asset**      | `OptionToken`                                 | ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.                                                                                                |
 
 ### Collateralization Model
@@ -101,11 +101,22 @@ $N(\cdot)$ is approximated via Abramowitz & Stegun 26.2.17 (max error $1.5 \time
 
 > Delta ranges 0–1 for calls (0 = deep OTM, 1 = deep ITM). A 0.5-delta call is approximately ATM.
 
-### 5. Chainlink CRE Consensus Settlement
+### 5. Chainlink CRE — Decentralized Expiry Settlement
 
-$$S_{final} = \frac{1}{m} \sum_{x \in \mathcal{X}_{trimmed}} x, \qquad \mathcal{X}_{trimmed} = \begin{cases} \{x_2, \dots, x_{n-1}\} & n \ge 3 \\ \{x_1, \dots, x_n\} & n < 3 \end{cases}$$
+**Why the app needs CRE.** A parametric option is only as trustworthy as the price it settles against. At expiry every open series needs one **final spot price** $S_{final}$ written on-chain, because that single number decides every payout: holders redeem the in-the-money difference and the LP reclaims the remaining collateral (see [§6 flow](#6-settlement--redemption-chainlink-cre)). Settlement is the one part of the option lifecycle that can't be a pure on-chain formula — it needs an external price *and* a guaranteed trigger at $\text{DTE}=0$, with no trusted keeper in the loop.
 
-DON fetches $n$ prices from Binance, Coinbase, Kraken; trims outliers; writes trimmed mean on-chain via `settleSeries()`.
+**What CRE does for Smile** — it is the settlement layer:
+
+- **Scheduled, not poked** — a CRE *cron trigger* fires the settlement workflow at expiry, so no keeper bot or user transaction is required to settle a series.
+- **Reads the canonical feed** — the DON reads the same **Chainlink ETH/USD aggregator** the frontend uses for live spot ([`0x694AA1…25306`](frontend/hooks/useUniswapSpot.ts#L11) on Sepolia) via `latestRoundData()` at the last *finalized* block, so every node observes an identical value:
+
+$$S_{final} = \mathtt{latestRoundData().answer} \;\; (\text{8-dec}) \;\rightarrow\; \text{USDC 6-dec}$$
+
+- **Signed, on-chain write** — the DON signs the consensus result and delivers it through the CRE forwarder, which calls `AquaOptionSettlement.settleSeries(seriesId, S_final)`. That call is the single on-chain state change that flips a series from *open* to *settled* and unlocks redemption.
+
+In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, and **Chainlink CRE closes the loop at expiry** — turning a live series into a settled, redeemable claim using the project's canonical price feed, on a schedule, with no trusted keeper.
+
+> **Design note.** Because the settlement price is read from an on-chain Chainlink feed, the DON's role here is a *scheduled, trust-minimized keeper* (deterministic read + signed write) rather than novel off-chain data sourcing. Swapping the on-chain feed read for direct CEX fetches with median DON consensus is a localized change to the workflow's price-read step if a venue price is ever preferred over the aggregator.
 
 ---
 
@@ -239,20 +250,20 @@ sequenceDiagram
 
 ### 6. Settlement & Redemption (Chainlink CRE)
 
-At expiry, the CRE DON fetches $S$ from multiple CEXs, computes trimmed-mean consensus, and calls `settleSeries()`. Holders redeem ITM payouts; LP reclaims remaining collateral.
+At expiry, the CRE DON reads the Chainlink ETH/USD feed (the same one the app uses for spot), reaches consensus on the finalized value, and calls `settleSeries()`. Holders redeem ITM payouts; LP reclaims remaining collateral.
 
 ```mermaid
 sequenceDiagram
     participant CRE as 🔵 Chainlink CRE DON
-    participant Feeds as 🔵 Price Feeds (Binance, Coinbase, Kraken)
+    participant Feed as 🔵 Chainlink ETH/USD Feed
     participant Settlement as 🟢 AquaOptionSettlement
     participant Maker as 🟢 Maker (LP)
     participant Holder as Trader (Holder)
 
-    Note over CRE: triggered at DTE=0
-    CRE->>Feeds: fetch S
-    Feeds-->>CRE: [S_a, S_b, S_c]
-    Note over CRE: trimmed mean → S_final
+    Note over CRE: cron trigger at DTE=0
+    CRE->>Feed: latestRoundData() @ finalized block
+    Feed-->>CRE: answer (8-dec)
+    Note over CRE: DON consensus → S_final (→ USDC 6-dec)
     CRE->>Settlement: settleSeries(seriesId, S_final)
     Note over Settlement: settled=true
     Holder->>Settlement: redeem(seriesId, amount)
@@ -283,7 +294,7 @@ sequenceDiagram
 
 1. **HookMiner Latency**: Finding a Uniswap v4 Hook address with the required flag prefix took significantly longer than expected, delaying `OptionPricingHook` deployment.
 2. **SwapVM Instruction Set**: Implementing a stateless pricing engine in Solidity to mirror SwapVM bytecode required several iterations. Stack-too-deep errors in `buy()` were resolved by enabling `via_ir = true` in `foundry.toml`.
-3. **Chainlink CRE Rate Limiting**: Initial simulations failed due to Binance V3 API rate limits. Resolved by implementing trimmed-mean across Binance, Coinbase, and Kraken.
+3. **Chainlink CRE Price Source**: An initial design fetched ETH/USD from CEX REST APIs per node, which hit Binance V3 rate limits and risked cross-node divergence during simulation. Resolved by reading the canonical Chainlink ETH/USD aggregator on-chain at the last finalized block — every DON node observes the same value, so settlement consensus is deterministic and matches the price the app displays.
 4. **GitHub Pages SPA Routing**: Next.js static export broke on refresh. Fixed with `.nojekyll` and static export config.
 
 ---
@@ -356,15 +367,15 @@ PRIVATE_KEY="$PRIVATE_KEY" forge script script/Deploy.s.sol:Deploy \
 ### 6. Chainlink CRE Workflow
 
 The required Chainlink integration is a **CRE workflow** that performs an on-chain
-state change: at option expiry each DON node independently fetches ETH/USD, CRE
-forms median consensus, and the DON-signed report calls
+state change: on a cron schedule the DON reads the Chainlink ETH/USD feed at the
+last finalized block, reaches consensus, and the DON-signed report calls
 `AquaOptionSettlement.settleSeries(seriesId, spotPrice)` on-chain.
 
 | File | Role |
 | ---- | ---- |
-| [`cre-workflow/workflow.ts`](cre-workflow/workflow.ts) | The workflow itself — cron trigger → per-node Binance fetch → `consensusMedianAggregation()` → DON-signed `writeReport` → `settleSeries()`. Compiles to WASM. |
-| [`cre-workflow/config.json`](cre-workflow/config.json) | Runtime config: `schedule`, `seriesId`, and the target `settlement` chain selector + contract address. |
-| [`cre-workflow/package.json`](cre-workflow/package.json) | `compile` / `simulate` / `simulate:broadcast` / `deploy` scripts. |
+| [`cre-workflow/settlement/workflow.ts`](cre-workflow/settlement/workflow.ts) | The workflow itself — cron trigger → `callContract(latestRoundData)` on the Chainlink feed → DON consensus → DON-signed `writeReport` → `settleSeries()`. Compiles to WASM. |
+| [`cre-workflow/settlement/config.json`](cre-workflow/settlement/config.json) | Runtime config: `schedule`, `seriesId`, target `settlementAddress`, `priceFeedAddress` (Chainlink ETH/USD), `gasLimit`, and chain selector. |
+| [`cre-workflow/settlement/package.json`](cre-workflow/settlement/package.json) | Deps + `typecheck` script. Build/simulate/deploy run via the **`cre` CLI** (`cre workflow build\|simulate\|deploy settlement`). |
 
 > **Access control.** `settleSeries()` carries an `onlyCRE` modifier
 > ([AquaOptionSettlement.sol:38](src/vaults/AquaOptionSettlement.sol#L38)) — only the
@@ -392,10 +403,10 @@ cre login                 # opens a browser; or, non-interactively:
 cd cre-workflow && npm install
 ```
 
-Edit [`cre-workflow/config.json`](cre-workflow/config.json) so `seriesId` matches the
+Edit [`cre-workflow/settlement/config.json`](cre-workflow/settlement/config.json) so `seriesId` matches the
 series you registered on-chain (copy it from the **On-Chain Proof** tab or from the
-`forge script` deploy logs) and `settlement.contractAddress` points at your deployed
-`AquaOptionSettlement`.
+`forge script` deploy logs) and `evm.settlementAddress` points at your deployed
+`AquaOptionSettlement` (and `evm.priceFeedAddress` at the Chainlink ETH/USD feed for the chain).
 
 ---
 
@@ -439,8 +450,8 @@ npm run simulate:broadcast
 ```bash
 cd cre-workflow
 
-# 1. Compile the workflow to WASM
-npm run compile          # bun x cre-compile workflow.ts dist/workflow.wasm
+# 1. Build the workflow to WASM
+npm run build            # cre workflow build settlement
 
 # 2. Authenticate the CRE CLI with your account
 cre login
@@ -482,7 +493,7 @@ Holders can then `redeem()` ITM payouts and the LP can `reclaimCollateral()`.
 | 1    | LP     | Connect wallet → _Authorize Strike Range_ → approve collateral + authorize | `ERC20.approve()` + `AquaCollateralVault.authorizeRange()` |
 | 2    | Trader | Click **Buy** on a strike within LP's range → approve USDC → buy           | `ERC20.approve(USDC)` + `AquaCollateralVault.buy()`        |
 | 3    | Trader | Click **Close** to unwind early                                            | `AquaCollateralVault.close()`                              |
-| 4    | —      | Paste `seriesId` into `cre-workflow/config.json`, run `npm run simulate`   | `AquaOptionSettlement.settleSeries()` via CRE              |
+| 4    | —      | Paste `seriesId` into `cre-workflow/settlement/config.json`, run `cre workflow simulate settlement` | `AquaOptionSettlement.settleSeries()` via CRE              |
 | 5    | Trader | Call `redeem()` to collect payout (ITM only)                               | `AquaOptionSettlement.redeem()`                            |
 | 6    | LP     | Call `reclaimCollateral()` to recover remaining collateral                 | `AquaOptionSettlement.reclaimCollateral()`                 |
 
@@ -501,7 +512,7 @@ Holders can then `redeem()` ITM payouts and the LP can `reclaimCollateral()`.
 - **LP (Liquidity Provider):** A participant who backs trades. Here, LPs authorize the vault to pull collateral JIT — they are yield-seeking covered-option writers, not market makers.
 - **Maker:** The option writer (LP). Authorizes a strike range, provides collateral JIT, receives premiums, reclaims collateral at expiry.
 - **Trader:** The option buyer. Pays premium, receives an OptionToken representing the long position, redeems ITM payout at settlement.
-- **CEX (Centralized Exchange):** Off-chain exchange (Binance, Coinbase, Kraken). Used as price sources for CRE settlement consensus.
+- **CEX (Centralized Exchange):** Off-chain exchange (Binance, Coinbase, Kraken). Referenced as real-world ETH/USD price sources; the live frontend spot is sourced via the Uniswap Trading API, while settlement reads the on-chain Chainlink feed.
 - **DEX (Decentralized Exchange):** On-chain exchange. Uniswap v4 provides secondary-market trading for OptionTokens.
 - **DON (Decentralized Oracle Network):** A tamper-resistant network of node operators that securely delivers external data to smart contracts (Chainlink).
 - **CRE (Chainlink Runtime Environment):** Off-chain computation environment for custom DON workflows (successor to Chainlink Functions).
@@ -530,7 +541,7 @@ Holders can then `redeem()` ITM payouts and the LP can `reclaimCollateral()`.
 - **SwapVM:** 1inch highly-optimized VM for custom matching and pricing logic.
 - **1inch Aqua:** 1inch primitive for JIT transfer of assets from LP self-custodial wallets.
 - **Uniswap v4 Hooks:** Smart contracts at swap lifecycle points: `beforeSwap` vetoes mispriced trades, `afterSwap` adjusts IV.
-- **Trimmed Mean:** CRE consensus that drops highest and lowest price reports before averaging — protects settlement from single-exchange flash crashes.
+- **`latestRoundData()`:** The Chainlink aggregator read returning the latest ETH/USD answer (8-decimal). CRE reads it at the last finalized block so every DON node agrees on the settlement price.
 
 ---
 

@@ -19,7 +19,9 @@
   <circle cx="37" cy="40" r="5.2" fill="#dfe3ec"></circle>
   <circle cx="59" cy="40" r="5.2" fill="#dfe3ec"></circle>
   
-  <path d="M28 52 Q48 76 68 52" stroke="url(#smMouth)" stroke-width="6" stroke-linecap="round" fill="none" filter="url(#smGlow)"></path>
-  
-  <circle cx="48" cy="65.2" r="3.4" fill="#3ad99b"></circle>
+  <g filter="url(#smGlow)">
+    <path d="M28 52 Q48 76 68 52" stroke="url(#smMouth)" stroke-width="6" stroke-linecap="round" fill="none"></path>
+    <path d="M28.40 56.79 L28 52 L32.64 53.27" stroke="url(#smMouth)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+    <path d="M63.36 53.27 L68 52 L67.60 56.79" stroke="url(#smMouth)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  </g>
 </svg>
