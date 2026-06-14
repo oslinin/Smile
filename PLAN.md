@@ -37,9 +37,16 @@ how cleverly an LP pre-allocated across dozens of dead strikes.
   premium opcode). The interface is shaped so it can later be lowered to bytecode.
 - **Premium math is an integer approximation, not full Black–Scholes.** On-chain
   BS is gas-prohibitive. We use a parametric premium: `intrinsic + time-value`,
-  where time-value scales with a **volatility smile** `σ(K) = σ0 + a·ln(K/S)²`
-  (fixed-point, no floats). This is enough to show a realistic smile and a
-  demand-driven spread.
+  where time-value scales with a **parametric volatility smile**:
+
+  ```
+  σ_strike = σ_global · (1 + α · ln(K/S)²)
+  ```
+
+  `ln(K/S)` is log-moneyness (0 at-the-money), `α` sets the smile's curvature,
+  and `σ_global` is the live demand-driven vol that `afterSwap` adjusts — so the
+  whole smile scales with demand. Implemented in fixed-point (no floats). This is
+  enough to show a realistic smile and a demand-driven spread.
 - **Asymmetric rounding makes the spread.** BUY (`exactOut`) rounds the premium
   **up** → Ask; SELL (`exactIn`) rounds **down** → Bid. Same strike, two sides,
   one consistent spread — no separate order book needed.
@@ -74,8 +81,8 @@ how cleverly an LP pre-allocated across dozens of dead strikes.
 
 ### Commit 4 — Volatility smile + asymmetric rounding (spread engine)
 - **Files:** `src/swapvm/OptionPricingEngine.sol`
-- Implement the parametric vol smile and the asymmetric rounding rule
-  (BUY→round up→Ask, SELL→round down→Bid).
+- Implement the parametric vol smile `σ_strike = σ_global · (1 + α · ln(K/S)²)`
+  and the asymmetric rounding rule (BUY→round up→Ask, SELL→round down→Bid).
 - **Verify:** OTM/ITM scale vol correctly; BUY/SELL on one strike yield a
   consistent spread.
 
