@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract, useSwitchChain } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { CONTRACTS } from "@/config/wagmi";
 
@@ -63,9 +63,24 @@ export default function Home() {
   const chainId = useChainId();
   const chains = useChains();
   const { data: balance } = useBalance({ address });
+  const { switchChain, isPending: switching } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
   const [mounted, setMounted] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  // Switch through the *connected* wagmi connector (not the ambiguous
+  // window.ethereum, which can point at a different installed wallet). Falls
+  // back to a raw EIP-3326 request when no wallet is connected yet.
+  const handleSwitch = (id: number) => {
+    setNetworkOpen(false);
+    setSwitchError(null);
+    if (!isConnected) { switchToNetwork(id); return; }
+    switchChain(
+      { chainId: id as 1 | 11155111 | 31337 | 1337 },
+      { onError: (e) => setSwitchError(e.message.split("\n")[0]) },
+    );
+  };
   const [activeAuth, setActiveAuth] = useState<ActiveAuth | null>(null);
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
@@ -152,7 +167,7 @@ export default function Home() {
                 onClick={() => setNetworkOpen((o) => !o)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
               >
-                {isConnected
+                {switching ? "Switching…" : isConnected
                   ? (currentChain?.name ?? `Chain ${chainId}`)
                   : "Network"}
                 <svg className="w-3 h-3 opacity-60" viewBox="0 0 12 12" fill="currentColor">
@@ -164,7 +179,7 @@ export default function Home() {
                   {NETWORKS.map((n) => (
                     <button
                       key={n.id}
-                      onClick={() => { switchToNetwork(n.id); setNetworkOpen(false); }}
+                      onClick={() => handleSwitch(n.id)}
                       className={`w-full text-left px-3 py-2.5 text-xs transition-colors flex items-center justify-between ${
                         isConnected && chainId === n.id
                           ? "text-white bg-blue-900/40"
@@ -175,6 +190,11 @@ export default function Home() {
                       {isConnected && chainId === n.id && <span className="text-blue-400 text-[10px]">✓ active</span>}
                     </button>
                   ))}
+                </div>
+              )}
+              {switchError && (
+                <div className="absolute right-0 mt-1 w-56 text-[11px] text-red-400 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 z-50">
+                  {switchError}
                 </div>
               )}
             </div>
