@@ -1,10 +1,11 @@
 "use client";
 
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
-import { useEffect, useState } from "react";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useAccount } from "wagmi";
+import { useEffect, useState, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 import { USDC_SEPOLIA } from "@/components/AuthorizeRange";
+import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
 
 const PRICING_ENGINE_ABI = [
   {
@@ -141,32 +142,65 @@ interface BuyPanelProps {
   auth: ActiveAuth;
   strike: number;
   spot: number;
+  askWAD: bigint | undefined;  // premium per contract from PricingEngine (18 dec)
   onClose: () => void;
 }
 
-function BuyPanel({ auth, strike, spot, onClose }: BuyPanelProps) {
+function BuyPanel({ auth, strike, spot, askWAD, onClose }: BuyPanelProps) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("1");
-  const [approveStep, setApproveStep] = useState(false);
+  const [swapQuote, setSwapQuote] = useState<UniswapSwapQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const amountWAD = BigInt(Math.round(Number(amount) * 1e18));
 
+  // Total USDC premium: askWAD is $/contract in WAD (18 dec); USDC is 6 dec
+  const totalUsdcPremium = askWAD
+    ? (askWAD * amountWAD) / BigInt(1e12) / BigInt(1e18)
+    : undefined;
+
+  const fetchQuote = useCallback(async () => {
+    if (!address || !totalUsdcPremium || totalUsdcPremium === BigInt(0)) return;
+    const apiKey = process.env.NEXT_PUBLIC_UNISWAP_API_KEY;
+    if (!apiKey) { setQuoteError("NEXT_PUBLIC_UNISWAP_API_KEY not set"); return; }
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const q = await fetchUniswapSwapQuote(totalUsdcPremium, address as `0x${string}`, USDC_SEPOLIA, apiKey);
+      setSwapQuote(q);
+    } catch (e) {
+      setQuoteError((e as Error).message);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [address, totalUsdcPremium?.toString()]);
+
+  // Uniswap swap: ETH → USDC via Universal Router
+  const { sendTransaction: sendSwap, data: swapTxHash, isPending: swapPending, error: swapError } = useSendTransaction();
+  const { isLoading: swapConfirming, isSuccess: swapSuccess } = useWaitForTransactionReceipt({ hash: swapTxHash });
+
+  // Step 2: Approve USDC for vault
   const { writeContract: approveUsdc, data: approveTxHash, isPending: approvePending, error: approveError } = useWriteContract();
   const { isLoading: approveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
 
+  // Step 3: vault.buy()
   const { writeContract: buyTx, data: buyTxHash, isPending: buyPending, error: buyError } = useWriteContract();
   const { isLoading: buyConfirming, isSuccess: buySuccess } = useWaitForTransactionReceipt({ hash: buyTxHash });
 
   const canTrade = !!CONTRACTS.aquaVault && !!address;
 
+  const handleSwap = () => {
+    if (!swapQuote) return;
+    sendSwap({ to: swapQuote.to, data: swapQuote.calldata, value: swapQuote.ethIn });
+  };
+
   const handleApprove = () => {
-    if (!canTrade) return;
-    setApproveStep(true);
-    // Approve a large USDC amount for premium payment
+    if (!canTrade || !totalUsdcPremium) return;
     approveUsdc({
       address: USDC_SEPOLIA as `0x${string}`,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [CONTRACTS.aquaVault as `0x${string}`, BigInt("1000000000000")], // 1M USDC headroom
+      args: [CONTRACTS.aquaVault as `0x${string}`, totalUsdcPremium * BigInt(2)],
     });
   };
 
@@ -187,54 +221,91 @@ function BuyPanel({ auth, strike, spot, onClose }: BuyPanelProps) {
     });
   };
 
-  const isApproved = approveSuccess;
-  const isWorking = approvePending || approveConfirming || buyPending || buyConfirming;
+  const isWorking = quoteLoading || swapPending || swapConfirming || approvePending || approveConfirming || buyPending || buyConfirming;
+  const anyError = quoteError ?? swapError?.message.split("\n")[0] ?? approveError?.message.split("\n")[0] ?? buyError?.message.split("\n")[0];
 
   return (
     <tr className="bg-blue-950/20 border-b border-gray-800">
       <td colSpan={7} className="px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-gray-400">Amount (contracts)</span>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            min="0.01"
-            step="0.01"
-            className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs font-mono focus:outline-none focus:border-blue-600"
-          />
-          <span className="text-xs text-gray-500">
-            {auth.isCall ? "Call" : "Put"} · K ${strike.toLocaleString()} · premium in USDC
-          </span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-gray-400">Amount (contracts)</span>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value); setSwapQuote(null); }}
+              min="0.01"
+              step="0.01"
+              className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs font-mono focus:outline-none focus:border-blue-600"
+            />
+            <span className="text-xs text-gray-500">
+              {auth.isCall ? "Call" : "Put"} · K ${strike.toLocaleString()}
+              {totalUsdcPremium !== undefined && ` · ${(Number(totalUsdcPremium) / 1e6).toFixed(2)} USDC premium`}
+            </span>
+            <button onClick={onClose} className="text-xs text-gray-500 hover:text-white ml-auto">Cancel</button>
+          </div>
+
           {!canTrade && (
             <span className="text-xs text-yellow-500">Set NEXT_PUBLIC_AQUA_VAULT to enable trading</span>
           )}
-          {canTrade && !isApproved && (
-            <button
-              onClick={handleApprove}
-              disabled={isWorking}
-              className="px-4 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-            >
-              {approvePending ? "Confirm…" : approveConfirming ? "Approving…" : "1. Approve USDC"}
-            </button>
+
+          {canTrade && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Step 1: Uniswap swap quote + execution */}
+              {!swapSuccess && (
+                <>
+                  {!swapQuote ? (
+                    <button
+                      onClick={fetchQuote}
+                      disabled={isWorking || !totalUsdcPremium}
+                      className="px-3 py-1.5 rounded-lg bg-pink-700 hover:bg-pink-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                    >
+                      {quoteLoading ? "Quoting…" : "1. Get Uniswap Quote"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSwap}
+                      disabled={isWorking}
+                      className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                    >
+                      {swapPending ? "Confirm in wallet…" : swapConfirming ? "Swapping…" : `1. Swap ${(Number(swapQuote.ethIn) / 1e18).toFixed(5)} ETH → ${(Number(swapQuote.usdcOut) / 1e6).toFixed(2)} USDC`}
+                    </button>
+                  )}
+                </>
+              )}
+              {swapSuccess && swapTxHash && (
+                <span className="text-xs text-pink-400 font-mono">
+                  ✓ Swapped via Uniswap ({swapTxHash.slice(0, 10)}…)
+                </span>
+              )}
+
+              {/* Step 2: Approve */}
+              {swapSuccess && !approveSuccess && (
+                <button
+                  onClick={handleApprove}
+                  disabled={isWorking}
+                  className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                >
+                  {approvePending ? "Confirm…" : approveConfirming ? "Approving…" : "2. Approve USDC"}
+                </button>
+              )}
+
+              {/* Step 3: Buy */}
+              {swapSuccess && approveSuccess && (
+                <button
+                  onClick={handleBuy}
+                  disabled={isWorking || buySuccess}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                >
+                  {buyPending ? "Confirm…" : buyConfirming ? "Confirming…" : buySuccess ? "✓ Filled" : `3. Buy ${amount} ${auth.isCall ? "Call" : "Put"}`}
+                </button>
+              )}
+            </div>
           )}
-          {canTrade && isApproved && (
-            <button
-              onClick={handleBuy}
-              disabled={isWorking || buySuccess}
-              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-            >
-              {buyPending ? "Confirm…" : buyConfirming ? "Confirming…" : buySuccess ? "✓ Filled" : `2. Buy ${amount} ${auth.isCall ? "Call" : "Put"}`}
-            </button>
+
+          {anyError && (
+            <span className="text-xs text-red-400">{anyError}</span>
           )}
-          {(approveError || buyError) && (
-            <span className="text-xs text-red-400">
-              {(approveError || buyError)?.message.split("\n")[0]}
-            </span>
-          )}
-          <button onClick={onClose} className="text-xs text-gray-500 hover:text-white ml-auto">
-            Cancel
-          </button>
         </div>
       </td>
     </tr>
@@ -387,7 +458,7 @@ function StrikeRow({ spot, strike, expiry, activeAuth }: StrikeRowProps) {
         </td>
       </tr>
       {panel === "buy" && activeAuth && (
-        <BuyPanel auth={activeAuth} strike={strike} spot={spot} onClose={() => setPanel(null)} />
+        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={ask.data as bigint | undefined} onClose={() => setPanel(null)} />
       )}
       {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
         <ClosePanel
