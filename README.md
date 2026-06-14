@@ -113,43 +113,28 @@ sequenceDiagram
     Frontend-->>LP: ✓ Range active — quoting K_min..K_max
 ```
 
-### 2. Primary Market Buy (Trader) — Uniswap Trading API
+### 2. Primary Market Buy (Trader)
 
-The frontend uses the **Uniswap Trading API** (`trade-api.gateway.uniswap.org/v1/quote`) for two purposes: (1) live ETH/USD spot price displayed in the header, and (2) routing the premium payment on-chain when a buyer purchases an option. The buyer pays in ETH; the Trading API finds the optimal route to deliver the exact USDC amount needed, then the Universal Router executes the swap on-chain. This gives a real Uniswap transaction hash as evidence of execution.
+Premium payment is routed through the **Uniswap Trading API** (`EXACT_OUTPUT` ETH→USDC), giving an on-chain Uniswap tx before the vault call.
 
 ```mermaid
 sequenceDiagram
     participant Buyer
-    participant Frontend
     participant UniAPI as Uniswap Trading API
-    participant UniRouter as Universal Router (on-chain)
     participant Engine as OptionPricingEngine
     participant Vault as AquaCollateralVault
     participant LP as LP Wallet
     participant Hook as OptionPricingHook
 
-    Buyer->>Frontend: Select K in [K_min, K_max]
-    Frontend->>Engine: quote(S, K, DTE, σ_global, α, isBuy=true)
-    Note over Engine: σ_K = σ_global · (1 + α · ln(K/S)²)<br/>P = intrinsic + S · σ_K · √T
-    Engine-->>Frontend: Ask price (USDC, 18-dec WAD)
-
-    Note over Frontend,UniAPI: Step 1 — Route premium payment via Uniswap Trading API
-    Frontend->>UniAPI: POST /v1/quote {type:EXACT_OUTPUT, tokenIn:ETH, tokenOut:USDC, amount:premium}
-    UniAPI-->>Frontend: {methodParameters: {calldata, to, value}} + quoteId
-    Buyer->>UniRouter: sendTransaction(calldata, value=ETH)
-    UniRouter-->>Buyer: USDC arrives in buyer wallet  ← on-chain Uniswap tx
-
-    Note over Frontend,Vault: Step 2 — Approve + buy
-    Buyer->>Frontend: Approve USDC for vault
+    Buyer->>Engine: quote(S, K, DTE, σ_global, α, isBuy=true)
+    Engine-->>Buyer: Ask price in USDC
+    Buyer->>UniAPI: POST /v1/quote EXACT_OUTPUT ETH→USDC (premium amount)
+    UniAPI-->>Buyer: Universal Router calldata + ETH value
     Buyer->>Vault: buy(authId, K, S, buyer, amount, USDC)
-    Vault->>Vault: validate K ∈ [K_min, K_max] & capacity
-    Vault->>Buyer: USDC.transferFrom(buyer → LP)  ← premium paid directly
-    Vault->>LP: WETH/USDC.transferFrom(LP → vault) ← JIT pull
-    Note over Vault: First buy at this K?<br/>Deploy new OptionToken lazily
-    Vault->>Buyer: OptionToken.mint(buyer, amount)
+    Vault->>LP: pull collateral JIT
+    Vault->>LP: transfer USDC premium
+    Vault->>Buyer: mint OptionToken
     Vault->>Hook: bumpSigma(isBuy=true)
-    Note over Hook: σ_global += γ
-    Vault-->>Buyer: ✓ OptionToken received
 ```
 
 ### 3. Close Position / Early Unwind (Holder)
