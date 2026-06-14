@@ -63,6 +63,25 @@ At expiry $T$, the final settlement price $S_{final}$ is determined by a decentr
 
 This process ensures that even if one exchange's price deviates significantly due to a flash crash or local liquidity issues, the on-chain settlement remains an accurate reflection of the global spot price.
 
+### 4. Black-Scholes Delta (Frontend)
+
+Delta ($\Delta$) measures the sensitivity of the option premium to a $1 move in the underlying spot price. It is computed client-side in the option matrix using the standard Black-Scholes formula for a European call, with $\sigma_{strike}$ (the smile-adjusted volatility) substituted for a flat $\sigma$.
+
+$$\Delta = N(d_1)$$
+
+$$d_1 = \frac{\ln(S/K) + \frac{1}{2}\sigma_{strike}^2 \cdot T}{\sigma_{strike} \cdot \sqrt{T}}$$
+
+Where:
+- $N(\cdot)$: Standard normal cumulative distribution function.
+- $S$: Current spot price.
+- $K$: Strike price.
+- $T$: Time to expiry in years.
+- $\sigma_{strike}$: Smile-adjusted volatility from Section 1 — ensures delta reflects the curvature of the vol surface, not just flat vol.
+
+$N(\cdot)$ is approximated using the Abramowitz & Stegun polynomial (26.2.17), which has a maximum error of $1.5 \times 10^{-7}$ and requires no lookup tables, making it suitable for browser execution.
+
+> Note: Delta is not computed on-chain. The `OptionPricingEngine` contract uses a gas-efficient parametric approximation that omits the normal distribution. Delta is display-only in the frontend and is not used for pricing or settlement.
+
 ## 🔄 Flow Diagrams
 
 ### 1. Option Price Quoting (View)
@@ -194,6 +213,7 @@ npx ts-node option-settlement.ts --simulate
 
 ### Options Terms
 
+- **Delta (Δ):** The rate of change of an option's premium with respect to a $1 move in the spot price. Ranges from 0 (deep OTM) to 1 (deep ITM) for calls. Computed in the frontend via N(d₁) from Black-Scholes using the smile-adjusted volatility σ_strike — see Mathematical Specification §4.
 - **Strike Price (K):** The price at which an option holder has the right to buy (call) or sell (put) the underlying asset at expiry.
 - **Spot Price (S):** The current market price of the underlying asset (ETH/USDC here), sourced from Chainlink oracles.
 - **Expiry (T):** The date/time at which an option contract settles and the holder's profit or loss is calculated.
