@@ -3,16 +3,19 @@
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
 import { LPDashboard } from "@/components/LPDashboard";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const DEMO_SPOT = 3420;
 
 export default function Home() {
   const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
-  const [lastTx, setLastTx] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [showConnectors, setShowConnectors] = useState(false);
+
+  // Only render wallet UI after hydration — avoids empty connectors on static pre-render
+  useEffect(() => { setMounted(true); }, []);
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
@@ -23,7 +26,8 @@ export default function Home() {
             Non-custodial · 1inch Aqua JIT · Uniswap v4 Hooks · Chainlink CRE
           </p>
         </div>
-        {isConnected ? (
+
+        {!mounted ? null : isConnected ? (
           <div className="flex items-center gap-3">
             <span className="text-gray-400 text-sm font-mono">
               {address?.slice(0, 6)}…{address?.slice(-4)}
@@ -44,17 +48,28 @@ export default function Home() {
             >
               {isPending ? "Connecting…" : "Connect Wallet"}
             </button>
+
             {showConnectors && (
-              <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden">
+                {connectors.length === 0 && (
+                  <div className="px-4 py-3 text-sm text-gray-400">
+                    No wallet detected.<br />
+                    <a href="https://metamask.io" target="_blank" rel="noreferrer"
+                       className="text-blue-400 underline">Install MetaMask</a>
+                  </div>
+                )}
                 {connectors.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => { connect({ connector: c }); setShowConnectors(false); }}
-                    className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-800 transition-colors"
+                    className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-0"
                   >
                     {c.name}
                   </button>
                 ))}
+                {error && (
+                  <div className="px-4 py-2 text-xs text-red-400">{error.message}</div>
+                )}
               </div>
             )}
           </div>
@@ -80,12 +95,6 @@ export default function Home() {
           </h2>
           <LPDashboard />
         </section>
-
-        {lastTx && (
-          <div className="text-xs text-gray-500 font-mono">
-            Last tx: {lastTx}
-          </div>
-        )}
       </div>
     </main>
   );
