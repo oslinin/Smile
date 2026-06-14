@@ -1,4 +1,4 @@
-# Parametric Options Marketplace — Build Plan
+# Smile — Build Plan
 
 A non-custodial, parametric options marketplace that solves the **low-liquidity
 problem in decentralized options** by combining three primitives:

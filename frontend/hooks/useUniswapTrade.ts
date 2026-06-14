@@ -2,7 +2,7 @@
 
 // Native ETH sentinel address used by the Uniswap Trading API
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const SEPOLIA_CHAIN_ID = 11155111;
+const MAINNET_CHAIN_ID = 1;
 const API_URL = "https://trade-api.gateway.uniswap.org/v1/quote";
 
 export interface UniswapSwapQuote {
@@ -26,13 +26,13 @@ export async function fetchUniswapSwapQuote(
     headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify({
       type: "EXACT_OUTPUT",
-      tokenInChainId: SEPOLIA_CHAIN_ID,
-      tokenOutChainId: SEPOLIA_CHAIN_ID,
+      tokenInChainId: MAINNET_CHAIN_ID,
+      tokenOutChainId: MAINNET_CHAIN_ID,
       tokenIn: NATIVE_ETH,
       tokenOut: usdcToken,
       amount: usdcAmountOut.toString(),
       swapper,
-      slippageTolerance: "1.0",
+      slippageTolerance: 1.0,
     }),
   });
 
@@ -42,8 +42,9 @@ export async function fetchUniswapSwapQuote(
   }
 
   const data = await res.json();
-  const mp = data.methodParameters;
-  if (!mp?.calldata) throw new Error("Uniswap API returned no calldata — Sepolia route may have no liquidity");
+  // Trading API v1 nests methodParameters under data.quote; older routing API has it at top level
+  const mp = data.quote?.methodParameters ?? data.methodParameters;
+  if (!mp?.calldata) throw new Error("Uniswap API returned no calldata — no mainnet liquidity route found");
 
   return {
     ethIn: BigInt(mp.value ?? "0"),

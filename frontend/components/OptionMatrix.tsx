@@ -1,6 +1,7 @@
 "use client";
 
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useAccount } from "wagmi";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useAccount, useChainId } from "wagmi";
+import { explorerTxUrl } from "@/lib/explorer";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { Leg } from "@/components/PayoffBuilder";
 import { CONTRACTS } from "@/config/wagmi";
@@ -124,6 +125,13 @@ const WAD = BigInt("1000000000000000000");
 const SIGMA_GLOBAL = (BigInt(80) * WAD) / BigInt(100);
 const ALPHA = BigInt(2) * WAD;
 const STRIKES_OFFSETS = [-20, -10, -5, 0, 5, 10, 20];
+
+function authRangeStrikes(min: number, max: number): number[] {
+  if (min === max) return [min];
+  const raw = Math.round((max - min) / 6 / 50) * 50 || 50;
+  return Array.from({ length: 7 }, (_, i) => Math.round((min + i * raw) / 50) * 50)
+    .filter((v, i, a) => v <= max && a.indexOf(v) === i);
+}
 
 const SIGMA_GLOBAL_NUM = 0.80;
 const ALPHA_NUM = 2.0;
@@ -314,7 +322,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
 
   return (
     <tr className="bg-orange-950/20 border-b border-gray-800">
-      <td colSpan={7} className="px-4 py-3">
+      <td colSpan={6} className="px-4 py-3">
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2 flex-wrap text-xs">
             {/* Call / Put toggle */}
@@ -392,6 +400,7 @@ interface BuyPanelProps {
 
 function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirmed }: BuyPanelProps) {
   const { address } = useAccount();
+  const chainId = useChainId();
   const [amount, setAmount] = useState("1");
   const [swapQuote, setSwapQuote] = useState<UniswapSwapQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -418,6 +427,13 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
       setQuoteLoading(false);
     }
   }, [address, totalUsdcPremium?.toString()]);
+
+  // Auto-fetch quote whenever premium or address changes (debounced for amount typing)
+  useEffect(() => {
+    setSwapQuote(null);
+    const t = setTimeout(fetchQuote, 500);
+    return () => clearTimeout(t);
+  }, [fetchQuote]);
 
   // Uniswap swap: ETH → USDC via Universal Router
   const { sendTransaction: sendSwap, data: swapTxHash, isPending: swapPending, error: swapError } = useSendTransaction({
@@ -480,14 +496,14 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
 
   return (
     <tr className="bg-blue-950/20 border-b border-gray-800">
-      <td colSpan={7} className="px-4 py-3">
+      <td colSpan={6} className="px-4 py-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-gray-400">Amount (contracts)</span>
             <input
               type="number"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); setSwapQuote(null); }}
+              onChange={(e) => setAmount(e.target.value)}
               min="0.01"
               step="0.01"
               className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs font-mono focus:outline-none focus:border-blue-600"
@@ -505,18 +521,13 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
 
           {canTrade && (
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Step 1: Uniswap swap quote + execution */}
+              {/* Step 1: Uniswap swap → execute */}
               {!swapSuccess && (
                 <>
-                  {!swapQuote ? (
-                    <button
-                      onClick={fetchQuote}
-                      disabled={isWorking || !totalUsdcPremium}
-                      className="px-3 py-1.5 rounded-lg bg-pink-700 hover:bg-pink-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                    >
-                      {quoteLoading ? "Quoting…" : "1. Get Uniswap Quote"}
-                    </button>
-                  ) : (
+                  {quoteLoading && (
+                    <span className="text-xs text-gray-400 animate-pulse">Quoting via Uniswap…</span>
+                  )}
+                  {swapQuote && (
                     <button
                       onClick={handleSwap}
                       disabled={isWorking}
@@ -527,11 +538,23 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
                   )}
                 </>
               )}
-              {swapSuccess && swapTxHash && (
-                <span className="text-xs text-pink-400 font-mono">
-                  ✓ Swapped via Uniswap ({swapTxHash.slice(0, 10)}…)
-                </span>
-              )}
+              {swapSuccess && swapTxHash && (() => {
+                const url = explorerTxUrl(chainId, swapTxHash);
+                return url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-pink-400 hover:text-pink-300 font-mono underline decoration-dotted"
+                  >
+                    ✓ Swapped via Uniswap ({swapTxHash.slice(0, 10)}…) ↗
+                  </a>
+                ) : (
+                  <span className="text-xs text-pink-400 font-mono">
+                    ✓ Swapped via Uniswap ({swapTxHash.slice(0, 10)}…)
+                  </span>
+                );
+              })()}
 
               {/* Step 2: Approve */}
               {swapSuccess && !approveSuccess && (
@@ -592,7 +615,7 @@ function ClosePanel({ optionToken, lp, balance, onClose }: ClosePanelProps) {
 
   return (
     <tr className="bg-red-950/20 border-b border-gray-800">
-      <td colSpan={7} className="px-4 py-3">
+      <td colSpan={6} className="px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             Close position · {(Number(balance) / 1e18).toFixed(4)} contracts
@@ -673,51 +696,52 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
   return (
     <>
       <tr className={`border-b border-gray-800 ${isATM ? "bg-blue-950/40" : ""}`}>
-        <td className="py-2 px-3 text-right font-mono text-sm">${strike.toLocaleString()}</td>
+        <td className="py-2 px-3 text-right font-mono text-sm">
+          <span className="flex items-center justify-end gap-1.5">
+            ${strike.toLocaleString()}
+            {hasPosition && hasToken && (
+              <button
+                onClick={() => setPanel(panel === "close" ? null : "close")}
+                title="Close position"
+                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold transition-colors ${
+                  panel === "close" ? "bg-gray-700 text-gray-400" : "bg-red-900/60 text-red-400 hover:bg-red-700"
+                }`}
+              >
+                pos
+              </button>
+            )}
+          </span>
+        </td>
         <td className="py-2 px-3 text-center font-mono text-sm text-purple-400">{delta.toFixed(2)}</td>
         <td className="py-2 px-3 text-center text-gray-400 text-xs">
           {moneyness > 0 ? "+" : ""}{moneyness.toFixed(1)}%
         </td>
-        <td className="py-2 px-3 text-right font-mono text-sm text-green-400">
+        <td
+          onClick={() => setPanel(panel === "sell" ? null : "sell")}
+          className={`py-2 px-3 text-right font-mono text-sm cursor-pointer select-none transition-colors ${
+            panel === "sell"
+              ? "bg-orange-900/40 text-orange-300"
+              : "text-green-400 hover:bg-orange-950/50 hover:text-orange-300"
+          }`}
+        >
           {bid.isLoading ? "…" : bid.error ? "–" : formatWAD(bid.data as bigint)}
         </td>
-        <td className="py-2 px-3 text-right font-mono text-sm text-red-400">
+        <td
+          onClick={() => isTradeable && setPanel(panel === "buy" ? null : "buy")}
+          className={`py-2 px-3 text-right font-mono text-sm transition-colors ${
+            isTradeable ? "cursor-pointer select-none" : "cursor-default"
+          } ${
+            panel === "buy"
+              ? "bg-blue-900/40 text-blue-200"
+              : isTradeable
+              ? "text-red-400 hover:bg-blue-950/50 hover:text-blue-300"
+              : "text-red-400 opacity-50"
+          }`}
+        >
           {ask.isLoading ? "…" : ask.error ? "–" : formatWAD(ask.data as bigint)}
         </td>
         <td className="py-2 px-3 text-right text-xs text-gray-500">
           {ask.data ? `${(sigma * 100).toFixed(1)}%` : "–"}
-        </td>
-        <td className="py-2 px-3 text-center">
-          <div className="flex gap-1 justify-center">
-            <button
-              onClick={() => setPanel(panel === "sell" ? null : "sell")}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                panel === "sell" ? "bg-gray-700 text-gray-300" : "bg-orange-700 hover:bg-orange-600 text-white"
-              }`}
-            >
-              Sell
-            </button>
-            {isTradeable && (
-              <button
-                onClick={() => setPanel(panel === "buy" ? null : "buy")}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                  panel === "buy" ? "bg-gray-700 text-gray-300" : "bg-blue-600 hover:bg-blue-500 text-white"
-                }`}
-              >
-                Buy
-              </button>
-            )}
-            {hasPosition && hasToken && (
-              <button
-                onClick={() => setPanel(panel === "close" ? null : "close")}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                  panel === "close" ? "bg-gray-700 text-gray-300" : "bg-red-700 hover:bg-red-600 text-white"
-                }`}
-              >
-                Close
-              </button>
-            )}
-          </div>
         </td>
       </tr>
       {panel === "sell" && (
@@ -748,6 +772,13 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
 
 // ── OptionMatrix ──────────────────────────────────────────────────────────────
 
+const EXPIRY_PRESETS = [
+  { label: "1d",  days: 1  },
+  { label: "7d",  days: 7  },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+];
+
 interface OptionMatrixProps {
   spot: number;
   activeAuth?: ActiveAuth | null;
@@ -757,16 +788,22 @@ interface OptionMatrixProps {
 }
 
 export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }: OptionMatrixProps) {
-  const [expiry, setExpiry] = useState(0);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [now, setNow] = useState(0);
 
-  useEffect(() => {
-    // Use LP's expiry if authorized, otherwise default to 30 days
-    setExpiry(activeAuth?.expiry ?? Math.floor(Date.now() / 1000) + 30 * 24 * 3600);
-  }, [activeAuth?.expiry]);
+  useEffect(() => { setNow(Math.floor(Date.now() / 1000)); }, []);
 
-  const strikes = STRIKES_OFFSETS.map((pct) =>
-    Math.round((spot * (1 + pct / 100)) / 50) * 50
-  );
+  // LP's authorized expiry takes precedence; otherwise use selected preset
+  const expiry = activeAuth?.expiry ?? (now + selectedDays * 86400);
+
+  // Highlight the preset tab closest to the active auth expiry
+  const activeDays = activeAuth
+    ? Math.round((activeAuth.expiry - now) / 86400)
+    : selectedDays;
+
+  const strikes = activeAuth
+    ? authRangeStrikes(activeAuth.strikeMin, activeAuth.strikeMax)
+    : STRIKES_OFFSETS.map((pct) => Math.round((spot * (1 + pct / 100)) / 50) * 50);
 
   if (!CONTRACTS.pricingEngine) {
     return (
@@ -778,27 +815,68 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSel
 
   return (
     <div className="rounded-xl border border-gray-800 overflow-hidden">
+      {/* Expiry tab bar */}
+      <div className="flex items-center gap-1 px-3 py-2 bg-gray-900 border-b border-gray-800">
+        <span className="text-gray-600 text-xs mr-2">Expiry</span>
+        {EXPIRY_PRESETS.map((p) => {
+          const isActive = !activeAuth && selectedDays === p.days;
+          const isAuthMatch = activeAuth && Math.abs(activeDays - p.days) < p.days * 0.3;
+          return (
+            <button
+              key={p.days}
+              onClick={() => { if (!activeAuth) setSelectedDays(p.days); }}
+              className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                isActive || isAuthMatch
+                  ? "bg-blue-600 text-white"
+                  : activeAuth
+                  ? "text-gray-700 cursor-default"
+                  : "text-gray-500 hover:text-white hover:bg-gray-800"
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+        {activeAuth && (
+          <span className="ml-2 text-xs text-blue-400 font-mono">
+            {Math.max(0, Math.round((activeAuth.expiry - now) / 86400))}d (LP auth)
+          </span>
+        )}
+        <span className="ml-auto text-gray-600 text-xs">
+          click Bid to sell · Ask to buy
+        </span>
+      </div>
+
       {activeAuth && <LPSummaryBar auth={activeAuth} />}
+
       <div className="overflow-x-auto">
-      <table className="w-full text-white">
-        <thead>
-          <tr className="border-b border-gray-700 bg-gray-900 text-gray-400 text-xs uppercase">
-            <th className="py-2 px-3 text-right">Strike</th>
-            <th className="py-2 px-3 text-center">Delta</th>
-            <th className="py-2 px-3 text-center">Moneyness</th>
-            <th className="py-2 px-3 text-right">Bid</th>
-            <th className="py-2 px-3 text-right">Ask</th>
-            <th className="py-2 px-3 text-right">IV</th>
-            <th className="py-2 px-3 text-center">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {expiry > 0 &&
-            strikes.map((k) => (
-              <StrikeRow key={k} spot={spot} strike={k} expiry={expiry} activeAuth={activeAuth} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} onSellConfirmed={onSellConfirmed} />
-            ))}
-        </tbody>
-      </table>
+        <table className="w-full text-white">
+          <thead>
+            <tr className="border-b border-gray-700 bg-gray-900 text-gray-400 text-xs uppercase">
+              <th className="py-2 px-3 text-right">Strike</th>
+              <th className="py-2 px-3 text-center">Delta</th>
+              <th className="py-2 px-3 text-center">Moneyness</th>
+              <th className="py-2 px-3 text-right">Bid ↓ sell</th>
+              <th className="py-2 px-3 text-right">Ask ↑ buy</th>
+              <th className="py-2 px-3 text-right">IV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expiry > 0 &&
+              strikes.map((k) => (
+                <StrikeRow
+                  key={k}
+                  spot={spot}
+                  strike={k}
+                  expiry={expiry}
+                  activeAuth={activeAuth}
+                  onSwapTx={onSwapTx}
+                  onBuyConfirmed={onBuyConfirmed}
+                  onSellConfirmed={onSellConfirmed}
+                />
+              ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

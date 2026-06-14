@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Options Marketplace",
+  title: "Smile",
   description: "Non-custodial parametric options powered by 1inch Aqua, Uniswap v4, and Chainlink CRE",
+  icons: { icon: "/smile-icon.svg" },
 };
 
 export default function RootLayout({

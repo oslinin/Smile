@@ -25,16 +25,28 @@ stop_existing() {
   fuser -k 3000/tcp 2>/dev/null || true
 }
 
+# ── 0. Load persistent env vars (FORK_URL, API keys) ─────────────────────────
+# Source before overwriting .env.local so values survive regeneration
+[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a || true
+
 # ── 1. Stop any previous instances ───────────────────────────────────────────
 stop_existing
 sleep 1
 
 # ── 2. Start Anvil ───────────────────────────────────────────────────────────
 echo "Starting Anvil …"
+FORK_ARGS=""
+if [ -n "${FORK_URL:-}" ]; then
+  echo "  Forking mainnet …"
+  FORK_ARGS="--fork-url ${FORK_URL}"
+  export FORK_MAINNET=true
+fi
+
 anvil \
   --chain-id 31337 \
   --block-time 1 \
   --port 8545 \
+  ${FORK_ARGS} \
   > /tmp/anvil-options.log 2>&1 &
 echo $! > "$ANVIL_PID_FILE"
 
@@ -64,9 +76,10 @@ echo "$DEPLOY_OUT" | grep "NEXT_PUBLIC_"
 # ── 4. Parse addresses and write .env.local ───────────────────────────────────
 echo "Writing $ENV_FILE …"
 
-# Preserve WC project ID and Uniswap API key if they exist
+# Preserve WC project ID, Uniswap API key, and fork URL if they exist
 WC_KEY=$(grep NEXT_PUBLIC_WC_PROJECT_ID "$ENV_FILE" 2>/dev/null || true)
 UNI_KEY=$(grep NEXT_PUBLIC_UNISWAP_API_KEY "$ENV_FILE" 2>/dev/null || true)
+FORK_KEY=$(grep "^FORK_URL=" "$ENV_FILE" 2>/dev/null || true)
 
 # Extract addresses from forge output
 parse() { echo "$DEPLOY_OUT" | grep "$1=" | tail -1 | cut -d= -f2 | tr -d '[:space:]'; }
@@ -82,7 +95,15 @@ NEXT_PUBLIC_PRICING_HOOK=$(parse NEXT_PUBLIC_PRICING_HOOK)
 NEXT_PUBLIC_AQUA_VAULT=$(parse NEXT_PUBLIC_AQUA_VAULT)
 NEXT_PUBLIC_SETTLEMENT=$(parse NEXT_PUBLIC_SETTLEMENT)
 
+# Anvil-prefixed copies — used by /anvil route (burner wallet)
+NEXT_PUBLIC_ANVIL_USDC_ADDRESS=$(parse NEXT_PUBLIC_USDC_ADDRESS)
+NEXT_PUBLIC_ANVIL_WETH_ADDRESS=$(parse NEXT_PUBLIC_WETH_ADDRESS)
+NEXT_PUBLIC_ANVIL_PRICING_ENGINE=$(parse NEXT_PUBLIC_PRICING_ENGINE)
+NEXT_PUBLIC_ANVIL_AQUA_VAULT=$(parse NEXT_PUBLIC_AQUA_VAULT)
+NEXT_PUBLIC_ANVIL_SETTLEMENT=$(parse NEXT_PUBLIC_SETTLEMENT)
+
 # Preserve API keys from previous .env.local
+${FORK_KEY}
 ${WC_KEY}
 ${UNI_KEY}
 EOF
@@ -108,14 +129,17 @@ for i in $(seq 1 40); do
 done
 
 echo ""
+BUYER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+BUYER_ADDR=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " Frontend: http://localhost:3000"
-echo " Anvil:    http://localhost:8545  (chain 31337)"
-echo " Deployer: $DEPLOYER_ADDR"
+echo " Sepolia UI:  http://localhost:3000         (MetaMask)"
+echo " Anvil UI:    http://localhost:3000/anvil   (burner wallet, no MetaMask)"
+echo " Anvil RPC:   http://localhost:8545  (chain 31337)"
 echo ""
-echo " MetaMask setup:"
-echo "   Network:     Localhost 8545  (chain 31337)"
-echo "   Import key:  $DEPLOYER_KEY"
+echo " Burner accounts (pick in UI at /anvil):"
+echo "   LP / Deployer  $DEPLOYER_ADDR"
+echo "   Buyer          $BUYER_ADDR"
 echo ""
 echo " Logs:  tail -f /tmp/anvil-options.log"
 echo "        tail -f /tmp/next-options.log"

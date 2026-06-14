@@ -35,7 +35,7 @@ const VAULT_ABI = [
   },
 ] as const;
 
-const ERC20_APPROVE_ABI = [
+const ERC20_ABI = [
   {
     name: "approve",
     type: "function",
@@ -45,6 +45,16 @@ const ERC20_APPROVE_ABI = [
       { name: "amount", type: "uint256" },
     ],
     outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
 
@@ -71,14 +81,18 @@ interface AuthorizeRangeProps {
 
 export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
   const [strikeMin, setStrikeMin] = useState(Math.round(spot * 0.9 / 50) * 50);
   const [strikeMax, setStrikeMax] = useState(Math.round(spot * 1.1 / 50) * 50);
   const [expiryOffset, setExpiryOffset] = useState(30 * 86_400);
   const [maxCollateral, setMaxCollateral] = useState("1.0");
   const [isCall, setIsCall] = useState(true);
-  const [step, setStep] = useState<"idle" | "approving" | "authorizing" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "approving" | "approved" | "authorizing" | "done">("idle");
   const [authorized, setAuthorized] = useState<ActiveAuth | null>(null);
   const firedRef = useRef(false);
+  const authCalledRef = useRef(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
   const collateralDecimals = isCall ? 18 : 6;
@@ -100,6 +114,20 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
     query: { enabled: !!CONTRACTS.aquaVault },
   });
 
+  // Read current allowance — if already >= maxCollateral we can skip approve
+  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
+    address: collateralToken as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: [
+      (address ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      (CONTRACTS.aquaVault ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+    ],
+    query: { enabled: !!address && !!CONTRACTS.aquaVault },
+  });
+
+  const allowanceSufficient = currentAllowance !== undefined && currentAllowance >= maxCollateralBig;
+
   // Step 1: approve collateral token
   const { writeContract: approve, data: approveTxHash, isPending: approvePending, error: approveError } = useWriteContract();
   const { isLoading: approveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
@@ -108,18 +136,24 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   const { writeContract: authorize, data: authTxHash, isPending: authPending, error: authError } = useWriteContract();
   const { isLoading: authConfirming, isSuccess: authSuccess } = useWaitForTransactionReceipt({ hash: authTxHash });
 
-  // After approval, auto-proceed to authorization
+  // After approval confirmed, move to "approved" so user clicks step 2 manually
   useEffect(() => {
     if (approveSuccess && step === "approving") {
-      setStep("authorizing");
-      authorize({
-        address: CONTRACTS.aquaVault as `0x${string}`,
-        abi: VAULT_ABI,
-        functionName: "authorizeRange",
-        args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, isCall],
-      });
+      setStep("approved");
     }
   }, [approveSuccess]);
+
+  const handleAuthorize = () => {
+    if (authCalledRef.current) return;
+    authCalledRef.current = true;
+    setStep("authorizing");
+    authorize({
+      address: CONTRACTS.aquaVault as `0x${string}`,
+      abi: VAULT_ABI,
+      functionName: "authorizeRange",
+      args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, isCall],
+    });
+  };
 
   useEffect(() => {
     if (authSuccess && nextAuthId !== undefined && !firedRef.current && address) {
@@ -139,21 +173,29 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
     }
   }, [authSuccess]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!address || !CONTRACTS.aquaVault) return;
+    // Re-check allowance fresh before deciding
+    const { data: freshAllowance } = await refetchAllowance();
+    const sufficient = freshAllowance !== undefined && freshAllowance >= maxCollateralBig;
+    if (sufficient) {
+      // Already approved — jump straight to step 2
+      setStep("approved");
+      return;
+    }
     setStep("approving");
     approve({
       address: collateralToken as `0x${string}`,
-      abi: ERC20_APPROVE_ABI,
+      abi: ERC20_ABI,
       functionName: "approve",
       args: [CONTRACTS.aquaVault as `0x${string}`, maxCollateralBig],
     });
   };
 
-  if (!isConnected) {
+  if (!mounted || !isConnected) {
     return (
       <div className="rounded-xl border border-gray-800 p-4 text-gray-500 text-sm">
-        Connect wallet to authorize a range.
+        {mounted ? "Connect wallet to authorize a range." : null}
       </div>
     );
   }
@@ -188,7 +230,15 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
     );
   }
 
-  const isWorking = step !== "idle";
+  const approveActive = step === "approving" && (approvePending || approveConfirming);
+  const authActive   = step === "authorizing" && (authPending || authConfirming);
+  const isWorking    = approveActive || authActive;
+
+  const handleReset = () => {
+    setStep("idle");
+    authCalledRef.current = false;
+    firedRef.current = false;
+  };
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-4">
@@ -278,23 +328,40 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
 
       <div className="text-xs text-gray-500 flex items-center justify-between">
         <span>LP: {address?.slice(0, 6)}…{address?.slice(-4)}</span>
-        <span>
-          Capacity: ~{isCall
+        <span className="flex items-center gap-2">
+          {allowanceSufficient && (
+            <span className="text-green-500">✓ already approved</span>
+          )}
+          <span>Capacity: ~{isCall
             ? `${maxCollateral} WETH`
             : `${Number(maxCollateral).toLocaleString()} USDC`}
+          </span>
         </span>
       </div>
 
       {/* Progress steps */}
-      {isWorking && (
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className={step === "approving" ? "text-blue-400 font-semibold" : "text-green-400"}>
-            1. Approve {isCall ? "WETH" : "USDC"}
+      {step !== "idle" && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className={
+            step === "approving" ? "text-blue-400 font-semibold" :
+            "text-green-400"
+          }>
+            ✓ 1. Approve {isCall ? "WETH" : "USDC"}
           </span>
           <span className="text-gray-700">→</span>
-          <span className={step === "authorizing" ? "text-blue-400 font-semibold" : step === "done" ? "text-green-400" : ""}>
+          <span className={
+            step === "approved"    ? "text-yellow-400 font-semibold" :
+            step === "authorizing" ? "text-blue-400 font-semibold" :
+            step === "done"        ? "text-green-400" :
+            "text-gray-600"
+          }>
             2. Authorize range
           </span>
+          {step !== "done" && !isWorking && (
+            <button onClick={handleReset} className="ml-auto text-gray-500 hover:text-white text-xs">
+              Reset
+            </button>
+          )}
         </div>
       )}
 
@@ -308,16 +375,32 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
         <div className="text-xs text-yellow-500">Set NEXT_PUBLIC_AQUA_VAULT to enable authorization</div>
       )}
 
-      <button
-        onClick={handleStart}
-        disabled={isWorking || !CONTRACTS.aquaVault || strikeMin > strikeMax || Number(maxCollateral) <= 0}
-        className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
-      >
-        {step === "idle" ? "Authorize Range"
-          : step === "approving" ? (approvePending ? "Confirm approval…" : approveConfirming ? "Approving…" : "Waiting…")
-          : step === "authorizing" ? (authPending ? "Confirm authorization…" : authConfirming ? "Authorizing…" : "Waiting…")
-          : "Done"}
-      </button>
+      {/* Step 1 button */}
+      {(step === "idle" || step === "approving") && (
+        <button
+          onClick={handleStart}
+          disabled={isWorking || !CONTRACTS.aquaVault || strikeMin > strikeMax || Number(maxCollateral) <= 0}
+          className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+        >
+          {step === "idle"
+            ? (allowanceSufficient ? "Authorize Range" : "1. Approve & Authorize Range")
+            : approvePending ? "Check MetaMask — confirm approval…"
+            : approveConfirming ? "Approving…" : "Waiting…"}
+        </button>
+      )}
+
+      {/* Step 2 button — shown after approval confirmed; always clickable unless actively working */}
+      {(step === "approved" || step === "authorizing") && (
+        <button
+          onClick={() => { authCalledRef.current = false; handleAuthorize(); }}
+          disabled={authActive}
+          className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+        >
+          {authPending     ? "Check MetaMask — confirm authorization…"
+           : authConfirming ? "Authorizing…"
+           : "2. Authorize Range"}
+        </button>
+      )}
     </div>
   );
 }

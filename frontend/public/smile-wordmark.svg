@@ -1,0 +1,17 @@
+<svg width="220" height="60" viewBox="0 0 220 60" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Smile">
+  <defs>
+    <linearGradient id="wmMouth" x1="12" y1="0" x2="44" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"></stop>
+      <stop offset="0.5" stop-color="#4d7cfe"></stop>
+      <stop offset="1" stop-color="#22d3ee"></stop>
+    </linearGradient>
+  </defs>
+  
+  <rect x="2" y="8" width="44" height="44" rx="12" fill="#12161f" stroke="#232a3a" stroke-width="1.25"></rect>
+  <circle cx="18" cy="25" r="2.7" fill="#dfe3ec"></circle>
+  <circle cx="30" cy="25" r="2.7" fill="#dfe3ec"></circle>
+  <path d="M13 31 Q24 43 35 31" stroke="url(#wmMouth)" stroke-width="3.2" stroke-linecap="round" fill="none"></path>
+  <circle cx="24" cy="37.2" r="1.8" fill="#3ad99b"></circle>
+  
+  <text x="60" y="40" font-family="Geist, -apple-system, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.8" fill="#f3f5fa">Smile</text>
+</svg>

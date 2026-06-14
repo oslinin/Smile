@@ -1,5 +1,8 @@
 "use client";
 
+import { useChainId } from "wagmi";
+import { explorerTxUrl } from "@/lib/explorer";
+
 const SEPOLIA_TX = "https://sepolia.etherscan.io/tx/";
 const SEPOLIA_ADDR = "https://sepolia.etherscan.io/address/";
 
@@ -31,6 +34,8 @@ interface TxProofProps {
 }
 
 export function TxProof({ recentSwapTx }: TxProofProps) {
+  const chainId = useChainId();
+  const swapUrl = recentSwapTx ? explorerTxUrl(chainId, recentSwapTx) : null;
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
       <h3 className="text-gray-400 text-xs uppercase tracking-widest">On-Chain Proof · Sepolia</h3>
@@ -63,14 +68,21 @@ export function TxProof({ recentSwapTx }: TxProofProps) {
         {recentSwapTx && (
           <div className="flex items-center justify-between gap-4 pt-2 border-t border-gray-800">
             <span className="text-gray-500 text-xs w-44 shrink-0">Uniswap Premium Swap</span>
-            <a
-              href={`${SEPOLIA_TX}${recentSwapTx}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-mono text-pink-400 hover:text-pink-300"
-            >
-              {recentSwapTx.slice(0, 10)}…{recentSwapTx.slice(-6)} ↗
-            </a>
+            {swapUrl ? (
+              <a
+                href={swapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-pink-400 hover:text-pink-300"
+              >
+                {recentSwapTx.slice(0, 10)}…{recentSwapTx.slice(-6)} ↗
+              </a>
+            ) : (
+              <span className="text-xs font-mono text-pink-400/70">
+                {recentSwapTx.slice(0, 10)}…{recentSwapTx.slice(-6)}
+                <span className="text-gray-600 ml-2">(local · no explorer)</span>
+              </span>
+            )}
           </div>
         )}
       </div>

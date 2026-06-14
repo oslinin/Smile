@@ -50,6 +50,8 @@ interface RegisterSeriesProps {
 
 export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
   const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [strike, setStrike] = useState(Math.round(spot / 50) * 50);
   const [expiryOffset, setExpiryOffset] = useState(7 * 86_400);
   const [optionToken, setOptionToken] = useState("");
@@ -102,10 +104,10 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
     });
   };
 
-  if (!isConnected) {
+  if (!mounted || !isConnected) {
     return (
       <div className="rounded-xl border border-gray-800 p-4 text-gray-500 text-sm">
-        Connect wallet to register a series.
+        {mounted ? "Connect wallet to register a series." : null}
       </div>
     );
   }
