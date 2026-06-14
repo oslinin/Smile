@@ -128,7 +128,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col items-start gap-0.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/smile-icon.svg" alt="Smile" height={28} className="block" style={{ height: 28 }} />
           <p className="text-gray-500 text-xs">

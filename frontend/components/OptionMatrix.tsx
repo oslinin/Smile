@@ -166,15 +166,28 @@ function blackScholesCall(spot: number, strike: number, sigma: number, T: number
   return spot * normalCDF(d1) - strike * normalCDF(d2);
 }
 
-function optionPriceWAD(spot: number, strike: number, expiry: number, isBuy: boolean): bigint {
+function blackScholesPut(spot: number, strike: number, sigma: number, T: number): number {
+  if (T <= 0) return Math.max(0, strike - spot);
+  if (sigma <= 0 || spot <= 0 || strike <= 0) return Math.max(0, strike - spot);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(spot / strike) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  return strike * normalCDF(-d2) - spot * normalCDF(-d1);
+}
+
+function priceWAD(spot: number, strike: number, expiry: number, isCall: boolean, isBuy: boolean): bigint {
   const T = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
   const sigma = smileVol(spot, strike);
-  const price = blackScholesCall(spot, strike, sigma, T);
-  const priceWAD = BigInt(Math.round(Math.max(0, price) * 1e12)) * BigInt(1e6);
-  // 1% bid/ask spread
-  return isBuy
-    ? (priceWAD * BigInt(101)) / BigInt(100)
-    : (priceWAD * BigInt(99)) / BigInt(100);
+  const price = isCall
+    ? blackScholesCall(spot, strike, sigma, T)
+    : blackScholesPut(spot, strike, sigma, T);
+  const p = BigInt(Math.round(Math.max(0, price) * 1e12)) * BigInt(1e6);
+  return isBuy ? (p * BigInt(101)) / BigInt(100) : (p * BigInt(99)) / BigInt(100);
+}
+
+// kept for backward compat within this file
+function optionPriceWAD(spot: number, strike: number, expiry: number, isBuy: boolean): bigint {
+  return priceWAD(spot, strike, expiry, true, isBuy);
 }
 
 function formatWAD(val: bigint | undefined): string {
@@ -256,9 +269,10 @@ interface SellPanelProps {
   defaultExpiry: number;
   onClose: () => void;
   onSellConfirmed?: (leg: Omit<Leg, "id">) => void;
+  colSpan?: number;
 }
 
-function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose, onSellConfirmed }: SellPanelProps) {
+function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose, onSellConfirmed, colSpan = 6 }: SellPanelProps) {
   const { address } = useAccount();
   const [kMin, setKMin] = useState(strike);
   const [kMax, setKMax] = useState(strike);
@@ -328,7 +342,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
 
   return (
     <tr className="bg-orange-950/20 border-b border-gray-800">
-      <td colSpan={6} className="px-4 py-3">
+      <td colSpan={colSpan} className="px-4 py-3">
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2 flex-wrap text-xs">
             {/* Call / Put toggle */}
@@ -402,9 +416,10 @@ interface BuyPanelProps {
   onClose: () => void;
   onSwapTx?: (hash: string) => void;
   onBuyConfirmed?: (leg: Omit<Leg, "id">) => void;
+  colSpan?: number;
 }
 
-function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirmed }: BuyPanelProps) {
+function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirmed, colSpan = 6 }: BuyPanelProps) {
   const { address } = useAccount();
   const chainId = useChainId();
   const [amount, setAmount] = useState("1");
@@ -502,7 +517,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
 
   return (
     <tr className="bg-blue-950/20 border-b border-gray-800">
-      <td colSpan={6} className="px-4 py-3">
+      <td colSpan={colSpan} className="px-4 py-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-gray-400">Amount (contracts)</span>
@@ -602,9 +617,10 @@ interface ClosePanelProps {
   lp: string;
   balance: bigint;
   onClose: () => void;
+  colSpan?: number;
 }
 
-function ClosePanel({ optionToken, lp, balance, onClose }: ClosePanelProps) {
+function ClosePanel({ optionToken, lp, balance, onClose, colSpan = 6 }: ClosePanelProps) {
   const { writeContract, data: txHash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
   const canClose = !!CONTRACTS.aquaVault && balance > BigInt(0);
@@ -621,7 +637,7 @@ function ClosePanel({ optionToken, lp, balance, onClose }: ClosePanelProps) {
 
   return (
     <tr className="bg-red-950/20 border-b border-gray-800">
-      <td colSpan={6} className="px-4 py-3">
+      <td colSpan={colSpan} className="px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             Close position · {(Number(balance) / 1e18).toFixed(4)} contracts
@@ -661,34 +677,37 @@ interface StrikeRowProps {
 }
 
 function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }: StrikeRowProps) {
-  const [panel, setPanel] = useState<"buy" | "sell" | "close" | null>(null);
+  type PanelState = { side: "call" | "put"; action: "buy" | "sell" | "close" } | null;
+  const [panel, setPanel] = useState<PanelState>(null);
   const { address } = useAccount();
-  const bidWAD = spot > 0 && expiry > 0 ? optionPriceWAD(spot, strike, expiry, false) : undefined;
-  const askWAD = spot > 0 && expiry > 0 ? optionPriceWAD(spot, strike, expiry, true) : undefined;
-  const moneyness = ((strike - spot) / spot) * 100;
-  const T = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
-  const sigma = smileVol(spot, strike);
-  const delta = callDelta(spot, strike, sigma, T);
-  const isATM = Math.abs(moneyness) < 1;
 
-  // Strike is tradeable if it falls within the LP's authorized range
-  const isTradeable = activeAuth &&
-    strike >= activeAuth.strikeMin &&
-    strike <= activeAuth.strikeMax;
+  const T     = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
+  const sigma = smileVol(spot, strike);
+  const cDelta = spot > 0 && expiry > 0 ? callDelta(spot, strike, sigma, T) : 0;
+  const pDelta = cDelta - 1;
+  const ivStr  = `${(sigma * 100).toFixed(1)}%`;
+
+  const callBid = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  false) : undefined;
+  const callAsk = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  true)  : undefined;
+  const putBid  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, false) : undefined;
+  const putAsk  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, true)  : undefined;
+
+  const isATM       = Math.abs((strike - spot) / spot) < 0.01;
+  const callBuyable = !!activeAuth && activeAuth.isCall;
+  const putBuyable  = !!activeAuth && !activeAuth.isCall;
+
+  const toggle = (side: "call" | "put", action: "buy" | "sell" | "close") =>
+    setPanel(p => (p?.side === side && p.action === action) ? null : { side, action });
 
   const strikeWAD = BigInt(Math.round(strike * 1e18));
-
-  // Look up whether an OptionToken exists for this (authId, strike)
   const { data: optionTokenAddr } = useReadContract({
     address: CONTRACTS.aquaVault as `0x${string}`,
     abi: VAULT_ABI,
     functionName: "optionTokens",
     args: [activeAuth?.authId ?? BigInt(0), strikeWAD],
-    query: { enabled: !!isTradeable && !!CONTRACTS.aquaVault && !!activeAuth },
+    query: { enabled: !!activeAuth && !!CONTRACTS.aquaVault },
   });
-
   const hasToken = optionTokenAddr && optionTokenAddr !== "0x0000000000000000000000000000000000000000";
-
   const { data: holderBalance } = useReadContract({
     address: (hasToken ? optionTokenAddr : "0x0000000000000000000000000000000000000000") as `0x${string}`,
     abi: ERC20_ABI,
@@ -696,80 +715,106 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
     args: [(address ?? "0x0000000000000000000000000000000000000000") as `0x${string}`],
     query: { enabled: !!hasToken && !!address },
   });
-
   const hasPosition = holderBalance !== undefined && holderBalance > BigInt(0);
+
+  const COL = 9;
+
+  const callBidCls = [
+    "py-2 px-3 text-right font-mono text-sm cursor-pointer select-none transition-colors",
+    panel?.side === "call" && panel.action === "sell"
+      ? "bg-orange-900/40 text-orange-300"
+      : "text-green-400 hover:bg-orange-950/50 hover:text-orange-300",
+  ].join(" ");
+
+  const callAskCls = [
+    "py-2 px-3 text-right font-mono text-sm transition-colors border-r border-gray-800",
+    callBuyable ? "cursor-pointer select-none" : "cursor-default",
+    panel?.side === "call" && panel.action === "buy"
+      ? "bg-blue-900/40 text-blue-200"
+      : callBuyable
+      ? "text-red-400 hover:bg-blue-950/50 hover:text-blue-300"
+      : "text-red-400 opacity-40",
+  ].join(" ");
+
+  const putAskCls = [
+    "py-2 px-3 text-left font-mono text-sm transition-colors border-l border-gray-800",
+    putBuyable ? "cursor-pointer select-none" : "cursor-default",
+    panel?.side === "put" && panel.action === "buy"
+      ? "bg-blue-900/40 text-blue-200"
+      : putBuyable
+      ? "text-red-400 hover:bg-blue-950/50 hover:text-blue-300"
+      : "text-red-400 opacity-40",
+  ].join(" ");
+
+  const putBidCls = [
+    "py-2 px-3 text-left font-mono text-sm cursor-pointer select-none transition-colors",
+    panel?.side === "put" && panel.action === "sell"
+      ? "bg-orange-900/40 text-orange-300"
+      : "text-green-400 hover:bg-orange-950/50 hover:text-orange-300",
+  ].join(" ");
 
   return (
     <>
       <tr className={`border-b border-gray-800 ${isATM ? "bg-blue-950/40" : ""}`}>
-        <td className="py-2 px-3 text-right font-mono text-sm">
-          <span className="flex items-center justify-end gap-1.5">
+        {/* ── CALLS ── */}
+        <td className="py-2 px-2 text-right text-xs text-gray-500 w-14">{ivStr}</td>
+        <td className="py-2 px-2 text-right font-mono text-sm text-purple-400 w-14">{cDelta.toFixed(2)}</td>
+        <td className={callBidCls} onClick={() => toggle("call", "sell")}>{formatWAD(callBid)}</td>
+        <td className={callAskCls} onClick={() => callBuyable && toggle("call", "buy")}>{formatWAD(callAsk)}</td>
+
+        {/* ── STRIKE ── */}
+        <td className="py-2 px-3 text-center font-mono text-sm font-bold border-x border-gray-700 w-24">
+          <span className="flex items-center justify-center gap-1">
             ${strike.toLocaleString()}
             {hasPosition && hasToken && (
               <button
-                onClick={() => setPanel(panel === "close" ? null : "close")}
-                title="Close position"
-                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold transition-colors ${
-                  panel === "close" ? "bg-gray-700 text-gray-400" : "bg-red-900/60 text-red-400 hover:bg-red-700"
+                onClick={() => toggle(activeAuth?.isCall ? "call" : "put", "close")}
+                className={`text-[10px] px-1 py-0.5 rounded font-semibold transition-colors ${
+                  panel?.action === "close" ? "bg-gray-700 text-gray-400" : "bg-red-900/60 text-red-400 hover:bg-red-700"
                 }`}
-              >
-                pos
-              </button>
+              >pos</button>
             )}
           </span>
         </td>
-        <td className="py-2 px-3 text-center font-mono text-sm text-purple-400">{delta.toFixed(2)}</td>
-        <td className="py-2 px-3 text-center text-gray-400 text-xs">
-          {moneyness > 0 ? "+" : ""}{moneyness.toFixed(1)}%
-        </td>
-        <td
-          onClick={() => setPanel(panel === "sell" ? null : "sell")}
-          className={`py-2 px-3 text-right font-mono text-sm cursor-pointer select-none transition-colors ${
-            panel === "sell"
-              ? "bg-orange-900/40 text-orange-300"
-              : "text-green-400 hover:bg-orange-950/50 hover:text-orange-300"
-          }`}
-        >
-          {formatWAD(bidWAD)}
-        </td>
-        <td
-          onClick={() => isTradeable && setPanel(panel === "buy" ? null : "buy")}
-          className={`py-2 px-3 text-right font-mono text-sm transition-colors ${
-            isTradeable ? "cursor-pointer select-none" : "cursor-default"
-          } ${
-            panel === "buy"
-              ? "bg-blue-900/40 text-blue-200"
-              : isTradeable
-              ? "text-red-400 hover:bg-blue-950/50 hover:text-blue-300"
-              : "text-red-400 opacity-50"
-          }`}
-        >
-          {formatWAD(askWAD)}
-        </td>
-        <td className="py-2 px-3 text-right text-xs text-gray-500">
-          {askWAD ? `${(sigma * 100).toFixed(1)}%` : "–"}
-        </td>
+
+        {/* ── PUTS ── */}
+        <td className={putAskCls} onClick={() => putBuyable && toggle("put", "buy")}>{formatWAD(putAsk)}</td>
+        <td className={putBidCls} onClick={() => toggle("put", "sell")}>{formatWAD(putBid)}</td>
+        <td className="py-2 px-2 text-left font-mono text-sm text-purple-400 w-14">{pDelta.toFixed(2)}</td>
+        <td className="py-2 px-2 text-left text-xs text-gray-500 w-14">{ivStr}</td>
       </tr>
-      {panel === "sell" && (
+
+      {panel?.action === "sell" && (
         <SellPanel
           strike={strike}
           spot={spot}
-          bidWAD={bidWAD}
-          defaultIsCall={activeAuth?.isCall ?? true}
+          bidWAD={panel.side === "call" ? callBid : putBid}
+          defaultIsCall={panel.side === "call"}
           defaultExpiry={activeAuth?.expiry ?? Math.floor(Date.now() / 1000) + 30 * 86400}
           onClose={() => setPanel(null)}
           onSellConfirmed={onSellConfirmed}
+          colSpan={COL}
         />
       )}
-      {panel === "buy" && activeAuth && (
-        <BuyPanel auth={activeAuth} strike={strike} spot={spot} askWAD={askWAD} onClose={() => setPanel(null)} onSwapTx={onSwapTx} onBuyConfirmed={onBuyConfirmed} />
+      {panel?.action === "buy" && activeAuth && (
+        <BuyPanel
+          auth={activeAuth}
+          strike={strike}
+          spot={spot}
+          askWAD={panel.side === "call" ? callAsk : putAsk}
+          onClose={() => setPanel(null)}
+          onSwapTx={onSwapTx}
+          onBuyConfirmed={onBuyConfirmed}
+          colSpan={COL}
+        />
       )}
-      {panel === "close" && activeAuth && hasToken && holderBalance !== undefined && (
+      {panel?.action === "close" && activeAuth && hasToken && holderBalance !== undefined && (
         <ClosePanel
           optionToken={optionTokenAddr as string}
           lp={activeAuth.lp}
           balance={holderBalance}
           onClose={() => setPanel(null)}
+          colSpan={COL}
         />
       )}
     </>
@@ -807,9 +852,7 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSel
     ? Math.round((activeAuth.expiry - now) / 86400)
     : selectedDays;
 
-  const strikes = activeAuth
-    ? authRangeStrikes(activeAuth.strikeMin, activeAuth.strikeMax)
-    : STRIKES_OFFSETS.map((pct) => Math.round((spot * (1 + pct / 100)) / 50) * 50);
+  const strikes = STRIKES_OFFSETS.map((pct) => Math.round((spot * (1 + pct / 100)) / 50) * 50);
 
   if (!CONTRACTS.pricingEngine) {
     return (
@@ -849,7 +892,7 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSel
           </span>
         )}
         <span className="ml-auto text-gray-600 text-xs">
-          click Bid to sell · Ask to buy
+          Bid↓ to sell · Ask↑ to buy
         </span>
       </div>
 
@@ -858,13 +901,21 @@ export function OptionMatrix({ spot, activeAuth, onSwapTx, onBuyConfirmed, onSel
       <div className="overflow-x-auto">
         <table className="w-full text-white">
           <thead>
+            <tr className="bg-gray-900/80 text-[10px] uppercase tracking-wide">
+              <th colSpan={4} className="py-1.5 text-center text-blue-400/80 border-r border-gray-700">Calls</th>
+              <th className="py-1.5 text-center text-gray-500">Strike</th>
+              <th colSpan={4} className="py-1.5 text-center text-orange-400/80 border-l border-gray-700">Puts</th>
+            </tr>
             <tr className="border-b border-gray-700 bg-gray-900 text-gray-400 text-xs uppercase">
-              <th className="py-2 px-3 text-right">Strike</th>
-              <th className="py-2 px-3 text-center">Delta</th>
-              <th className="py-2 px-3 text-center">Moneyness</th>
-              <th className="py-2 px-3 text-right">Bid ↓ sell</th>
-              <th className="py-2 px-3 text-right">Ask ↑ buy</th>
-              <th className="py-2 px-3 text-right">IV</th>
+              <th className="py-2 px-2 text-right">IV</th>
+              <th className="py-2 px-2 text-right">Δ</th>
+              <th className="py-2 px-3 text-right">Bid↓sell</th>
+              <th className="py-2 px-3 text-right border-r border-gray-700">Ask↑buy</th>
+              <th className="py-2 px-3 text-center border-x border-gray-700">Strike</th>
+              <th className="py-2 px-3 text-left border-l border-gray-700">Ask↑buy</th>
+              <th className="py-2 px-3 text-left">Bid↓sell</th>
+              <th className="py-2 px-2 text-left">Δ</th>
+              <th className="py-2 px-2 text-left">IV</th>
             </tr>
           </thead>
           <tbody>
