@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smile — Docs</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: #030712;
+    color: #e5e7eb;
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .doc { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1, h2, h3, h4 { color: #fff; font-weight: 700; line-height: 1.25; margin: 1.8em 0 0.6em; }
+  h1 { font-size: 2rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.3em; }
+  h2 { font-size: 1.5rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.3em; }
+  h3 { font-size: 1.2rem; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  p, li { color: #d1d5db; }
+  code {
+    background: #111827; border: 1px solid #1f2937; border-radius: 4px;
+    padding: 0.1em 0.35em; font-size: 0.875em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #fbcfe8;
+  }
+  pre {
+    background: #0b1120; border: 1px solid #1f2937; border-radius: 8px;
+    padding: 16px; overflow-x: auto;
+  }
+  pre code { background: none; border: none; padding: 0; color: #cbd5e1; }
+  blockquote {
+    margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid #374151; color: #9ca3af;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9rem; }
+  th, td { border: 1px solid #1f2937; padding: 8px 12px; text-align: left; }
+  th { background: #111827; color: #fff; }
+  img { max-width: 100%; }
+  hr { border: none; border-top: 1px solid #1f2937; margin: 2em 0; }
+  .mermaid { background: #0b1120; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin: 1em 0; text-align: center; }
+  .back { display: inline-block; margin-bottom: 24px; color: #9ca3af; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <article class="doc">
+    <h1>Smile</h1>
+<p>TL;DR: Standard options market potentially as popular as Robinhood, decentralized as Polymarket.</p>
+<p>A non-custodial, parametric options marketplace that solves three interlocking problems in DeFi options: thin liquidity at each strike, yield-killing collateral lock-up, and the absence of emergent market makers. By combining <strong>1inch Aqua</strong>, <strong>Uniswap v4 Hooks</strong>, and <strong>Chainlink CRE</strong>, LPs can quote an entire strike range from one capital pool — while their collateral keeps earning DeFi yield until a buyer actually matches.</p>
+<hr>
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#-the-thesis">The Thesis</a></li>
+<li><a href="#%EF%B8%8F-architecture">Architecture</a></li>
+<li><a href="#-mathematical-specification">Mathematical Specification</a></li>
+<li><a href="#-flow-diagrams">Flow Diagrams</a></li>
+<li><a href="#-deployed-addresses-sepolia">Deployed Addresses (Sepolia)</a></li>
+<li><a href="#%EF%B8%8F-deployment-notes--failures">Deployment Notes &amp; Failures</a></li>
+<li><a href="#%EF%B8%8F-how-to-run-the-project">How to Run the Project</a></li>
+<li><a href="#end-to-end-demo-walkthrough">End-to-End Demo Walkthrough</a></li>
+<li><a href="#-glossary">Glossary</a></li>
+<li><a href="#%EF%B8%8F-project-structure">Project Structure</a></li>
+<li><a href="#technical-stack">Technical Stack</a></li>
+<li><a href="#foundry-usage">Foundry Usage</a></li>
+</ol>
+<hr>
+<h2>🚀 The Thesis</h2>
+<p>While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer many strategies retail traders have been increasingly investing in: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, buying butterflies to express a range-bound view on volatility, etc. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain: Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity.</p>
+<p>Smile attempts to overcome these limitations to on-chain standard opions trading by using Aqua&#39;s non-custodial LP to remediate:</p>
+<ol>
+<li>Liquidity fragmentation across strikes and expiries, until a buyer is matched. Makers can offer liquidity across a range of strikes and expiries, increasing net liquidity.</li>
+<li>Collateral lockup in LPs, and forfeited dividend yield — which is not a limitation of standard options writers — is also removed by Aqua&#39;s non-custodial LP.</li>
+<li>Standard options markets work because broker-dealers delta-hedge their books against the spot market. Smile attempts to use the trading and settlement functionality provided by Uniswap and Chainlink to allow clever LPs and arbitrageurs to continuously arbitraging away mispricings between options and the underlying. Specifically:<ul>
+<li>Fast trading and premium transfer via Uniswap Trading API</li>
+<li>Vol surface repricing post-trade via Uniswap v4 Hooks across strikes and expiries</li>
+<li>Options payoff settlement and redemption via Chainlink CRE</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>🏗️ Architecture</h2>
+<table>
+<thead>
+<tr>
+<th align="left">Layer</th>
+<th align="left">Component</th>
+<th align="left">Functionality</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Pricing</strong></td>
+<td align="left"><code>OptionPricingEngine</code></td>
+<td align="left">Stateless parametric premium: $\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$.</td>
+</tr>
+<tr>
+<td align="left"><strong>Liquidity</strong></td>
+<td align="left"><code>AquaCollateralVault</code></td>
+<td align="left">LP calls <code>authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})</code>. On <code>buy()</code>, collateral is pulled JIT from LP wallet; premium flows buyer → LP directly. OptionToken deployed lazily per strike.</td>
+</tr>
+<tr>
+<td align="left"><strong>Market</strong></td>
+<td align="left"><code>OptionPricingHook</code> + <strong>Uniswap Trading API</strong></td>
+<td align="left">v4 Hook: <code>beforeSwap</code> vetoes mispriced trades; <code>afterSwap</code> adjusts $\sigma_{global}$. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer&#39;s ETH→USDC premium swap via the Universal Router on each trade.</td>
+</tr>
+<tr>
+<td align="left"><strong>Settlement</strong></td>
+<td align="left"><code>AquaOptionSettlement</code> + Chainlink CRE</td>
+<td align="left">At expiry a scheduled CRE DON reads the canonical Chainlink ETH/USD feed (the same feed the app shows for spot), reaches consensus on the finalized value, and writes $S_{final}$ on-chain via <code>settleSeries()</code>; holders redeem ITM payouts.</td>
+</tr>
+<tr>
+<td align="left"><strong>Asset</strong></td>
+<td align="left"><code>OptionToken</code></td>
+<td align="left">ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.</td>
+</tr>
+</tbody></table>
+<h3>Collateralization Model</h3>
+<p><strong>V1 (current) — Cash-Secured / Covered (Fully Collateralized)</strong></p>
+<p>The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP backs it with 1 WETH (Covered Call). To mint a Put, the LP backs it with 3,500 USDC (Cash-Secured Put). The collateral is authorized JIT via Aqua — it never leaves the LP&#39;s wallet until a buyer matches — but it is always fully present and earmarked.</p>
+<p>Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.</p>
+<p><strong>V2 (out of scope) — Margin &amp; Liquidation (Under-Collateralized)</strong></p>
+<p>Advanced platforms like Derive allow LPs to post fractional collateral (e.g., 500 USDC to back a 3,500 ETH Call). As spot moves against the LP, the liability grows. If collateral falls below a safety threshold (e.g., 110% of the option&#39;s current market value), external liquidation bots forcibly close the position — buying back the option from the market using the LP&#39;s remaining collateral before bad debt accrues.</p>
+<p>This model unlocks capital efficiency but requires an on-chain margin engine, a liquidation keeper network, and robust price feeds at sub-second granularity. It is explicitly out of scope for V1.</p>
+<hr>
+<h2>📐 Mathematical Specification</h2>
+<h3>1. Parametric Volatility Smile</h3>
+<p>$$\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$$</p>
+<ul>
+<li>$\sigma_{global}$: demand-weighted baseline IV, adjusted by every primary-market trade and secondary-market swap.</li>
+<li>$\alpha$: smile curvature (default 2.0). OTM/ITM strikes price above $\sigma_{global}$; ATM returns $\sigma_{global}$ exactly.</li>
+<li>$K/S$: moneyness ratio.</li>
+</ul>
+<h3>2. Premium Calculation</h3>
+<p>$$P = \underbrace{\max(S - K,, 0)}<em>{\text{intrinsic}} + \underbrace{S \cdot \sigma</em>{strike} \cdot \sqrt{T}}_{\text{time-value}}$$</p>
+<ul>
+<li><strong>Ask (buy):</strong> rounds up 1 wei.</li>
+<li><strong>Bid (sell):</strong> floor.</li>
+</ul>
+<p>Gas-efficient on-chain approximation — omits $N(d_1)$ and $N(d_2)$ to avoid square-root-heavy distributions.</p>
+<h3>3. σ Feedback Loop</h3>
+<p>$$\sigma_{global,,t+1} = \sigma_{global,,t} + \gamma \cdot \text{sign}(\text{trade})$$</p>
+<ul>
+<li>$+\gamma$ on every <code>buy()</code> or secondary-market <code>exactOut</code> swap (demand signal).</li>
+<li>$-\gamma$ on every <code>close()</code> or secondary-market <code>exactIn</code> swap (supply signal).</li>
+<li>$\gamma = 0.5%$ per trade. This creates a price-impact-like mechanism: heavy buying steepens the smile and raises premiums, attracting arbitrageurs who sell/close to earn the spread.</li>
+</ul>
+<h3>4. Black-Scholes Delta (Frontend)</h3>
+<p>Delta ($\Delta$) is computed client-side for the matrix display. Not used in on-chain pricing.</p>
+<p>$$\Delta = N(d_1), \qquad d_1 = \frac{\ln(S/K) + \frac{1}{2}\sigma_{strike}^2 \cdot T}{\sigma_{strike} \cdot \sqrt{T}}$$</p>
+<p>$N(\cdot)$ is approximated via Abramowitz &amp; Stegun 26.2.17 (max error $1.5 \times 10^{-7}$, no lookup tables). $\sigma_{strike}$ from §1 is used — ensuring delta reflects the vol surface curvature, not flat vol.</p>
+<blockquote>
+<p>Delta ranges 0–1 for calls (0 = deep OTM, 1 = deep ITM). A 0.5-delta call is approximately ATM.</p>
+</blockquote>
+<h3>5. Chainlink CRE — Decentralized Expiry Settlement</h3>
+<p><strong>Why the app needs CRE.</strong> A parametric option is only as trustworthy as the price it settles against. At expiry every open series needs one <strong>final spot price</strong> $S_{final}$ written on-chain, because that single number decides every payout: holders redeem the in-the-money difference and the LP reclaims the remaining collateral (see <a href="#6-settlement--redemption-chainlink-cre">§6 flow</a>). Settlement is the one part of the option lifecycle that can&#39;t be a pure on-chain formula — it needs an external price <em>and</em> a guaranteed trigger at $\text{DTE}=0$, with no trusted keeper in the loop.</p>
+<p><strong>What CRE does for Smile</strong> — it is the settlement layer:</p>
+<ul>
+<li><strong>Scheduled, not poked</strong> — a CRE <em>cron trigger</em> fires the settlement workflow at expiry, so no keeper bot or user transaction is required to settle a series.</li>
+<li><strong>Reads the canonical feed</strong> — the DON reads the same <strong>Chainlink ETH/USD aggregator</strong> the frontend uses for live spot (<a href="frontend/hooks/useUniswapSpot.ts#L11"><code>0x694AA1…25306</code></a> on Sepolia) via <code>latestRoundData()</code> at the last <em>finalized</em> block, so every node observes an identical value:</li>
+</ul>
+<p>$$S_{final} = \mathtt{latestRoundData().answer} ;; (\text{8-dec}) ;\rightarrow; \text{USDC 6-dec}$$</p>
+<ul>
+<li><strong>Signed, on-chain write</strong> — the DON signs the consensus result and delivers it through the CRE forwarder, which calls <code>AquaOptionSettlement.settleSeries(seriesId, S_final)</code>. That call is the single on-chain state change that flips a series from <em>open</em> to <em>settled</em> and unlocks redemption.</li>
+</ul>
+<p>In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, and <strong>Chainlink CRE closes the loop at expiry</strong> — turning a live series into a settled, redeemable claim using the project&#39;s canonical price feed, on a schedule, with no trusted keeper.</p>
+<blockquote>
+<p><strong>Design note.</strong> Because the settlement price is read from an on-chain Chainlink feed, the DON&#39;s role here is a <em>scheduled, trust-minimized keeper</em> (deterministic read + signed write) rather than novel off-chain data sourcing. Swapping the on-chain feed read for direct CEX fetches with median DON consensus is a localized change to the workflow&#39;s price-read step if a venue price is ever preferred over the aggregator.</p>
+</blockquote>
+<hr>
+<h2>🔄 Flow Diagrams</h2>
+<blockquote>
+<p>Color key: 🟢 1inch Aqua · 🩷 Uniswap · 🔵 Chainlink</p>
+</blockquote>
+<h3>0. System Overview</h3>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Trader
+    participant Frontend
+    participant SwapVM as 🟢 SwapVM (OptionPricingEngine)
+    participant Aqua as 🟢 1inch Aqua (AquaCollateralVault)
+    participant Maker as 🟢 Maker (LP Wallet)
+    participant CRE as 🔵 Chainlink CRE DON
+    participant Settle as 🟢 AquaOptionSettlement
+
+    rect rgba(60,80,120,0.12)
+    Note over Trader,Maker: Trade (pre-expiry) — no Chainlink CRE involved
+    Trader-&gt;&gt;Frontend: Select strike &amp; expiry
+    Frontend-&gt;&gt;SwapVM: quote(S, K, T, σ)
+    SwapVM--&gt;&gt;Frontend: Bid / Ask
+    Frontend--&gt;&gt;Trader: Option matrix
+    Trader-&gt;&gt;Aqua: buy(strike, amount)
+    Aqua-&gt;&gt;SwapVM: validate price
+    Aqua-&gt;&gt;Maker: pull collateral JIT
+    Aqua-&gt;&gt;Maker: transfer premium
+    Aqua--&gt;&gt;Trader: OptionToken minted
+    end
+
+    rect rgba(40,90,140,0.18)
+    Note over CRE,Settle: Expiry settlement (DTE = 0) — Chainlink CRE
+    CRE-&gt;&gt;CRE: cron trigger → read Chainlink ETH/USD feed → DON consensus
+    CRE-&gt;&gt;Settle: settleSeries(seriesId, S_final) · onlyCRE
+    Note over Settle: series settled=true → redemption unlocked
+    Trader-&gt;&gt;Settle: redeem() → ITM payout
+    Maker-&gt;&gt;Settle: reclaimCollateral() → remainder
+    end
+</code></pre>
+<h3>1. Range Authorization (LP)</h3>
+<p>The LP authorizes a strike range from one collateral pool. No collateral moves at this stage — it stays in the LP&#39;s wallet earning yield. The LP also pre-approves the vault to spend up to <code>maxCollateral</code> JIT.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant LP
+    participant Frontend
+    participant Vault as 🟢 AquaCollateralVault
+
+    LP-&gt;&gt;Frontend: K_min, K_max, DTE, maxCollateral
+    Frontend-&gt;&gt;LP: ERC20.approve(vault, maxCollateral)
+    Note over LP: collateral stays in wallet — earns yield until matched
+    Frontend-&gt;&gt;Vault: authorizeRange(K_min..K_max, DTE, maxCollateral)
+    Vault--&gt;&gt;Frontend: authId
+    Frontend--&gt;&gt;LP: ✓ range active
+</code></pre>
+<h3>2. Primary Market Buy (Trader)</h3>
+<p>Premium payment is routed through the <strong>Uniswap Trading API</strong> (<code>EXACT_OUTPUT</code> ETH→USDC), giving an on-chain Uniswap tx before the vault call.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Buyer
+    participant UniAPI as 🩷 Uniswap Trading API
+    participant Vault as 🟢 AquaCollateralVault
+    participant LP as 🟢 LP Wallet
+
+    Note over Buyer: PricingEngine returns ask price (σ, K, DTE)
+    Buyer-&gt;&gt;UniAPI: EXACT_OUTPUT ETH→USDC
+    UniAPI--&gt;&gt;Buyer: Universal Router calldata
+    Buyer-&gt;&gt;Vault: buy(authId, K, amount)
+    Vault-&gt;&gt;LP: pull collateral JIT
+    Vault-&gt;&gt;LP: transfer USDC premium
+    Vault-&gt;&gt;Buyer: mint OptionToken
+    Note over Vault: Hook bumps σ_global post-buy
+</code></pre>
+<h3>3. Close Position / Early Unwind (Holder)</h3>
+<p>A holder unwinds before expiry. Vault burns their tokens, returns collateral to LP pro-rata, and decrements σ. This path is also exercised by arbitrageurs closing delta-hedged positions.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Holder
+    participant Frontend
+    participant Vault as 🟢 AquaCollateralVault
+    participant LP as 🟢 LP Wallet
+    participant Hook as 🩷 OptionPricingHook
+
+    Holder-&gt;&gt;Frontend: Click Close
+    Holder-&gt;&gt;Vault: close(optionToken, lp, amount)
+    Note over Vault: collateralToRelease = locked * amount / supply
+    Vault-&gt;&gt;Vault: OptionToken.burn(holder, amount)
+    Vault-&gt;&gt;LP: transfer collateral pro-rata
+    Vault-&gt;&gt;Hook: bumpSigma(isBuy=false)
+    Note over Hook: σ_global -= γ
+    Vault--&gt;&gt;Holder: ✓ closed
+</code></pre>
+<h3>4. Arbitrageur as Emergent Market Maker</h3>
+<p>When on-chain σ diverges from market IV, arbitrageurs can capture the spread by buying the primary market and hedging on spot. Their close activity re-equilibrates σ_global. This is the emergent market-making loop.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Arb as Arbitrageur
+    participant Vault as 🟢 AquaCollateralVault
+    participant UniPool as 🩷 Uniswap v4 ETH/USDC
+    participant Hook as 🩷 OptionPricingHook
+
+    Note over Arb: σ_global &lt; market IV — options underpriced
+    Arb-&gt;&gt;Vault: buy(authId, K, amount)
+    Arb-&gt;&gt;UniPool: short ETH delta hedge
+    Note over Arb: σ_global rises toward market IV
+    Arb-&gt;&gt;Vault: close(optionToken, lp, amount)
+    Arb-&gt;&gt;UniPool: unwind delta hedge
+    Note over Arb: profit = (σ_market - σ_entry) * vega
+</code></pre>
+<h3>5. Secondary Market Swap (Uniswap v4)</h3>
+<p>Existing OptionTokens can be resold. The hook vetoes mispriced swaps and adjusts σ. Secondary market only — ERC-20 ownership transfers, no minting.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Seller
+    participant Pool as 🩷 Uniswap v4 Pool
+    participant Hook as 🩷 OptionPricingHook
+    participant Oracle as 🔵 Chainlink Price Feed
+
+    Seller-&gt;&gt;Pool: swap(OptionToken → USDC)
+    Pool-&gt;&gt;Hook: beforeSwap(params, hookData)
+    Hook-&gt;&gt;Oracle: fetch S
+    Note over Hook: Veto if |P_exec - P_fair| &gt; 5%
+    Hook--&gt;&gt;Pool: ✓ OK
+    Pool-&gt;&gt;Pool: OptionToken transfers to buyer
+    Pool-&gt;&gt;Hook: afterSwap(params)
+    Note over Hook: exactIn (sell) → σ -= γ
+    Hook--&gt;&gt;Pool: ✓ σ updated
+</code></pre>
+<h3>6. Settlement &amp; Redemption (Chainlink CRE)</h3>
+<p>At expiry, the CRE DON reads the Chainlink ETH/USD feed (the same one the app uses for spot), reaches consensus on the finalized value, and calls <code>settleSeries()</code>. Holders redeem ITM payouts; LP reclaims remaining collateral.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant CRE as 🔵 Chainlink CRE DON
+    participant Feed as 🔵 Chainlink ETH/USD Feed
+    participant Settlement as 🟢 AquaOptionSettlement
+    participant Maker as 🟢 Maker (LP)
+    participant Holder as Trader (Holder)
+
+    Note over CRE,Settlement: Expiry settlement runs only through Chainlink CRE
+    Note over CRE: cron trigger at DTE=0
+    CRE-&gt;&gt;Feed: latestRoundData() @ finalized block
+    Feed--&gt;&gt;CRE: answer (8-dec)
+    Note over CRE: DON consensus → S_final (→ USDC 6-dec)
+    CRE-&gt;&gt;Settlement: settleSeries(seriesId, S_final) · onlyCRE forwarder
+    Note over Settlement: settled=true (redemption was blocked until now)
+    Holder-&gt;&gt;Settlement: redeem(seriesId, amount)
+    Note over Settlement: ITM: payout = (S_final-K)*amount
+    Settlement-&gt;&gt;Holder: transfer payout
+    Maker-&gt;&gt;Settlement: reclaimCollateral(seriesId)
+    Settlement-&gt;&gt;Maker: transfer remainder
+</code></pre>
+<hr>
+<h2>📍 Deployed Addresses (Sepolia)</h2>
+<table>
+<thead>
+<tr>
+<th>Contract</th>
+<th>Address</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>OptionPricingEngine</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532"><code>0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532</code></a></td>
+</tr>
+<tr>
+<td><strong>OptionPricingHook</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x15578B9248b574194867Ab204bE4161213Acf194"><code>0x15578B9248b574194867Ab204bE4161213Acf194</code></a></td>
+</tr>
+<tr>
+<td><strong>AquaCollateralVault</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x5115fbdb810D1dB316034fF670c65c45d875f887"><code>0x5115fbdb810D1dB316034fF670c65c45d875f887</code></a></td>
+</tr>
+<tr>
+<td><strong>AquaOptionSettlement</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x5c9E7BB8db084A955acD519f61287d24Ff24F211"><code>0x5c9E7BB8db084A955acD519f61287d24Ff24F211</code></a></td>
+</tr>
+<tr>
+<td><strong>USDC</strong> (Circle Sepolia)</td>
+<td><a href="https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"><code>0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238</code></a></td>
+</tr>
+<tr>
+<td><strong>WETH</strong> (canonical Sepolia)</td>
+<td><a href="https://sepolia.etherscan.io/address/0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9"><code>0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9</code></a></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><em>Live on Sepolia testnet. Frontend deployed at <strong><a href="https://oslinin.github.io/Smile">https://oslinin.github.io/Smile</a></strong> (WalletConnect enabled — switch MetaMask to Sepolia to interact).</em></p>
+</blockquote>
+<hr>
+<h2>⚠️ Deployment Notes &amp; Failures</h2>
+<ol>
+<li><strong>HookMiner Latency</strong>: Finding a Uniswap v4 Hook address with the required flag prefix took significantly longer than expected, delaying <code>OptionPricingHook</code> deployment.</li>
+<li><strong>SwapVM Instruction Set</strong>: Implementing a stateless pricing engine in Solidity to mirror SwapVM bytecode required several iterations. Stack-too-deep errors in <code>buy()</code> were resolved by enabling <code>via_ir = true</code> in <code>foundry.toml</code>.</li>
+<li><strong>Chainlink CRE Price Source</strong>: An initial design fetched ETH/USD from CEX REST APIs per node, which hit Binance V3 rate limits and risked cross-node divergence during simulation. Resolved by reading the canonical Chainlink ETH/USD aggregator on-chain at the last finalized block — every DON node observes the same value, so settlement consensus is deterministic and matches the price the app displays.</li>
+<li><strong>GitHub Pages SPA Routing</strong>: Next.js static export broke on refresh. Fixed with <code>.nojekyll</code> and static export config.</li>
+</ol>
+<hr>
+<h2>🛠️ How to Run the Project</h2>
+<h3>1. View Live Site (GitHub Pages)</h3>
+<p><strong>URL:</strong> <code>https://oslinin.github.io/Smile</code></p>
+<h3>2. Local Frontend Development</h3>
+<pre><code class="language-bash">cd frontend
+npm install
+npm run dev
+</code></pre>
+<p>Open <a href="http://localhost:3000">http://localhost:3000</a>. Connect MetaMask to Sepolia.</p>
+<h3>3. Smart Contract Development (Foundry)</h3>
+<pre><code class="language-bash">forge build   # compile all contracts
+forge test    # run 34 tests
+</code></pre>
+<h3>4. Deploy to Anvil (Local)</h3>
+<p>The quickest path: <code>./local.sh</code> starts Anvil, deploys all contracts, writes <code>frontend/.env.local</code>, and launches the dev server in one step.</p>
+<p>To deploy manually (e.g., to iterate on the script):</p>
+<pre><code class="language-bash"># Terminal 1 — start Anvil
+anvil --chain-id 31337 --block-time 1 --port 8545
+
+# Terminal 2 — deploy (uses Anvil&#39;s pre-funded account 0)
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  forge script script/Deploy.s.sol:Deploy \
+  --rpc-url http://localhost:8545 \
+  --broadcast \
+  --skip-simulation
+</code></pre>
+<h3>5. Deploy to Sepolia</h3>
+<p>Copy <code>.env.example</code> → <code>.env</code>, fill in <code>PRIVATE_KEY</code> and <code>RPC_SEPOLIA</code>, then:</p>
+<pre><code class="language-bash">source .env
+PRIVATE_KEY=&quot;$PRIVATE_KEY&quot; forge script script/Deploy.s.sol:Deploy \
+  --rpc-url &quot;$RPC_SEPOLIA&quot; \
+  --broadcast
+</code></pre>
+<p>The script outputs <code>NEXT_PUBLIC_*</code> addresses; copy them into <code>frontend/.env.local</code> (or set <code>NEXT_PUBLIC_CHAIN_ID=11155111</code>).</p>
+<p>To verify contracts on Etherscan at the same time:</p>
+<pre><code class="language-bash">source .env
+PRIVATE_KEY=&quot;$PRIVATE_KEY&quot; forge script script/Deploy.s.sol:Deploy \
+  --rpc-url &quot;$RPC_SEPOLIA&quot; \
+  --broadcast \
+  --verify \
+  --etherscan-api-key &quot;$ETHERSCAN_API_KEY&quot;
+</code></pre>
+<h3>6. Chainlink CRE Workflow</h3>
+<p>The required Chainlink integration is a <strong>CRE workflow</strong> that performs an on-chain
+state change: on a cron schedule the DON reads the Chainlink ETH/USD feed at the
+last finalized block, reaches consensus, and the DON-signed report calls
+<code>AquaOptionSettlement.settleSeries(seriesId, spotPrice)</code> on-chain.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="cre-workflow/settlement/workflow.ts"><code>cre-workflow/settlement/workflow.ts</code></a></td>
+<td>The workflow itself — cron trigger → <code>callContract(latestRoundData)</code> on the Chainlink feed → DON consensus → DON-signed <code>writeReport</code> → <code>settleSeries()</code>. Compiles to WASM.</td>
+</tr>
+<tr>
+<td><a href="cre-workflow/settlement/config.json"><code>cre-workflow/settlement/config.json</code></a></td>
+<td>Runtime config: <code>schedule</code>, <code>seriesId</code>, target <code>settlementAddress</code>, <code>priceFeedAddress</code> (Chainlink ETH/USD), <code>gasLimit</code>, and chain selector.</td>
+</tr>
+<tr>
+<td><a href="cre-workflow/settlement/package.json"><code>cre-workflow/settlement/package.json</code></a></td>
+<td>Deps + <code>typecheck</code> script. Build + simulate run via the <strong><code>cre</code> CLI</strong> (<code>cre workflow build|simulate settlement</code>).</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Access control.</strong> <code>settleSeries()</code> carries an <code>onlyCRE</code> modifier
+(<a href="src/vaults/AquaOptionSettlement.sol#L38">AquaOptionSettlement.sol:38</a>) — only the
+CRE forwarder address passed to the constructor at deploy time can write the
+settlement price. The simulator uses a local forwarder; the live path requires the
+contract to be deployed with your registered CRE forwarder address.</p>
+</blockquote>
+<h4>Prerequisites</h4>
+<p>The current CRE CLI (v1.20.x) reworks several commands; this workflow is pinned to
+<strong>v1.11.0</strong> to match <code>@chainlink/cre-sdk@^1.11.0</code>. The CLI is a binary installed via
+Chainlink&#39;s official script (it is <strong>not</strong> an npm package).</p>
+<pre><code class="language-bash"># 1. CRE CLI v1.11.0 — installs to ~/.cre/bin and appends it to PATH in ~/.bashrc.
+curl -sSL https://app.chain.link/cre/install.sh | bash -s -- v1.11.0
+source ~/.bashrc          # or open a new shell, so `cre` is on PATH
+cre version               # → CRE CLI version v1.11.0
+
+# 2. Bun ≥ 1.0 — cre-compile uses it to build the WASM target.
+curl -fsSL https://bun.sh/install | bash
+
+# 3. Authenticate — required even for local simulation.
+cre login                 # opens a browser; or, non-interactively:
+# echo &#39;CRE_API_KEY=&lt;key from Account Settings at https://app.chain.link&gt;&#39; &gt;&gt; cre-workflow/.env
+
+# 4. Install workflow + contract-binding deps (each folder has its own package.json).
+cd cre-workflow
+( cd settlement &amp;&amp; bun install )
+( cd contracts  &amp;&amp; bun install )
+
+# 5. (Optional) Regenerate the typed contract binding from the Foundry ABI.
+#    Already committed under contracts/evm/ts/generated/; only needed if the ABI changes.
+cp ../out/AquaOptionSettlement.sol/AquaOptionSettlement.json contracts/evm/src/abi/
+cre generate-bindings evm --language typescript
+</code></pre>
+<p>Edit <a href="cre-workflow/settlement/config.json"><code>cre-workflow/settlement/config.json</code></a> so <code>seriesId</code> matches the
+series you registered on-chain (copy it from the <strong>On-Chain Proof</strong> tab or from the
+<code>forge script</code> deploy logs), <code>evm.settlementAddress</code> points at your deployed
+<code>AquaOptionSettlement</code>, and <code>evm.priceFeedAddress</code> is the Chainlink ETH/USD feed for the
+chain (Sepolia: <code>0x694AA1769357215DE4FAC081bf1f309aDC325306</code>). The active CRE target is
+read from <code>CRE_TARGET</code> in <code>cre-workflow/.env</code> (<code>staging-settings</code> → Sepolia RPC in
+<a href="cre-workflow/project.yaml"><code>project.yaml</code></a>).</p>
+<blockquote>
+<p><strong>Build needs no auth; simulate does.</strong> <code>cre workflow build</code> compiles the WASM
+locally. <code>cre workflow simulate</code> gates on auth — run <code>cre login</code> (or set
+<code>CRE_API_KEY</code>) first.</p>
+</blockquote>
+<hr>
+<h3>6a. Demonstrate a successful CRE CLI simulation (the verified path)</h3>
+<p>First confirm it compiles (no auth needed):</p>
+<pre><code class="language-bash">cd cre-workflow
+cre workflow build settlement
+# ✓ Workflow compiled successfully
+# ✓ Build output written to settlement/binary.wasm
+</code></pre>
+<p>Then run the simulation. The simulator spins up a local CRE runtime, fires the cron
+trigger, runs the workflow&#39;s on-chain feed read + DON consensus, and signs the report —
+all against the Sepolia RPC from <code>project.yaml</code>:</p>
+<pre><code class="language-bash">cre workflow simulate settlement --non-interactive --trigger-index 0
+# `--non-interactive --trigger-index 0` selects the single cron trigger;
+# omit both to pick it from an interactive menu.
+</code></pre>
+<p>Verified output (CLI v1.11.0, reading the live Sepolia ETH/USD feed — exit code <code>0</code>):</p>
+<pre><code class="language-text">Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite report=50kb gas=10000000 | WASM binary=100mb compressed=20mb
+  Binary hash: 9d57d352ac4d3e6ca2e4540cd52e22875e93e15e96f557c8a6c9bfc35fe24b38
+  Config hash: 09b81d8b718c888f7c668324102c18f369f49391a15adee7cbc76e576aea9331
+2026-06-14T07:00:26Z [SIMULATION] Simulator Initialized
+
+2026-06-14T07:00:26Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-06-14T07:00:26Z [USER LOG] [CRE] Option settlement workflow triggered
+2026-06-14T07:00:26Z [USER LOG] [CRE] Chainlink ETH/USD: $1675.28
+2026-06-14T07:00:26Z [USER LOG] [CRE] settleSeries(0x0000…0001, 1675280000) submitted — tx 0x0000…0000
+
+✓ Workflow Simulation Result:
+&quot;1675280000&quot;
+
+2026-06-14T07:00:26Z [SIMULATION] Execution finished signal received
+2026-06-14T07:00:26Z [SIMULATION] Skipping WorkflowEngineV2
+2026-06-14T07:00:26Z [SIMULATION] Failed to cleanup beholder error=BeholderClient has not been started: cannot stop unstarted service
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
+</code></pre>
+<p><code>1675280000</code> is the feed price ($1,675.28) in USDC 6-decimal fixed-point. Notes on the
+output:</p>
+<ul>
+<li><strong>The tx hash is zero</strong> because a plain simulation routes the EVM write through a
+<strong>mock</strong> forwarder rather than broadcasting — the trigger → feed read → DON consensus →
+report-signing path is fully exercised, which is what the CRE CLI simulation verifies.</li>
+<li><strong><code>Failed to cleanup beholder …</code></strong> is a benign teardown log printed <em>after</em> the result;
+the simulator stops a telemetry client it never started in local mode. The run still
+exits <code>0</code>. Filter it for a clean demo: <code>… | grep -v &quot;Failed to cleanup beholder&quot;</code>.</li>
+</ul>
+<blockquote>
+<p><strong>Note — live broadcast is out of scope here.</strong> CRE delivers DON-signed reports through
+a KeystoneForwarder that calls <code>onReport(bytes,bytes)</code> on the receiver, whereas
+<code>AquaOptionSettlement</code> exposes a plain <code>settleSeries(bytes32,uint256)</code> guarded by
+<code>onlyCRE</code>. Wiring the live on-chain write (an <code>onReport</code> entrypoint + registered
+forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the demonstrated path.</p>
+</blockquote>
+<hr>
+<h2>End-to-End Demo Walkthrough</h2>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Actor</th>
+<th>Action</th>
+<th>Contract call</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>LP</td>
+<td>Connect wallet → <em>Authorize Strike Range</em> → approve collateral + authorize</td>
+<td><code>ERC20.approve()</code> + <code>AquaCollateralVault.authorizeRange()</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Trader</td>
+<td>Click <strong>Buy</strong> on a strike within LP&#39;s range → approve USDC → buy</td>
+<td><code>ERC20.approve(USDC)</code> + <code>AquaCollateralVault.buy()</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Trader</td>
+<td>Click <strong>Close</strong> to unwind early</td>
+<td><code>AquaCollateralVault.close()</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>—</td>
+<td>Paste <code>seriesId</code> into <code>cre-workflow/settlement/config.json</code>, run <code>cre workflow simulate settlement</code></td>
+<td><code>AquaOptionSettlement.settleSeries()</code> via CRE</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Trader</td>
+<td>Call <code>redeem()</code> to collect payout (ITM only)</td>
+<td><code>AquaOptionSettlement.redeem()</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>LP</td>
+<td>Call <code>reclaimCollateral()</code> to recover remaining collateral</td>
+<td><code>AquaOptionSettlement.reclaimCollateral()</code></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>📖 Glossary</h2>
+<h3>Ethereum / Blockchain Terms</h3>
+<ul>
+<li><strong>EOA (Externally Owned Account):</strong> A standard Ethereum wallet controlled by a private key (e.g., MetaMask). LPs and traders use EOAs; the protocol never takes custody of their funds.</li>
+<li><strong>ERC-20:</strong> Standard interface for fungible tokens. <code>OptionToken</code> follows this standard so positions can be resold on any DEX.</li>
+<li><strong>Non-custodial:</strong> The protocol never holds user assets. Collateral stays in LP wallets until a buyer matches; the vault only moves funds atomically on match.</li>
+</ul>
+<h3>DeFi Terms</h3>
+<ul>
+<li><strong>LP (Liquidity Provider):</strong> A participant who backs trades. Here, LPs authorize the vault to pull collateral JIT — they are yield-seeking covered-option writers, not market makers.</li>
+<li><strong>Maker:</strong> The option writer (LP). Authorizes a strike range, provides collateral JIT, receives premiums, reclaims collateral at expiry.</li>
+<li><strong>Trader:</strong> The option buyer. Pays premium, receives an OptionToken representing the long position, redeems ITM payout at settlement.</li>
+<li><strong>CEX (Centralized Exchange):</strong> Off-chain exchange (Binance, Coinbase, Kraken). Referenced as real-world ETH/USD price sources; the live frontend spot is sourced via the Uniswap Trading API, while settlement reads the on-chain Chainlink feed.</li>
+<li><strong>DEX (Decentralized Exchange):</strong> On-chain exchange. Uniswap v4 provides secondary-market trading for OptionTokens.</li>
+<li><strong>DON (Decentralized Oracle Network):</strong> A tamper-resistant network of node operators that securely delivers external data to smart contracts (Chainlink).</li>
+<li><strong>CRE (Chainlink Runtime Environment):</strong> Off-chain computation environment for custom DON workflows (successor to Chainlink Functions).</li>
+<li><strong>JIT (Just-In-Time) Liquidity:</strong> Capital pulled from an LP&#39;s wallet only at trade execution — never locked idle. Enabled by 1inch Aqua.</li>
+</ul>
+<h3>Options Terms</h3>
+<ul>
+<li><strong>Delta (Δ):</strong> Rate of change of premium per $1 move in spot. 0 = deep OTM, 1 = deep ITM for calls. Computed frontend-only via $N(d_1)$ using smile-adjusted $\sigma_{strike}$.</li>
+<li><strong>Strike Price (K):</strong> Price at which the option holder has the right to buy (call) or sell (put) at expiry.</li>
+<li><strong>Spot Price (S):</strong> Current market price of ETH/USDC, sourced from Chainlink.</li>
+<li><strong>DTE (Days to Expiry):</strong> Time remaining until settlement, in days.</li>
+<li><strong>K_min / K_max:</strong> The lower and upper bounds of an LP&#39;s authorized strike range.</li>
+<li><strong>OTM (Out-of-The-Money):</strong> No intrinsic value at expiry; LP reclaims 100% of collateral.</li>
+<li><strong>ITM (In-The-Money):</strong> Intrinsic value at expiry; holder receives payout, LP gets remainder.</li>
+<li><strong>IV (Implied Volatility / σ):</strong> Market&#39;s forecast of price movement. <code>σ_global</code> is demand-weighted and adjusts with every trade.</li>
+<li><strong>Volatility Smile:</strong> OTM/ITM options trade at higher IV than ATM; modeled by $\alpha \cdot \ln(K/S)^2$ curvature.</li>
+<li><strong>Black-Scholes:</strong> Mathematical option pricing model. This protocol uses a parametric approximation (gas-efficient, no $N(d_1)$ on-chain).</li>
+</ul>
+<h3>Protocol-Specific Terms</h3>
+<ul>
+<li><strong>Range Authorization:</strong> LP&#39;s single on-chain commitment to write options at any strike $K \in [K_{min}, K_{max}]$ from one collateral pool. First buy at a new strike deploys an OptionToken lazily.</li>
+<li><strong>Yield Double-Dip:</strong> LP earns staking/lending yield on collateral (because it stays in their wallet via Aqua JIT) <em>and</em> option premium from buyers. Impossible in vault-locking designs.</li>
+<li><strong>σ_global Feedback Loop:</strong> Every primary-market buy bumps $\sigma_{global}$ up; every close/sell decrements it. Creates on-chain price discovery that arbitrageurs can trade against.</li>
+<li><strong>Emergent Market Maker:</strong> An arbitrageur who buys underpriced options (low $\sigma_{global}$) on the primary market, delta-hedges on Uniswap, and closes when σ corrects — capturing the spread while enforcing IV consistency.</li>
+<li><strong>Covered Call / Cash-Secured Put:</strong> Fully collateralized option: WETH backs calls (LP delivers ETH if exercised), USDC backs puts (LP purchases ETH if exercised). No naked writing; collateral IS the hedge.</li>
+<li><strong>SwapVM:</strong> 1inch highly-optimized VM for custom matching and pricing logic.</li>
+<li><strong>1inch Aqua:</strong> 1inch primitive for JIT transfer of assets from LP self-custodial wallets.</li>
+<li><strong>Uniswap v4 Hooks:</strong> Smart contracts at swap lifecycle points: <code>beforeSwap</code> vetoes mispriced trades, <code>afterSwap</code> adjusts IV.</li>
+<li><strong><code>latestRoundData()</code>:</strong> The Chainlink aggregator read returning the latest ETH/USD answer (8-decimal). CRE reads it at the last finalized block so every DON node agrees on the settlement price.</li>
+</ul>
+<hr>
+<h2>🏗️ Project Structure</h2>
+<pre><code class="language-text">├── cre-workflow/             # Chainlink CRE Logic (TypeScript)
+│   ├── config.json           # Series ID + settlement contract config
+│   └── workflow.ts           # DON workflow (CRE SDK, compiled to WASM)
+├── frontend/                 # Next.js Application
+│   ├── components/           # AuthorizeRange, OptionMatrix, LPDashboard
+│   ├── config/               # Wagmi + contract addresses
+│   └── app/                  # Next.js App Router
+├── src/                      # Smart Contracts (Solidity)
+│   ├── hooks/                # OptionPricingHook (Uniswap v4)
+│   ├── swapvm/               # OptionPricingEngine (parametric B/S)
+│   ├── vaults/               # AquaCollateralVault + AquaOptionSettlement
+│   └── OptionToken.sol       # ERC-20 option position
+├── test/                     # Foundry tests (34 passing)
+├── foundry.toml              # Foundry config (via_ir = true for stack depth)
+└── remappings.txt
+</code></pre>
+<hr>
+<h2>Technical Stack</h2>
+<ul>
+<li><strong>Smart Contracts</strong>: Solidity 0.8.35 (Foundry, via_ir)</li>
+<li><strong>Frontend</strong>: Next.js 16, Tailwind CSS, Wagmi/Viem</li>
+<li><strong>Oracle/Settlement</strong>: Chainlink CRE SDK</li>
+<li><strong>DEX Infrastructure</strong>: Uniswap v4 Hooks, 1inch Aqua</li>
+</ul>
+<hr>
+<p><em>Built for the 1inch + Uniswap + Chainlink Hackathon.</em></p>
+<h2>Foundry Usage</h2>
+<pre><code class="language-shell">forge build
+forge test
+forge --help
+anvil --help
+cast --help
+</code></pre>
+
+  </article>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    // Turn ```mermaid fenced blocks into mermaid-rendered containers.
+    document.querySelectorAll("code.language-mermaid").forEach((el) => {
+      const pre = el.closest("pre");
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = el.textContent;
+      pre.replaceWith(div);
+    });
+    mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+    try { await mermaid.run(); } catch (e) { console.error("mermaid render failed", e); }
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
-import { TARGET_CHAIN_ID, CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS } from "@/config/wagmi";
 
 const VAULT_ABI_MINI = [
   { name: "nextAuthId", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
@@ -64,7 +64,6 @@ export default function Home() {
   const chains = useChains();
   const { data: balance } = useBalance({ address });
   const currentChain = chains.find((c) => c.id === chainId);
-  const isWrongChain = isConnected && chainId !== TARGET_CHAIN_ID;
   const [mounted, setMounted] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
   const [activeAuth, setActiveAuth] = useState<ActiveAuth | null>(null);
@@ -136,19 +135,23 @@ export default function Home() {
           </p>
         </div>
 
-        {!mounted ? null : (
+        <div className="flex items-center gap-3">
+          <a
+            href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-gray-400 hover:text-white transition-colors"
+          >
+            Help ↗
+          </a>
+          {!mounted ? null : (
           <div className="flex items-center gap-3">
             {/* Network dropdown — always visible so you can switch before connecting */}
             <div className="relative">
               <button
                 onClick={() => setNetworkOpen((o) => !o)}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors ${
-                  isConnected && isWrongChain
-                    ? "bg-red-900/60 text-red-300 border-red-700 hover:bg-red-900"
-                    : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
-                }`}
+                className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
               >
-                {isConnected && isWrongChain ? "⚠ " : ""}
                 {isConnected
                   ? (currentChain?.name ?? `Chain ${chainId}`)
                   : "Network"}
@@ -214,6 +217,7 @@ export default function Home() {
             )}
           </div>
         )}
+        </div>
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
