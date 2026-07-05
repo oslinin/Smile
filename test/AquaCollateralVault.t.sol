@@ -106,7 +106,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
 
-        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,,, bool isCall, bool active,,,) =
+        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active,,,,) =
             vault.authorizations(authId);
 
         assertEq(storedLp, lp);
@@ -155,7 +155,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         vault.revokeAuthorization(authId);
 
-        (,,,,,,,,, bool active,,,) = vault.authorizations(authId);
+        (,,,,,,,, bool active,,,,) = vault.authorizations(authId);
         assertFalse(active);
     }
 

@@ -63,9 +63,11 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 maxCollateral;   // total capacity (WAD for calls, 6-dec for puts)
         uint256 usedCollateral;  // informational — Aqua virtual balance enforces capacity
         address collateralToken; // WETH for calls, USDC for puts
-        address premiumToken;    // token buyers pay premiums in (typically USDC)
         bool isCall;
         bool active;
+        // Fields below are appended so the tuple prefix stays ABI-compatible
+        // with pre-Aqua frontend readers of `authorizations(authId)`.
+        address premiumToken;    // token buyers pay premiums in (typically USDC)
         address sigmaSource;     // hook snapshot — baked into the immutable strategy
         uint8 premiumDecimals;   // premiumToken decimals snapshot
         bytes32 strategyHash;    // Aqua strategy hash (order hash for calls)
