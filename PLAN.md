@@ -31,10 +31,13 @@ how cleverly an LP pre-allocated across dozens of dead strikes.
 
 ## Feasibility Notes (MVP simplifications)
 
-- **SwapVM as a stateless Solidity program.** Hand-writing raw SwapVM bytecode is
-  out of scope for a weekend. The pricing engine is implemented as a *stateless,
-  pure* Solidity contract that models the SwapVM instruction path (a custom
-  premium opcode). The interface is shaped so it can later be lowered to bytecode.
+- **SwapVM as a stateless Solidity program.** ~~Hand-writing raw SwapVM bytecode is
+  out of scope for a weekend.~~ **Superseded:** the project now runs on the
+  official `1inch/aqua` and `1inch/swap-vm` contracts. `SmileSwapVMRouter`
+  registers a custom `optionPremium` instruction (opcode 33) on the official
+  VM, LP strategies are genuine SwapVM bytecode shipped via `Aqua.ship()`, and
+  trades execute through official `Aqua.pull()`/`push()`. The stateless
+  `OptionPricingEngine` remains as a quoting facade over the shared math.
 - **Premium math is an integer approximation, not full Black–Scholes.** On-chain
   BS is gas-prohibitive. We use a parametric premium: `intrinsic + time-value`,
   where time-value scales with a **parametric volatility smile**:
