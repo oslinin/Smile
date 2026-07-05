@@ -4,7 +4,7 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useSen
 import { explorerTxUrl } from "@/lib/explorer";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { Leg } from "@/components/PayoffBuilder";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
@@ -60,9 +60,17 @@ const VAULT_ABI = [
       { name: "expiry", type: "uint256" },
       { name: "maxCollateral", type: "uint256" },
       { name: "collateralToken", type: "address" },
+      { name: "premiumToken", type: "address" },
       { name: "isCall", type: "bool" },
     ],
     outputs: [{ name: "authId", type: "uint256" }],
+  },
+  {
+    name: "nextAuthId",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "buy",
@@ -71,13 +79,15 @@ const VAULT_ABI = [
     inputs: [
       { name: "authId", type: "uint256" },
       { name: "strike", type: "uint256" },
-      { name: "spot", type: "uint256" },
-      { name: "buyer", type: "address" },
       { name: "amount", type: "uint256" },
-      { name: "premiumToken", type: "address" },
+      { name: "maxPremium", type: "uint256" },
     ],
-    outputs: [],
+    outputs: [
+      { name: "optionToken", type: "address" },
+      { name: "premiumPaid", type: "uint256" },
+    ],
   },
+  ...SHIP_PARAMS_ABI,
   {
     name: "close",
     type: "function",
@@ -281,8 +291,10 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
   const [expiryOffset, setExpiryOffset] = useState(
     Math.max(86400, defaultExpiry - Math.floor(Date.now() / 1000))
   );
-  const [step, setStep] = useState<"idle" | "approving" | "authorizing" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "approving" | "authorizing" | "shipping" | "done">("idle");
+  const [authIdToShip, setAuthIdToShip] = useState<bigint | null>(null);
   const firedRef = useRef(false);
+  const shipFiredRef = useRef(false);
 
   const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
   const amountNum = Math.max(0.001, Number(amount));
@@ -306,34 +318,72 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
   const { writeContract: authorize, data: authTxHash, isPending: authPending } = useWriteContract();
   const { isLoading: authConfirming, isSuccess: authSuccess } = useWaitForTransactionReceipt({ hash: authTxHash });
 
+  const { writeContract: ship, data: shipTxHash, isPending: shipPending } = useWriteContract();
+  const { isLoading: shipConfirming, isSuccess: shipSuccess } = useWaitForTransactionReceipt({ hash: shipTxHash });
+
+  // The vault assigns authIds sequentially — snapshot the next one pre-tx
+  const { data: nextAuthId } = useReadContract({
+    address: CONTRACTS.aquaVault as `0x${string}`,
+    abi: VAULT_ABI,
+    functionName: "nextAuthId",
+    query: { enabled: !!CONTRACTS.aquaVault },
+  });
+
+  // Official Aqua.ship() calldata for the freshly registered range
+  const { data: shipParams } = useReadContract({
+    address: CONTRACTS.aquaVault as `0x${string}`,
+    abi: VAULT_ABI,
+    functionName: "getShipParams",
+    args: [authIdToShip ?? BigInt(0)],
+    query: { enabled: !!CONTRACTS.aquaVault && authIdToShip !== null },
+  });
+
   useEffect(() => {
     if (approveSuccess && step === "approving") {
       setStep("authorizing");
+      if (nextAuthId !== undefined) setAuthIdToShip(nextAuthId);
       authorize({
         address: CONTRACTS.aquaVault as `0x${string}`,
         abi: VAULT_ABI,
         functionName: "authorizeRange",
-        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, isCall],
+        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, USDC_SEPOLIA as `0x${string}`, isCall],
       });
     }
   }, [approveSuccess]);
 
+  // Once registered, ship the strategy on the official Aqua registry
   useEffect(() => {
-    if (authSuccess && !firedRef.current) {
+    if (authSuccess && step === "authorizing" && shipParams && CONTRACTS.aqua && !shipFiredRef.current) {
+      shipFiredRef.current = true;
+      setStep("shipping");
+      const [app, strategy, tokens, amounts] = shipParams;
+      ship({
+        address: CONTRACTS.aqua as `0x${string}`,
+        abi: AQUA_ABI,
+        functionName: "ship",
+        args: [app, strategy, [...tokens], [...amounts]],
+      });
+    }
+  }, [authSuccess, shipParams]);
+
+  useEffect(() => {
+    if (shipSuccess && !firedRef.current) {
       firedRef.current = true;
       setStep("done");
       onSellConfirmed?.({ direction: "sell", isCall, strike: kMin, amount: amountNum });
     }
-  }, [authSuccess]);
+  }, [shipSuccess]);
 
   const handleStart = () => {
-    if (!address || !CONTRACTS.aquaVault) return;
+    if (!address || !CONTRACTS.aquaVault || !CONTRACTS.aqua) return;
     setStep("approving");
+    // Collateral allowance goes to the OFFICIAL Aqua registry — funds stay in
+    // the LP wallet and get pulled just-in-time on a match.
     approve({
       address: collateralToken as `0x${string}`,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [CONTRACTS.aquaVault as `0x${string}`, maxCollateral],
+      args: [CONTRACTS.aqua as `0x${string}`, maxCollateral],
     });
   };
 
@@ -390,7 +440,8 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
             {step !== "idle" && (
               <span className="text-orange-400 font-semibold">
                 {step === "approving" ? (approvePending ? "Confirm approval…" : approveConfirming ? "Approving…" : "…")
-                  : step === "authorizing" ? (authPending ? "Confirm…" : authConfirming ? "Authorizing…" : "…")
+                  : step === "authorizing" ? (authPending ? "Confirm…" : authConfirming ? "Registering…" : "…")
+                  : step === "shipping" ? (shipPending ? "Confirm…" : shipConfirming ? "Shipping to Aqua…" : "…")
                   : "✓ Written"}
               </span>
             )}
@@ -496,7 +547,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
   };
 
   const handleBuy = () => {
-    if (!canTrade) return;
+    if (!canTrade || !totalUsdcPremium) return;
     buyTx({
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
@@ -504,10 +555,10 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
       args: [
         auth.authId,
         BigInt(Math.round(strike * 1e18)),
-        BigInt(Math.round(spot * 1e18)),
-        address!,
         amountWAD,
-        USDC_SEPOLIA as `0x${string}`,
+        // Premium is computed on-chain by the SwapVM instruction (oracle spot
+        // + live σ); allow 2x headroom over our local estimate as slippage bound.
+        totalUsdcPremium * BigInt(2),
       ],
     });
   };
