@@ -1,5 +1,6 @@
-@uniswap/v4-core/=lib/v4-core/
-@uniswap/v4-periphery/=lib/v4-periphery/
-@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
-solmate/=lib/solmate/src/
+@uniswap/v4-core/=node_modules/@uniswap/v4-core/
+@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/
+@1inch/solidity-utils/=node_modules/@1inch/solidity-utils/
+@1inch/aqua/=lib/aqua/
+@1inch/swap-vm/=lib/swap-vm/
 forge-std/=lib/forge-std/src/
