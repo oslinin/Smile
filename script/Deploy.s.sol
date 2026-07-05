@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.30;
 
 import "forge-std/Script.sol";
 import "forge-std/StdCheats.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../src/swapvm/OptionPricingEngine.sol";
-import "../src/hooks/OptionPricingHook.sol";
-import "../src/vaults/AquaCollateralVault.sol";
-import "../src/vaults/AquaOptionSettlement.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+import { Aqua } from "@1inch/aqua/src/Aqua.sol";
+
+import { OptionPricingEngine } from "../src/swapvm/OptionPricingEngine.sol";
+import { SmileSwapVMRouter } from "../src/swapvm/SmileSwapVMRouter.sol";
+import { OptionPricingHook } from "../src/hooks/OptionPricingHook.sol";
+import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
+import { AquaOptionSettlement } from "../src/vaults/AquaOptionSettlement.sol";
+import { MockV3Aggregator } from "../src/mocks/MockV3Aggregator.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -19,6 +24,11 @@ contract MockERC20 is ERC20 {
 contract Deploy is Script, StdCheats {
     address constant USDC_MAINNET = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address constant WETH_MAINNET = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    // Official production Aqua deployment (mainnet)
+    address constant AQUA_MAINNET = 0x499943E74FB0cE105688beeE8Ef2ABec5D936d31;
+    // Chainlink ETH/USD feeds
+    address constant ETH_USD_FEED_MAINNET = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address constant ETH_USD_FEED_SEPOLIA = 0x694AA1769357215DE4FAC081bf1f309aDC325306;
     // Circle USDC + canonical WETH on Sepolia testnet
     address constant USDC_SEPOLIA = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
     address constant WETH_SEPOLIA = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
@@ -32,21 +42,27 @@ contract Deploy is Script, StdCheats {
 
         address usdcAddr;
         address wethAddr;
+        address oracleAddr;
+        address aquaAddr;
 
         if (block.chainid == 11155111) {
-            // ── Sepolia: use real Circle USDC + canonical WETH ───────────────
-            usdcAddr = USDC_SEPOLIA;
-            wethAddr = WETH_SEPOLIA;
+            // ── Sepolia: real Circle USDC + canonical WETH + Chainlink feed ──
+            usdcAddr   = USDC_SEPOLIA;
+            wethAddr   = WETH_SEPOLIA;
+            oracleAddr = ETH_USD_FEED_SEPOLIA;
         } else if (forkMainnet) {
-            // ── Mainnet fork: use real tokens, deal balances ─────────────────
-            usdcAddr = USDC_MAINNET;
-            wethAddr = WETH_MAINNET;
+            // ── Mainnet fork: real tokens, real Chainlink feed, and the
+            //    OFFICIAL production Aqua deployment ─────────────────────────
+            usdcAddr   = USDC_MAINNET;
+            wethAddr   = WETH_MAINNET;
+            oracleAddr = ETH_USD_FEED_MAINNET;
+            aquaAddr   = AQUA_MAINNET;
             // NOTE: token/ETH funding for the fork is done post-deploy in local.sh
             // via real `cast` txs (wrap WETH, set USDC storage). forge cheatcodes
             // like `deal`/`vm.deal` only mutate the script's simulation EVM and do
             // NOT broadcast to the Anvil node, so they cannot fund accounts here.
         } else {
-            // ── Blank Anvil: deploy mock tokens ──────────────────────────────
+            // ── Blank Anvil: deploy mock tokens + settable spot oracle ───────
             vm.startBroadcast(deployerKey);
             MockERC20 usdc = new MockERC20("USD Coin",      "USDC", 6);
             MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
@@ -54,26 +70,44 @@ contract Deploy is Script, StdCheats {
             weth.mint(deployer,       100e18);
             usdc.mint(buyer,    1_000_000e6);
             weth.mint(buyer,          10e18);
+            MockV3Aggregator mockOracle = new MockV3Aggregator(8, 3000e8);
             vm.stopBroadcast();
-            usdcAddr = address(usdc);
-            wethAddr = address(weth);
+            usdcAddr   = address(usdc);
+            wethAddr   = address(weth);
+            oracleAddr = address(mockOracle);
         }
 
         vm.startBroadcast(deployerKey);
 
-        // ── Core contracts ───────────────────────────────────────────────────
+        // ── Official 1inch Aqua (shared liquidity registry) ──────────────────
+        // On a mainnet fork the production deployment is reused; elsewhere the
+        // official contract is deployed fresh.
+        if (aquaAddr == address(0)) {
+            aquaAddr = address(new Aqua());
+        }
+
+        // ── Custom Aqua app: official SwapVM + custom option-premium opcode ──
+        SmileSwapVMRouter router = new SmileSwapVMRouter(aquaAddr, wethAddr, deployer);
+
+        // ── Pricing facade + Uniswap v4 hook ─────────────────────────────────
         OptionPricingEngine engine = new OptionPricingEngine();
 
         uint256 initialSigma = 0.8e18;
         // poolManager is unused on Anvil (no live Uniswap v4); pass address(1) as placeholder
         OptionPricingHook hook = new OptionPricingHook(address(engine), address(1), initialSigma);
 
-        AquaCollateralVault vault = new AquaCollateralVault(address(engine), deployer);
+        AquaCollateralVault vault = new AquaCollateralVault(
+            aquaAddr,
+            payable(address(router)),
+            oracleAddr,
+            deployer
+        );
 
         // deployer also acts as CRE forwarder in local testing
         AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer);
 
-        // ── Wire hook ↔ vault ────────────────────────────────────────────────
+        // ── Wire hook ↔ vault (before any range is authorized, so strategies
+        //    snapshot the hook as their live σ source) ──────────────────────
         vault.setHook(address(hook));
         hook.setVault(address(vault));
 
@@ -82,6 +116,9 @@ contract Deploy is Script, StdCheats {
         // ── Output — grep-friendly for shell parsing ──────────────────────
         console.log("NEXT_PUBLIC_USDC_ADDRESS=%s",    usdcAddr);
         console.log("NEXT_PUBLIC_WETH_ADDRESS=%s",    wethAddr);
+        console.log("NEXT_PUBLIC_AQUA=%s",            aquaAddr);
+        console.log("NEXT_PUBLIC_SWAPVM_ROUTER=%s",   address(router));
+        console.log("NEXT_PUBLIC_SPOT_ORACLE=%s",     oracleAddr);
         console.log("NEXT_PUBLIC_PRICING_ENGINE=%s",  address(engine));
         console.log("NEXT_PUBLIC_PRICING_HOOK=%s",    address(hook));
         console.log("NEXT_PUBLIC_AQUA_VAULT=%s",      address(vault));
