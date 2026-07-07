@@ -106,7 +106,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
 
-        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active,,,,) =
+        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active,,,,,,) =
             vault.authorizations(authId);
 
         assertEq(storedLp, lp);
@@ -121,7 +121,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
 
-        (,,,,,,,,,,,, bytes32 strategyHash) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
         // The vault-stored hash IS the official SwapVM order hash for Aqua orders,
         // and matches the hash Aqua derives from the shipped strategy bytes.
         assertEq(strategyHash, router.hash(vault.buildOrder(authId)));
@@ -155,7 +155,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         vault.revokeAuthorization(authId);
 
-        (,,,,,,,, bool active,,,,) = vault.authorizations(authId);
+        (,,,,,,,, bool active,,,,,,) = vault.authorizations(authId);
         assertFalse(active);
     }
 
@@ -182,7 +182,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(weth.balanceOf(address(vault)), amount);
 
         // Aqua virtual balances mirror the strategy state.
-        (,,,,,,,,,,,, bytes32 strategyHash) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
         (uint248 wethBal,) = aqua.rawBalances(lp, address(router), strategyHash, address(weth));
         assertEq(uint256(wethBal), maxCollateral - amount);
 
@@ -270,7 +270,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(usdc.balanceOf(lp), lpUsdcBefore - expectedCollateral + premiumPaid);
         assertEq(usdc.balanceOf(address(vault)), expectedCollateral);
 
-        (,,,,,,,,,,,, bytes32 strategyHash) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
         (uint248 bal,) = aqua.rawBalances(lp, address(vault), strategyHash, address(usdc));
         assertEq(uint256(bal), maxCollateral - expectedCollateral);
 

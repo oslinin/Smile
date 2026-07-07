@@ -21,8 +21,9 @@ import { SmileSwapVMRouter } from "../swapvm/SmileSwapVMRouter.sol";
 import { OptionPremiumArgsBuilder } from "../swapvm/OptionPremiumInstruction.sol";
 
 interface IOptionPricingHook {
-    function bumpSigma(bool isBuy) external;
-    function sigmaGlobal() external view returns (uint256);
+    function bumpSigma(bool isBuy, uint256 timeToExpiry) external;
+    function sigmaFor(uint256 timeToExpiry) external view returns (uint256);
+    function beta() external view returns (int256);
 }
 
 /// @notice JIT collateral vault built on the official 1inch Aqua protocol.
@@ -55,6 +56,10 @@ contract AquaCollateralVault is AquaApp, Ownable {
     uint256 public constant DEFAULT_SIGMA = 0.8e18; // fallback σ when no hook wired
     bytes32 private constant PUT_STRATEGY_TYPE = "SMILE-PUT-1";
 
+    /// @notice Max age of the Chainlink spot answer accepted when pricing.
+    /// Snapshotted into each strategy at authorize time (strategies are immutable).
+    uint256 public maxSpotStaleness = 1 hours;
+
     struct LPAuthorization {
         address lp;
         uint256 strikeMin;       // WAD lower bound
@@ -71,6 +76,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         address sigmaSource;     // hook snapshot — baked into the immutable strategy
         uint8 premiumDecimals;   // premiumToken decimals snapshot
         bytes32 strategyHash;    // Aqua strategy hash (order hash for calls)
+        int256 beta;             // skew snapshot (surface tilt at authorize time)
+        uint16 spotStaleness;    // oracle staleness bound baked into the strategy
     }
 
     struct LPPosition {
@@ -102,6 +109,12 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     function setHook(address hook_) external onlyOwner {
         hook = IOptionPricingHook(hook_);
+    }
+
+    /// @notice Update the staleness bound applied to NEW authorizations
+    /// (existing shipped strategies keep their snapshot).
+    function setMaxSpotStaleness(uint256 maxSpotStaleness_) external onlyOwner {
+        maxSpotStaleness = maxSpotStaleness_;
     }
 
     // ── LP Range Authorization ────────────────────────────────────────────────
@@ -139,6 +152,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         auth.active = true;
         auth.sigmaSource = address(hook);
         auth.premiumDecimals = IERC20Metadata(premiumToken).decimals();
+        auth.beta = address(hook) != address(0) ? hook.beta() : int256(0);
+        auth.spotStaleness = SafeCast.toUint16(maxSpotStaleness);
         auth.strategyHash = isCall
             ? keccak256(abi.encode(buildOrder(authId)))   // == router.hash() for Aqua orders
             : keccak256(_putStrategy(authId));
@@ -171,7 +186,9 @@ contract AquaCollateralVault is AquaApp, Ownable {
             auth.strikeMin.toUint128(),
             auth.strikeMax.toUint128(),
             auth.expiry.toUint40(),
-            ALPHA.toUint64()
+            ALPHA.toUint64(),
+            SafeCast.toInt64(auth.beta),
+            auth.spotStaleness
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), uint64(authId),                        // Controls._salt
@@ -303,7 +320,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
         optionToken = _mintSeries(authId, auth, strike, amount, collateralNeeded);
 
-        if (address(hook) != address(0)) hook.bumpSigma(true);
+        if (address(hook) != address(0)) hook.bumpSigma(true, auth.expiry - block.timestamp);
 
         emit PremiumPaid(optionToken, msg.sender, auth.lp, premiumPaid);
         emit OptionBought(authId, optionToken, msg.sender, strike, amount, premiumPaid);
@@ -359,12 +376,13 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 collateralNeeded,
         uint256 maxPremium
     ) internal nonReentrantStrategy(auth.lp, auth.strategyHash) returns (uint256 premiumPaid) {
-        uint256 spot = _spotWad();
+        uint256 spot = _spotWad(auth.spotStaleness);
+        uint256 timeToExpiry = auth.expiry - block.timestamp;
         uint256 sigma = auth.sigmaSource != address(0)
-            ? IOptionPricingHook(auth.sigmaSource).sigmaGlobal()
+            ? IOptionPricingHook(auth.sigmaSource).sigmaFor(timeToExpiry)
             : DEFAULT_SIGMA;
-        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigma, ALPHA);
-        uint256 premiumWadPerUnit = SmileMath.premium(spot, strike, auth.expiry - block.timestamp, sigmaStrike, false, true);
+        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigma, ALPHA, auth.beta);
+        uint256 premiumWadPerUnit = SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, false, true);
         uint256 totalWad = Math.ceilDiv(premiumWadPerUnit * amount, 1e18);
         premiumPaid = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, true);
         require(premiumPaid <= maxPremium, "premium above max");
@@ -424,7 +442,10 @@ contract AquaCollateralVault is AquaApp, Ownable {
         OptionToken(optionToken).burn(msg.sender, amount);
         IERC20(pos.collateralToken).safeTransfer(lp, collateralToRelease);
 
-        if (address(hook) != address(0)) hook.bumpSigma(false);
+        if (address(hook) != address(0)) {
+            uint256 tokenExpiry = OptionToken(optionToken).expiry();
+            hook.bumpSigma(false, tokenExpiry > block.timestamp ? tokenExpiry - block.timestamp : 0);
+        }
 
         emit OptionClosed(optionToken, msg.sender, amount);
         emit CollateralReleased(optionToken, lp, collateralToRelease);
@@ -442,9 +463,13 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    function _spotWad() internal view returns (uint256) {
-        (, int256 answer,,,) = oracle.latestRoundData();
+    function _spotWad(uint256 maxStaleness) internal view returns (uint256) {
+        (, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
         require(answer > 0, "bad oracle price");
+        require(
+            maxStaleness == 0 || (updatedAt != 0 && block.timestamp <= updatedAt + maxStaleness),
+            "stale oracle price"
+        );
         return SmileMath.scaleToWad(uint256(answer), oracle.decimals());
     }
 

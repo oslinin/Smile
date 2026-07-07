@@ -8,25 +8,27 @@ import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceO
 
 import { SmileMath } from "./SmileMath.sol";
 
-/// @notice Source of the demand-driven global implied volatility (the Uniswap
-/// v4 `OptionPricingHook` implements this — buys bump σ, sells decay it).
+/// @notice Live vol-surface source (the Uniswap v4 `OptionPricingHook`
+/// implements this — σ per tenor bucket, demand feedback bumps it).
 interface ISigmaSource {
-    function sigmaGlobal() external view returns (uint256);
+    function sigmaFor(uint256 timeToExpiry) external view returns (uint256);
 }
 
 /// @notice Builder for the packed maker args of `_optionPremiumXD`, mirroring
 /// the official SwapVM `*ArgsBuilder` style (e.g. ControlsArgsBuilder).
 library OptionPremiumArgsBuilder {
-    /// @dev Packed layout (126 bytes total):
+    /// @dev Packed layout v2 (136 bytes total):
     ///   oracle          | 20 bytes — Chainlink-style aggregator for spot
     ///   sigmaSource     | 20 bytes — ISigmaSource (0 → DEFAULT_SIGMA)
-    ///   premiumToken    | 20 bytes — must equal query.tokenIn
-    ///   collateralToken | 20 bytes — must equal query.tokenOut
+    ///   premiumToken    | 20 bytes — the premium leg of the pair
+    ///   collateralToken | 20 bytes — the collateral leg of the pair
     ///   premiumDecimals |  1 byte
     ///   strikeMin       | 16 bytes — uint128, WAD USD
     ///   strikeMax       | 16 bytes — uint128, WAD USD
     ///   expiry          |  5 bytes — uint40 unix timestamp
     ///   alpha           |  8 bytes — uint64, WAD smile curvature
+    ///   beta            |  8 bytes — int64, WAD skew tilt (signed)
+    ///   maxStaleness    |  2 bytes — uint16 seconds; 0 = no staleness check
     function build(
         address oracle,
         address sigmaSource,
@@ -36,11 +38,13 @@ library OptionPremiumArgsBuilder {
         uint128 strikeMin,
         uint128 strikeMax,
         uint40 expiry,
-        uint64 alpha
+        uint64 alpha,
+        int64 beta,
+        uint16 maxStaleness
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             oracle, sigmaSource, premiumToken, collateralToken,
-            premiumDecimals, strikeMin, strikeMax, expiry, alpha
+            premiumDecimals, strikeMin, strikeMax, expiry, alpha, beta, maxStaleness
         );
     }
 }
@@ -68,11 +72,12 @@ contract OptionPremiumInstruction {
     error OptionPremiumStrikeMissing();
     error OptionPremiumStrikeOutOfRange(uint256 strike, uint256 strikeMin, uint256 strikeMax);
     error OptionPremiumBadOraclePrice(int256 answer);
+    error OptionPremiumStaleOraclePrice(uint256 updatedAt, uint256 maxStaleness, uint256 nowTimestamp);
 
-    /// @dev Fallback σ_global when no sigma source is wired (80% IV).
+    /// @dev Fallback σ when no sigma source is wired (80% IV).
     uint256 internal constant DEFAULT_SIGMA = 0.8e18;
     uint256 internal constant WAD = 1e18;
-    uint256 internal constant ARGS_LENGTH = 126;
+    uint256 internal constant ARGS_LENGTH = 136;
 
     struct OptionTerms {
         address oracle;
@@ -84,6 +89,8 @@ contract OptionPremiumInstruction {
         uint256 strikeMax;
         uint256 expiry;
         uint256 alpha;
+        int256 beta;
+        uint256 maxStaleness;
     }
 
     /// @dev Custom instruction body. Maker args are the packed option terms
@@ -97,12 +104,13 @@ contract OptionPremiumInstruction {
         require(block.timestamp < terms.expiry, OptionPremiumExpired(terms.expiry, block.timestamp));
 
         uint256 strike = _takerStrike(ctx, terms);
-        uint256 spot = _oracleSpotWad(terms.oracle);
-        uint256 sigmaGlobal = terms.sigmaSource != address(0)
-            ? ISigmaSource(terms.sigmaSource).sigmaGlobal()
-            : DEFAULT_SIGMA;
-        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigmaGlobal, terms.alpha);
+        uint256 spot = _oracleSpotWad(terms.oracle, terms.maxStaleness);
         uint256 timeToExpiry = terms.expiry - block.timestamp;
+        // Live vol surface: σ per tenor from the sigma source, skewed per strike.
+        uint256 sigmaTenor = terms.sigmaSource != address(0)
+            ? ISigmaSource(terms.sigmaSource).sigmaFor(timeToExpiry)
+            : DEFAULT_SIGMA;
+        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigmaTenor, terms.alpha, terms.beta);
 
         if (ctx.query.isExactIn) {
             // Bid side: taker fixed the premium; options received round DOWN.
@@ -130,6 +138,8 @@ contract OptionPremiumInstruction {
         terms.strikeMax = uint128(bytes16(args.slice(97, 113, OptionPremiumMissingArgs.selector)));
         terms.expiry = uint40(bytes5(args.slice(113, 118, OptionPremiumMissingArgs.selector)));
         terms.alpha = uint64(bytes8(args.slice(118, 126, OptionPremiumMissingArgs.selector)));
+        terms.beta = int64(uint64(bytes8(args.slice(126, 134, OptionPremiumMissingArgs.selector))));
+        terms.maxStaleness = uint16(bytes2(args.slice(134, 136, OptionPremiumMissingArgs.selector)));
     }
 
     /// @dev Reads the taker-chosen strike (32 bytes) from taker instruction
@@ -149,10 +159,15 @@ contract OptionPremiumInstruction {
         );
     }
 
-    /// @dev Chainlink-style spot read, normalized to WAD.
-    function _oracleSpotWad(address oracle) private view returns (uint256) {
-        (, int256 answer,,,) = IPriceOracle(oracle).latestRoundData();
+    /// @dev Chainlink-style spot read, normalized to WAD, with a staleness
+    /// guard mirroring the official SwapVM OraclePriceAdjuster instruction.
+    function _oracleSpotWad(address oracle, uint256 maxStaleness) private view returns (uint256) {
+        (, int256 answer,, uint256 updatedAt,) = IPriceOracle(oracle).latestRoundData();
         require(answer > 0, OptionPremiumBadOraclePrice(answer));
+        require(
+            maxStaleness == 0 || (updatedAt != 0 && block.timestamp <= updatedAt + maxStaleness),
+            OptionPremiumStaleOraclePrice(updatedAt, maxStaleness, block.timestamp)
+        );
         uint8 decimals = IPriceOracle(oracle).decimals();
         return SmileMath.scaleToWad(uint256(answer), decimals);
     }

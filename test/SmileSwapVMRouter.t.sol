@@ -42,6 +42,7 @@ contract SmileSwapVMRouterTest is Test {
     uint256 constant ALPHA      = 2e18;
     uint256 constant SIGMA      = 0.8e18; // instruction default (no sigma source wired)
     uint256 constant MAX_COLLATERAL = 10e18;
+    uint256 constant MAX_STALENESS  = 1 hours;
     uint256 expiry;
 
     ISwapVM.Order order;
@@ -77,7 +78,9 @@ contract SmileSwapVMRouterTest is Test {
             uint128(STRIKE_MIN),
             uint128(STRIKE_MAX),
             uint40(expiry),
-            uint64(ALPHA)
+            uint64(ALPHA),
+            int64(0),
+            uint16(MAX_STALENESS)
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), salt,                                   // Controls._salt
@@ -186,6 +189,26 @@ contract SmileSwapVMRouterTest is Test {
         vm.warp(expiry + 1);
         vm.expectRevert();
         router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+    }
+
+    function test_quote_staleOracleReverts() public {
+        // Feed last updated at t0; warp past the strategy's staleness bound.
+        vm.warp(block.timestamp + MAX_STALENESS + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OptionPremiumInstruction.OptionPremiumStaleOraclePrice.selector,
+                1, MAX_STALENESS, block.timestamp
+            )
+        );
+        router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+    }
+
+    function test_quote_freshOracleAfterUpdatePasses() public {
+        vm.warp(block.timestamp + MAX_STALENESS + 1);
+        oracle.setAnswer(3000e8); // refresh updatedAt
+        (uint256 amountIn,,) =
+            router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+        assertGt(amountIn, 0);
     }
 
     // ── swap ─────────────────────────────────────────────────────────────────

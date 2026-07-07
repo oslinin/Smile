@@ -158,4 +158,61 @@ contract OptionPricingHookTest is Test {
         vm.expectRevert("only pool manager");
         hook.afterSwap(address(0), poolKey, params, BalanceDelta.wrap(0), "");
     }
+
+    // ── Vol surface: tenor buckets + skew ─────────────────────────────────────
+
+    function test_sigmaFor_selectsTenorBucket() public {
+        address vault = address(0xA117);
+        hook.setVault(vault);
+
+        // Bump only the 30–90d bucket via a 45-day trade
+        vm.prank(vault);
+        hook.bumpSigma(true, 45 days);
+
+        assertEq(hook.sigmaFor(1 days),  SIGMA);                 // [0,7d) untouched
+        assertEq(hook.sigmaFor(10 days), SIGMA);                 // [7d,30d) untouched
+        assertEq(hook.sigmaFor(45 days), SIGMA + hook.GAMMA());  // [30d,90d) bumped
+        assertEq(hook.sigmaFor(180 days), SIGMA);                // [90d,∞) untouched
+    }
+
+    function test_sigmaGlobal_backCompat_is30dBucket() public {
+        address vault = address(0xA117);
+        hook.setVault(vault);
+        vm.prank(vault);
+        hook.bumpSigma(true, 10 days); // [7d,30d) bucket
+        assertEq(hook.sigmaGlobal(), SIGMA + hook.GAMMA());
+    }
+
+    function test_afterSwap_bumpsAllBuckets() public {
+        SwapParams memory params = SwapParams({zeroForOne: true, amountSpecified: -1e18, sqrtPriceLimitX96: 0});
+        vm.prank(poolManager);
+        hook.afterSwap(address(0), poolKey, params, BalanceDelta.wrap(0), "");
+        assertEq(hook.sigmaFor(1 days),   SIGMA + hook.GAMMA());
+        assertEq(hook.sigmaFor(180 days), SIGMA + hook.GAMMA());
+    }
+
+    function test_setBeta_onlyAdmin() public {
+        hook.setBeta(-0.5e18);
+        assertEq(hook.beta(), -0.5e18);
+
+        vm.prank(address(0xBAD));
+        vm.expectRevert("only admin");
+        hook.setBeta(0);
+    }
+
+    // β<0 makes low strikes (downside) price richer than the symmetric smile
+    function test_negativeBeta_downsideSkew() public view {
+        uint256 expiry = block.timestamp + 30 days;
+        OptionPricingEngine.PricingParams memory p = OptionPricingEngine.PricingParams({
+            spot: SPOT, strike: 1600e18, expiry: expiry, // K < S → ln(K/S) < 0
+            sigmaGlobal: SIGMA, alpha: ALPHA, isBuy: true
+        });
+        uint256 symmetric = engine.quoteSurface(p, 0);
+        uint256 skewed = engine.quoteSurface(p, -0.5e18);
+        assertGt(skewed, symmetric);
+
+        // ...and high strikes (upside) price cheaper
+        p.strike = 2400e18; // K > S → ln(K/S) > 0
+        assertLt(engine.quoteSurface(p, -0.5e18), engine.quoteSurface(p, 0));
+    }
 }

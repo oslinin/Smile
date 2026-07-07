@@ -12,7 +12,7 @@ library SmileMath {
 
     error LnNonPositive();
 
-    /// @notice σ_strike = σ_global · (1 + α · ln(K/S)²)  — multiplicative smile.
+    /// @notice σ_strike = σ_global · (1 + α · ln(K/S)²)  — symmetric smile.
     /// OTM/ITM strikes scale above σ_global; ATM (K==S) returns σ_global exactly.
     function smileVol(
         uint256 spot,
@@ -20,14 +20,30 @@ library SmileMath {
         uint256 sigmaGlobal,
         uint256 alpha
     ) internal pure returns (uint256) {
-        if (spot == 0) return sigmaGlobal;
+        return smileVol(spot, strike, sigmaGlobal, alpha, 0);
+    }
+
+    /// @notice σ_strike = σ · (1 + α · ln(K/S)² + β · ln(K/S))  — smile + skew.
+    /// β < 0 tilts the surface so low strikes (downside) price richer, matching
+    /// the empirical equity/crypto skew; β = 0 recovers the symmetric smile.
+    /// The multiplier is floored at 0.1 so deep wings can never zero out σ.
+    function smileVol(
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 alpha,
+        int256 beta
+    ) internal pure returns (uint256) {
+        if (spot == 0) return sigma;
         // ln(K/S) in WAD
         int256 lnKS = lnWad(int256((strike * WAD) / spot));
         // lnKS² in WAD
         uint256 lnKS2 = uint256((lnKS * lnKS) / int256(WAD));
-        // multiplier = 1 + alpha * lnKS²  (in WAD)
-        uint256 multiplier = WAD + (alpha * lnKS2) / WAD;
-        return (sigmaGlobal * multiplier) / WAD;
+        // multiplier = 1 + α·lnKS² + β·lnKS  (in WAD, signed while skew applies)
+        int256 multiplier = int256(WAD + (alpha * lnKS2) / WAD) + (beta * lnKS) / int256(WAD);
+        int256 floorMultiplier = int256(WAD / 10);
+        if (multiplier < floorMultiplier) multiplier = floorMultiplier;
+        return (sigma * uint256(multiplier)) / WAD;
     }
 
     /// @notice Parametric premium per 1e18 option units, in WAD USD.
