@@ -112,8 +112,9 @@ const settle = (runtime: Runtime<Config>): string => {
 
 	runtime.log(`[CRE] Chainlink ETH/USD: $${(Number(answer) / 1e8).toFixed(2)}`)
 
-	// 3. Chainlink ETH/USD is 8-decimal fixed-point; settlement stores USDC 6-decimal.
-	const spotUsdc6 = answer / 100n
+	// 3. Chainlink ETH/USD is 8-decimal fixed-point; the settlement registry
+	// stores prices in WAD (18-dec) — scale up by 10^10.
+	const spotWad = answer * 10n ** 10n
 
 	// 4. DON-signed report → settleSeries on-chain (the required state change).
 	const settlement = new AquaOptionSettlement(evmClient, evm.settlementAddress as Address)
@@ -121,7 +122,7 @@ const settle = (runtime: Runtime<Config>): string => {
 	const resp = settlement.writeReportFromSettleSeries(
 		runtime,
 		seriesId as Hex,
-		spotUsdc6,
+		spotWad,
 		{ gasLimit: evm.gasLimit },
 	)
 
@@ -130,8 +131,8 @@ const settle = (runtime: Runtime<Config>): string => {
 	}
 
 	const txHash = bytesToHex(resp.txHash ?? new Uint8Array(32))
-	runtime.log(`[CRE] settleSeries(${seriesId}, ${spotUsdc6}) submitted — tx ${txHash}`)
-	return spotUsdc6.toString()
+	runtime.log(`[CRE] settleSeries(${seriesId}, ${spotWad}) submitted — tx ${txHash}`)
+	return spotWad.toString()
 }
 
 // ── Trigger handler ───────────────────────────────────────────────────────────

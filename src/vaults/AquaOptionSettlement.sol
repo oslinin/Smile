@@ -1,124 +1,121 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.30;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "../OptionToken.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceOracle.sol";
 
-/// @notice Manages option expiry and settlement.
-/// Only the authorized Chainlink CRE forwarder may write the final spot price.
-/// Commit 9: expiry guards + CRE-only access.
-/// Commit 10: fully-collateralized OTM/ITM payouts.
+import { SmileMath } from "../swapvm/SmileMath.sol";
+
+/// @notice Expiry-price REGISTRY for option series. Collateral custody and
+/// payouts live in the vault (`AquaCollateralVault.redeem/reclaimCollateral`);
+/// this contract records — immutably, once per series — the price a series
+/// settled at, through either of two paths:
+///
+///  - `settleSeries` (CRE): the Chainlink CRE forwarder writes the DON's
+///    consensus price in WAD. Kept as the scheduled/demo path.
+///  - `settleWithChainlinkRound`: PERMISSIONLESS. Anyone — a keeper, the CRE,
+///    the holder themselves — supplies the Chainlink roundId covering expiry
+///    and the contract verifies on-chain that it is the first round at/after
+///    expiry. No trusted writer: settlement liveness reduces to the feed's.
 contract AquaOptionSettlement is Ownable {
-    using SafeERC20 for IERC20;
-
     /// @dev Address of the Chainlink CRE forwarder (set at deploy time).
     address public immutable creForwarder;
+    /// @dev Canonical Chainlink price feed used for permissionless settlement.
+    IPriceOracle public immutable feed;
+    /// @dev The vault allowed to register series (set once by owner).
+    address public registrar;
 
     struct Series {
-        uint256 expiry;
-        uint256 strikePrice;      // K in USDC 6-dec
-        uint256 collateralPerUnit; // collateral locked per 1e18 option units
-        address collateralToken;
         address optionToken;
-        address lp;
-        uint256 totalCollateral;
+        uint256 expiry;
+        uint256 strike;          // WAD USD
+        bool isCall;
         bool settled;
-        uint256 settlementPrice; // final spot price from CRE
+        uint256 settlementPrice; // WAD USD, written exactly once
     }
 
     mapping(bytes32 => Series) public series;
 
-    event SeriesRegistered(bytes32 indexed seriesId);
-    event SeriesSettled(bytes32 indexed seriesId, uint256 settlementPrice);
-    event HolderPaid(bytes32 indexed seriesId, address holder, uint256 payout);
-    event CollateralReturned(bytes32 indexed seriesId, address lp, uint256 amount);
+    event SeriesRegistered(bytes32 indexed seriesId, address indexed optionToken, uint256 expiry, uint256 strike, bool isCall);
+    event SeriesSettled(bytes32 indexed seriesId, uint256 settlementPrice, address indexed settler);
 
     modifier onlyCRE() {
         require(msg.sender == creForwarder, "only CRE forwarder");
         _;
     }
 
-    constructor(address creForwarder_, address owner_) Ownable(owner_) {
+    constructor(address creForwarder_, address owner_, address feed_) Ownable(owner_) {
         creForwarder = creForwarder_;
+        feed = IPriceOracle(feed_);
     }
 
-    /// @notice Register a series before expiry. Called by vault when collateral is locked.
+    /// @notice One-time wiring of the vault that registers series on mint.
+    function setRegistrar(address registrar_) external onlyOwner {
+        require(registrar == address(0), "already set");
+        registrar = registrar_;
+    }
+
+    /// @notice Called by the vault on the first mint of each (range, strike) series.
     function registerSeries(
         bytes32 seriesId,
-        uint256 expiry,
-        uint256 strikePrice,
-        uint256 collateralPerUnit,
-        address collateralToken,
         address optionToken,
-        address lp,
-        uint256 totalCollateral
-    ) external onlyOwner {
+        uint256 expiry,
+        uint256 strike,
+        bool isCall
+    ) external {
+        require(msg.sender == registrar, "only registrar");
         require(series[seriesId].expiry == 0, "already registered");
         series[seriesId] = Series({
-            expiry: expiry,
-            strikePrice: strikePrice,
-            collateralPerUnit: collateralPerUnit,
-            collateralToken: collateralToken,
             optionToken: optionToken,
-            lp: lp,
-            totalCollateral: totalCollateral,
+            expiry: expiry,
+            strike: strike,
+            isCall: isCall,
             settled: false,
             settlementPrice: 0
         });
-        emit SeriesRegistered(seriesId);
+        emit SeriesRegistered(seriesId, optionToken, expiry, strike, isCall);
     }
 
-    /// @notice Called by Chainlink CRE forwarder with consensus spot price at expiry.
-    /// This is the required on-chain state change (Commit 11 wires the off-chain workflow).
-    function settleSeries(bytes32 seriesId, uint256 spotPrice) external onlyCRE {
-        Series storage s = series[seriesId];
+    /// @notice CRE path: the forwarder writes the DON's consensus price (WAD).
+    function settleSeries(bytes32 seriesId, uint256 settlementPriceWad) external onlyCRE {
+        Series storage s = _pendingSeries(seriesId);
+        s.settled = true;
+        s.settlementPrice = settlementPriceWad;
+        emit SeriesSettled(seriesId, settlementPriceWad, msg.sender);
+    }
+
+    /// @notice Permissionless path: settle with the Chainlink round that covers
+    /// expiry. The caller supplies `roundId`; the contract verifies that the
+    /// round was updated at/after expiry AND that its predecessor was updated
+    /// before expiry (i.e. it is the FIRST post-expiry round, so callers can't
+    /// cherry-pick a later, more favorable price).
+    /// @dev Predecessor check assumes `roundId - 1` is in the same proxy phase;
+    /// at a phase boundary the predecessor lookup reverts and is skipped.
+    function settleWithChainlinkRound(bytes32 seriesId, uint80 roundId) external {
+        Series storage s = _pendingSeries(seriesId);
+
+        (, int256 answer,, uint256 updatedAt,) = feed.getRoundData(roundId);
+        require(answer > 0, "bad round answer");
+        require(updatedAt >= s.expiry, "round before expiry");
+
+        if (roundId > 0) {
+            try feed.getRoundData(roundId - 1) returns (uint80, int256, uint256, uint256 prevUpdatedAt, uint80) {
+                require(prevUpdatedAt == 0 || prevUpdatedAt < s.expiry, "not first round after expiry");
+            } catch {
+                // phase boundary / missing predecessor — accept the round
+            }
+        }
+
+        uint256 priceWad = SmileMath.scaleToWad(uint256(answer), feed.decimals());
+        s.settled = true;
+        s.settlementPrice = priceWad;
+        emit SeriesSettled(seriesId, priceWad, msg.sender);
+    }
+
+    function _pendingSeries(bytes32 seriesId) internal view returns (Series storage s) {
+        s = series[seriesId];
         require(s.expiry > 0, "unknown series");
         require(block.timestamp >= s.expiry, "not yet expired");
         require(!s.settled, "already settled");
-
-        s.settled = true;
-        s.settlementPrice = spotPrice;
-        emit SeriesSettled(seriesId, spotPrice);
-    }
-
-    /// @notice Holder redeems their option tokens for payout.
-    /// ITM: payout = max(S - K, 0) per unit. OTM: 0 (collateral stays with LP).
-    function redeem(bytes32 seriesId, uint256 amount) external {
-        Series storage s = series[seriesId];
-        require(s.settled, "not settled");
-        require(amount > 0, "zero amount");
-
-        OptionToken(s.optionToken).burn(msg.sender, amount);
-
-        uint256 payout = 0;
-        if (s.settlementPrice > s.strikePrice) {
-            // ITM: pay (S - K) per unit, scaled by amount/1e18
-            uint256 intrinsic = s.settlementPrice - s.strikePrice;
-            payout = (intrinsic * amount) / 1e18;
-            // Cap at available collateral per unit
-            uint256 maxPayout = (s.collateralPerUnit * amount) / 1e18;
-            if (payout > maxPayout) payout = maxPayout;
-        }
-
-        if (payout > 0) {
-            s.totalCollateral -= payout;
-            IERC20(s.collateralToken).safeTransfer(msg.sender, payout);
-            emit HolderPaid(seriesId, msg.sender, payout);
-        }
-    }
-
-    /// @notice LP reclaims remaining collateral after settlement (OTM: 100%, ITM: remainder).
-    function reclaimCollateral(bytes32 seriesId) external {
-        Series storage s = series[seriesId];
-        require(s.settled, "not settled");
-        require(msg.sender == s.lp, "not lp");
-        require(s.totalCollateral > 0, "nothing to reclaim");
-
-        uint256 amount = s.totalCollateral;
-        s.totalCollateral = 0;
-        IERC20(s.collateralToken).safeTransfer(s.lp, amount);
-        emit CollateralReturned(seriesId, s.lp, amount);
     }
 }

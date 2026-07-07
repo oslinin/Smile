@@ -8,6 +8,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 
 import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
+import { AquaOptionSettlement } from "../src/vaults/AquaOptionSettlement.sol";
 import { SmileSwapVMRouter } from "../src/swapvm/SmileSwapVMRouter.sol";
 import { OptionPricingEngine } from "../src/swapvm/OptionPricingEngine.sol";
 import { OptionToken } from "../src/OptionToken.sol";
@@ -26,6 +27,7 @@ contract AquaCollateralVaultTest is Test {
     Aqua aqua;
     SmileSwapVMRouter router;
     AquaCollateralVault vault;
+    AquaOptionSettlement settlement;
     OptionPricingEngine engine;
     MockV3Aggregator oracle;
     MockERC20 usdc;
@@ -50,6 +52,9 @@ contract AquaCollateralVaultTest is Test {
         engine = new OptionPricingEngine();
         oracle = new MockV3Aggregator(8, 3000e8);
         vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner);
+        settlement = new AquaOptionSettlement(owner, owner, address(oracle));
+        settlement.setRegistrar(address(vault));
+        vault.setSettlement(address(settlement));
         expiry = block.timestamp + 30 days;
 
         usdc.mint(buyer, 1_000_000e6);
@@ -383,5 +388,122 @@ contract AquaCollateralVaultTest is Test {
         (uint248 bal,) = aqua.rawBalances(lp, address(vault), strategyHash, address(usdc));
         assertEq(uint256(bal), maxCollateral - bidReceived);
         assertLt(bidReceived, collateral); // sanity: bid ≪ cash security
+    }
+
+    // ── settlement: register on buy → permissionless settle → redeem/reclaim ──
+
+    function test_buy_registersSeries() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        (address regToken, uint256 regExpiry, uint256 regStrike, bool regIsCall, bool settled,) =
+            settlement.series(vault.seriesId(authId, STRIKE));
+        assertEq(regToken, optionToken);
+        assertEq(regExpiry, expiry);
+        assertEq(regStrike, STRIKE);
+        assertTrue(regIsCall);
+        assertFalse(settled);
+    }
+
+    function test_redeem_beforeSettlementReverts() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        vm.prank(buyer);
+        vm.expectRevert("not settled");
+        vault.redeem(optionToken, 1e18);
+    }
+
+    /// ITM call, settled permissionlessly at $3600: holder redeems the cash
+    /// intrinsic in WETH, LP reclaims the exact remainder — full conservation.
+    function test_settleRedeemReclaim_itmCall_conserved() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        // Expiry passes; the feed prints its first post-expiry round at $3600.
+        vm.warp(expiry + 10);
+        oracle.setAnswer(3600e8); // round 2
+        vm.prank(address(0xA22)); // anyone can settle — no trusted role
+        settlement.settleWithChainlinkRound(vault.seriesId(authId, STRIKE), 2);
+
+        // Holder: (S-K)/S = 600/3600 of 1 WETH per unit.
+        uint256 expectedPayout = (1e18 * (3600e18 - STRIKE)) / 3600e18;
+        vm.prank(buyer);
+        uint256 payout = vault.redeem(optionToken, 1e18);
+        assertEq(payout, expectedPayout);
+        assertEq(weth.balanceOf(buyer), expectedPayout);
+
+        // LP: exactly the rest of the escrowed collateral. Zero residue.
+        uint256 lpBefore = weth.balanceOf(lp);
+        vm.prank(lp);
+        uint256 reclaimed = vault.reclaimCollateral(optionToken);
+        assertEq(reclaimed, 1e18 - expectedPayout);
+        assertEq(weth.balanceOf(lp), lpBefore + reclaimed);
+        assertEq(weth.balanceOf(address(vault)), 0);
+    }
+
+    /// OTM call: holder redeems for zero, LP reclaims 100%.
+    function test_settleRedeemReclaim_otmCall() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        vm.warp(expiry + 10);
+        oracle.setAnswer(2500e8);
+        settlement.settleWithChainlinkRound(vault.seriesId(authId, STRIKE), 2);
+
+        vm.prank(buyer);
+        uint256 payout = vault.redeem(optionToken, 1e18);
+        assertEq(payout, 0);
+        assertEq(OptionToken(optionToken).balanceOf(buyer), 0);
+
+        vm.prank(lp);
+        assertEq(vault.reclaimCollateral(optionToken), 1e18);
+        assertEq(weth.balanceOf(address(vault)), 0);
+    }
+
+    /// LP reclaiming FIRST must leave the holders' worst-case owed in escrow.
+    function test_reclaimBeforeRedeem_reservesHolderClaim() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        vm.warp(expiry + 10);
+        oracle.setAnswer(3600e8);
+        settlement.settleWithChainlinkRound(vault.seriesId(authId, STRIKE), 2);
+
+        uint256 owed = (1e18 * (3600e18 - STRIKE)) / 3600e18;
+        vm.prank(lp);
+        assertEq(vault.reclaimCollateral(optionToken), 1e18 - owed);
+
+        // The holder's redemption is still fully payable afterwards.
+        vm.prank(buyer);
+        assertEq(vault.redeem(optionToken, 1e18), owed);
+        assertEq(weth.balanceOf(address(vault)), 0);
+    }
+
+    /// ITM put: intrinsic paid in USDC at fixed 6-dec scaling.
+    function test_settleRedeem_itmPut() public {
+        uint256 authId = _authorizePut(10_000e6);
+        uint256 strike = 2800e18;
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, strike, 1e18, type(uint256).max);
+
+        vm.warp(expiry + 10);
+        oracle.setAnswer(2500e8);
+        settlement.settleWithChainlinkRound(vault.seriesId(authId, strike), 2);
+
+        uint256 buyerBefore = usdc.balanceOf(buyer);
+        vm.prank(buyer);
+        uint256 payout = vault.redeem(optionToken, 1e18);
+        assertEq(payout, 300e6); // (2800 - 2500) USD per unit, 6-dec
+        assertEq(usdc.balanceOf(buyer), buyerBefore + 300e6);
+
+        vm.prank(lp);
+        assertEq(vault.reclaimCollateral(optionToken), 2800e6 - 300e6);
+        assertEq(usdc.balanceOf(address(vault)), 0);
     }
 }
