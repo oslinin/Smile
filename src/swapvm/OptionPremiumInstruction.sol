@@ -57,9 +57,9 @@ library OptionPremiumArgsBuilder {
 /// WETH), where tokenOut is pulled just-in-time from the maker wallet through
 /// Aqua and escrowed by the taker-side vault, which mints the OptionToken.
 ///
-/// Sides map onto SwapVM's amount semantics:
-///   exactOut (taker fixes collateral/options wanted) → premium rounds UP  → Ask
-///   exactIn  (taker fixes premium spent)             → options round DOWN → Bid
+/// The strategy quotes a TWO-SIDED market — swap direction selects the side:
+///   forward (premium → collateral): open a position  → priced at Ask (rounds up)
+///   reverse (collateral → premium): sell back / close → priced at Bid (rounds down)
 contract OptionPremiumInstruction {
     using Calldata for bytes;
     using ContextLib for Context;
@@ -67,8 +67,7 @@ contract OptionPremiumInstruction {
     error OptionPremiumMissingArgs();
     error OptionPremiumRecomputeDetected();
     error OptionPremiumExpired(uint256 expiry, uint256 nowTimestamp);
-    error OptionPremiumWrongTokenIn(address tokenIn, address premiumToken);
-    error OptionPremiumWrongTokenOut(address tokenOut, address collateralToken);
+    error OptionPremiumWrongTokenPair(address tokenIn, address tokenOut);
     error OptionPremiumStrikeMissing();
     error OptionPremiumStrikeOutOfRange(uint256 strike, uint256 strikeMin, uint256 strikeMax);
     error OptionPremiumBadOraclePrice(int256 answer);
@@ -96,11 +95,22 @@ contract OptionPremiumInstruction {
     /// @dev Custom instruction body. Maker args are the packed option terms
     /// (see OptionPremiumArgsBuilder); taker instruction args carry the chosen
     /// strike as 32 bytes (optional when strikeMin == strikeMax).
+    ///
+    /// The instruction is TWO-SIDED — direction selects the quote side:
+    ///   forward (premium in  → collateral out): buyer opens  → Ask (rounds against taker)
+    ///   reverse (collateral in → premium out):  holder closes → Bid (rounds against taker)
+    /// One shipped strategy therefore quotes a full two-sided market.
     function _optionPremiumXD(Context memory ctx, bytes calldata args) internal view {
         OptionTerms memory terms = _parseArgs(args);
 
-        require(ctx.query.tokenIn == terms.premiumToken, OptionPremiumWrongTokenIn(ctx.query.tokenIn, terms.premiumToken));
-        require(ctx.query.tokenOut == terms.collateralToken, OptionPremiumWrongTokenOut(ctx.query.tokenOut, terms.collateralToken));
+        bool forward;
+        if (ctx.query.tokenIn == terms.premiumToken && ctx.query.tokenOut == terms.collateralToken) {
+            forward = true;
+        } else if (ctx.query.tokenIn == terms.collateralToken && ctx.query.tokenOut == terms.premiumToken) {
+            forward = false;
+        } else {
+            revert OptionPremiumWrongTokenPair(ctx.query.tokenIn, ctx.query.tokenOut);
+        }
         require(block.timestamp < terms.expiry, OptionPremiumExpired(terms.expiry, block.timestamp));
 
         uint256 strike = _takerStrike(ctx, terms);
@@ -112,18 +122,33 @@ contract OptionPremiumInstruction {
             : DEFAULT_SIGMA;
         uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigmaTenor, terms.alpha, terms.beta);
 
-        if (ctx.query.isExactIn) {
-            // Bid side: taker fixed the premium; options received round DOWN.
-            require(ctx.swap.amountOut == 0, OptionPremiumRecomputeDetected());
-            uint256 premiumWad = SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, true, false);
-            uint256 paidWad = SmileMath.scaleToWad(ctx.swap.amountIn, terms.premiumDecimals);
-            ctx.swap.amountOut = (paidWad * WAD) / premiumWad;
+        // forward → Ask (rounds up), reverse → Bid (rounds down): the spread engine.
+        uint256 premiumWad = SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, true, forward);
+
+        if (forward) {
+            if (ctx.query.isExactIn) {
+                // Buyer fixed the premium budget; option units round DOWN at Ask.
+                require(ctx.swap.amountOut == 0, OptionPremiumRecomputeDetected());
+                uint256 paidWad = SmileMath.scaleToWad(ctx.swap.amountIn, terms.premiumDecimals);
+                ctx.swap.amountOut = (paidWad * WAD) / premiumWad;
+            } else {
+                // Buyer fixed the option units; premium rounds UP at Ask.
+                require(ctx.swap.amountIn == 0, OptionPremiumRecomputeDetected());
+                uint256 costWad = Math.ceilDiv(ctx.swap.amountOut * premiumWad, WAD);
+                ctx.swap.amountIn = SmileMath.scaleFromWad(costWad, terms.premiumDecimals, true);
+            }
         } else {
-            // Ask side: taker fixed the collateral (option units); premium rounds UP.
-            require(ctx.swap.amountIn == 0, OptionPremiumRecomputeDetected());
-            uint256 premiumWad = SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, true, true);
-            uint256 costWad = Math.ceilDiv(ctx.swap.amountOut * premiumWad, WAD);
-            ctx.swap.amountIn = SmileMath.scaleFromWad(costWad, terms.premiumDecimals, true);
+            if (ctx.query.isExactIn) {
+                // Holder sells a fixed number of units; premium out rounds DOWN at Bid.
+                require(ctx.swap.amountOut == 0, OptionPremiumRecomputeDetected());
+                uint256 valueWad = (ctx.swap.amountIn * premiumWad) / WAD;
+                ctx.swap.amountOut = SmileMath.scaleFromWad(valueWad, terms.premiumDecimals, false);
+            } else {
+                // Holder wants fixed premium out; units in round UP at Bid.
+                require(ctx.swap.amountIn == 0, OptionPremiumRecomputeDetected());
+                uint256 outWad = SmileMath.scaleToWad(ctx.swap.amountOut, terms.premiumDecimals);
+                ctx.swap.amountIn = Math.ceilDiv(outWad * WAD, premiumWad);
+            }
         }
     }
 

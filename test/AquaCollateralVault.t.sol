@@ -63,7 +63,11 @@ contract AquaCollateralVaultTest is Test {
         weth.mint(lp, maxCollateral);
         vm.startPrank(lp);
         authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, maxCollateral, address(weth), address(usdc), true);
-        weth.approve(address(aqua), maxCollateral);
+        // Allowance covers CUMULATIVE pulls (capacity restored by sellbacks can
+        // be pulled again), so approve above maxCollateral — max here.
+        weth.approve(address(aqua), type(uint256).max);
+        // Premium-token allowance lets Aqua pull the Bid on sellbacks (close()).
+        usdc.approve(address(aqua), type(uint256).max);
         vm.stopPrank();
         _ship(authId);
     }
@@ -287,20 +291,97 @@ contract AquaCollateralVaultTest is Test {
         vault.buy(authId, 2800e18, 1e18, type(uint256).max);
     }
 
-    // ── close ─────────────────────────────────────────────────────────────────
+    // ── close (sellback at Bid) ───────────────────────────────────────────────
 
-    function test_close_burnsTokenAndReleasesCollateral() public {
+    function test_close_holderReceivesBid_capacityRestored() public {
+        uint256 maxCollateral = 5e18;
+        uint256 authId = _authorizeCall(maxCollateral);
+
+        vm.prank(buyer);
+        (address optionToken, uint256 askPaid) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        uint256 buyerUsdcBefore = usdc.balanceOf(buyer);
+        vm.prank(buyer);
+        uint256 bidReceived = vault.close(optionToken, lp, 1e18, 0);
+
+        // Holder sold back at Bid: paid, positive, and never above the Ask.
+        assertGt(bidReceived, 0);
+        assertLe(bidReceived, askPaid);
+        assertEq(usdc.balanceOf(buyer), buyerUsdcBefore + bidReceived);
+        assertEq(OptionToken(optionToken).balanceOf(buyer), 0);
+
+        // Collateral round-tripped to the LP wallet; escrow empty; position cleared.
+        assertEq(weth.balanceOf(lp), maxCollateral);
+        assertEq(weth.balanceOf(address(vault)), 0);
+        (uint256 locked,) = vault.positions(optionToken, lp);
+        assertEq(locked, 0);
+
+        // Official Aqua virtual balance shows the range's JIT capacity restored.
+        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (uint248 wethBal,) = aqua.rawBalances(lp, address(router), strategyHash, address(weth));
+        assertEq(uint256(wethBal), maxCollateral);
+    }
+
+    function test_close_thenBuyAgainstRestoredCapacity() public {
+        // Capacity 1 WETH: buy 1 → close → buy 1 again must succeed because
+        // the sellback restored the strategy's virtual balance.
+        uint256 authId = _authorizeCall(1e18);
+
+        vm.startPrank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+        vault.close(optionToken, lp, 1e18, 0);
+        vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+        vm.stopPrank();
+
+        assertEq(OptionToken(optionToken).balanceOf(buyer), 1e18);
+    }
+
+    function test_close_minPayoutSlippageReverts() public {
         uint256 authId = _authorizeCall(5e18);
         vm.prank(buyer);
-        vault.buy(authId, STRIKE, 1e18, type(uint256).max);
-
-        address optionToken = vault.optionTokens(authId, STRIKE);
-        uint256 lpWethBefore = weth.balanceOf(lp);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
 
         vm.prank(buyer);
-        vault.close(optionToken, lp, 1e18);
+        vm.expectRevert();
+        vault.close(optionToken, lp, 1e18, type(uint256).max);
+    }
 
-        assertEq(OptionToken(optionToken).balanceOf(buyer), 0);
-        assertGt(weth.balanceOf(lp), lpWethBefore); // LP got collateral back
+    function test_close_lpCannotFundBuyback_reverts() public {
+        uint256 authId = _authorizeCall(5e18);
+        vm.prank(buyer);
+        (address optionToken, uint256 premiumPaid) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        // LP spends the earned premium elsewhere — the Bid pull has nothing to take.
+        vm.prank(lp);
+        usdc.transfer(address(0xDEAD), premiumPaid);
+
+        vm.prank(buyer);
+        vm.expectRevert();
+        vault.close(optionToken, lp, 1e18, 0);
+    }
+
+    function test_closePut_holderPaid_capacityRestored() public {
+        uint256 maxCollateral = 10_000e6;
+        uint256 authId = _authorizePut(maxCollateral);
+        uint256 strike = 2800e18;
+        uint256 collateral = (strike * 1e18) / 1e30;
+
+        vm.prank(buyer);
+        (address optionToken, uint256 askPaid) = vault.buy(authId, strike, 1e18, type(uint256).max);
+
+        uint256 buyerUsdcBefore = usdc.balanceOf(buyer);
+        vm.prank(buyer);
+        uint256 bidReceived = vault.close(optionToken, lp, 1e18, 0);
+
+        assertGt(bidReceived, 0);
+        assertLe(bidReceived, askPaid);
+        assertEq(usdc.balanceOf(buyer), buyerUsdcBefore + bidReceived);
+        assertEq(usdc.balanceOf(address(vault)), 0); // escrow returned
+
+        // Virtual balance: -collateral (buy pull) -bid (close pull) +collateral (close push)
+        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (uint248 bal,) = aqua.rawBalances(lp, address(vault), strategyHash, address(usdc));
+        assertEq(uint256(bal), maxCollateral - bidReceived);
+        assertLt(bidReceived, collateral); // sanity: bid ≪ cash security
     }
 }

@@ -96,8 +96,9 @@ const VAULT_ABI = [
       { name: "optionToken", type: "address" },
       { name: "lp", type: "address" },
       { name: "amount", type: "uint256" },
+      { name: "minPayout", type: "uint256" },
     ],
-    outputs: [],
+    outputs: [{ name: "payout", type: "uint256" }],
   },
   {
     name: "optionTokens",
@@ -682,7 +683,9 @@ function ClosePanel({ optionToken, lp, balance, onClose, colSpan = 6 }: ClosePan
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
       functionName: "close",
-      args: [optionToken as `0x${string}`, lp as `0x${string}`, balance],
+      // minPayout 0: sellback accepts any Bid (the holder is exiting; the Bid
+      // itself is computed on-chain from the live surface)
+      args: [optionToken as `0x${string}`, lp as `0x${string}`, balance, BigInt(0)],
     });
   };
 
