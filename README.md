@@ -59,6 +59,15 @@ The liquidity layer runs on the **official contracts** — [`1inch/aqua`](https:
 - **Covered calls** execute as official SwapVM swaps (premium `Aqua.push()`ed to the LP wallet, collateral `Aqua.pull()`ed JIT). **Cash-secured puts** use the vault itself as an official `AquaApp` (same JIT `pull()`, under the official per-strategy reentrancy lock) since premium and collateral share one token (USDC).
 - **Capacity is enforced by Aqua itself**: over-buying a range underflows the maker's virtual balance inside the official `Aqua.pull()` — the vault keeps no parallel accounting. On a mainnet fork the deploy script reuses the **production Aqua deployment** (`0x4999…6D31`).
 
+### Revenue model (protocol fee via the official fee opcode)
+
+Every option **buy** carries a protocol fee (default 1%, capped at 5%) that accrues to a fee recipient — e.g. the 1inch DAO treasury — routed through the **official SwapVM fee instruction**, not custom plumbing:
+
+- The call-strategy program grows to five instructions: `salt → deadline → jumpIfTokenIn → aquaProtocolFee → optionPremium`. The official `Fee._aquaProtocolFeeAmountInXD` (opcode 28) grosses the fee up **on top of the Ask** — the buyer pays `ask + fee`, the fee recipient is paid through the official `Aqua.pull()`, and **the LP always nets the full premium**.
+- The official `Controls._jumpIfTokenIn` (opcode 11) makes fees **direction-aware in bytecode**: sellbacks (collateral-in) jump past the fee instruction, so closing a position is fee-free and never double-charges.
+- Puts (the vault-as-AquaApp leg) apply the identical gross-up vault-side.
+- Fee terms are **snapshotted per authorization** — an LP sees the exact fee at ship time and it can never change under them; governance changes apply only to new ranges. Fee-enabled ranges ship with $25 of premium-token virtual headroom (an allowance number, no tokens move) because the official opcode pulls the fee before the buyer's premium push lands.
+
 ### Collateralization Model
 
 **V1 (current) — Cash-Secured / Covered (Fully Collateralized)**

@@ -115,7 +115,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
 
-        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active,,,,,,) =
+        (address storedLp, uint256 sMin, uint256 sMax, uint256 exp,,,, bool isCall, bool active,,,,,,,,) =
             vault.authorizations(authId);
 
         assertEq(storedLp, lp);
@@ -130,7 +130,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         uint256 authId = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
 
-        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
         // The vault-stored hash IS the official SwapVM order hash for Aqua orders,
         // and matches the hash Aqua derives from the shipped strategy bytes.
         assertEq(strategyHash, router.hash(vault.buildOrder(authId)));
@@ -164,7 +164,7 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         vault.revokeAuthorization(authId);
 
-        (,,,,,,,, bool active,,,,,,) = vault.authorizations(authId);
+        (,,,,,,,, bool active,,,,,,,,) = vault.authorizations(authId);
         assertFalse(active);
     }
 
@@ -191,7 +191,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(weth.balanceOf(address(vault)), amount);
 
         // Aqua virtual balances mirror the strategy state.
-        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
         (uint248 wethBal,) = aqua.rawBalances(lp, address(router), strategyHash, address(weth));
         assertEq(uint256(wethBal), maxCollateral - amount);
 
@@ -279,7 +279,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(usdc.balanceOf(lp), lpUsdcBefore - expectedCollateral + premiumPaid);
         assertEq(usdc.balanceOf(address(vault)), expectedCollateral);
 
-        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
         (uint248 bal,) = aqua.rawBalances(lp, address(vault), strategyHash, address(usdc));
         assertEq(uint256(bal), maxCollateral - expectedCollateral);
 
@@ -322,7 +322,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(locked, 0);
 
         // Official Aqua virtual balance shows the range's JIT capacity restored.
-        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
         (uint248 wethBal,) = aqua.rawBalances(lp, address(router), strategyHash, address(weth));
         assertEq(uint256(wethBal), maxCollateral);
     }
@@ -384,7 +384,7 @@ contract AquaCollateralVaultTest is Test {
         assertEq(usdc.balanceOf(address(vault)), 0); // escrow returned
 
         // Virtual balance: -collateral (buy pull) -bid (close pull) +collateral (close push)
-        (,,,,,,,,,,,, bytes32 strategyHash,,) = vault.authorizations(authId);
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
         (uint248 bal,) = aqua.rawBalances(lp, address(vault), strategyHash, address(usdc));
         assertEq(uint256(bal), maxCollateral - bidReceived);
         assertLt(bidReceived, collateral); // sanity: bid ≪ cash security
@@ -505,5 +505,93 @@ contract AquaCollateralVaultTest is Test {
         vm.prank(lp);
         assertEq(vault.reclaimCollateral(optionToken), 2800e6 - 300e6);
         assertEq(usdc.balanceOf(address(vault)), 0);
+    }
+
+    // ── protocol fee (official SwapVM fee opcode → DAO revenue) ───────────────
+
+    address dao = address(0xDA0);
+    uint32 constant FEE_BPS = 0.01e9; // 1% (scale 1e9 = 100%)
+
+    function _authorizeCallWithFee(uint256 maxCollateral) internal returns (uint256 authId) {
+        vault.setProtocolFee(FEE_BPS, dao);
+        authId = _authorizeCall(maxCollateral);
+        // The official fee opcode pulls the fee BEFORE the buyer's premium
+        // push lands, so the LP wallet needs a small float on the first trade.
+        usdc.mint(lp, 100e6);
+    }
+
+    function test_setProtocolFee_guards() public {
+        vm.expectRevert("fee too high");
+        vault.setProtocolFee(0.06e9, dao); // > 5% cap
+
+        vm.expectRevert("no recipient");
+        vault.setProtocolFee(FEE_BPS, address(0));
+
+        vm.prank(buyer);
+        vm.expectRevert();
+        vault.setProtocolFee(FEE_BPS, dao); // not owner
+    }
+
+    function test_shipParams_feeSeedOnlyWhenFeeEnabled() public {
+        vm.prank(lp);
+        uint256 noFeeAuth = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
+        (,,, uint256[] memory amountsNoFee) = vault.getShipParams(noFeeAuth);
+        assertEq(amountsNoFee[1], 0);
+
+        vault.setProtocolFee(FEE_BPS, dao);
+        vm.prank(lp);
+        uint256 feeAuth = vault.authorizeRange(STRIKE_MIN, STRIKE_MAX, expiry, 5e18, address(weth), address(usdc), true);
+        (,,, uint256[] memory amountsFee) = vault.getShipParams(feeAuth);
+        assertEq(amountsFee[1], 25e6); // $25 headroom for the first fee pulls
+    }
+
+    function test_buyWithFee_daoAccrues_lpNetsFullAsk() public {
+        uint256 authId = _authorizeCallWithFee(5e18);
+        uint256 lpUsdcBefore = usdc.balanceOf(lp);
+
+        uint256 ask = _expectedCallAskUsdc(STRIKE, 1e18);
+        uint256 expectedFee = (ask * FEE_BPS) / (1e9 - FEE_BPS); // official gross-up, floor
+
+        vm.prank(buyer);
+        (, uint256 premiumPaid) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        // Buyer paid Ask + fee; DAO accrued the fee; LP netted the FULL Ask.
+        assertEq(premiumPaid, ask + expectedFee);
+        assertEq(usdc.balanceOf(dao), expectedFee);
+        assertEq(usdc.balanceOf(lp), lpUsdcBefore + ask);
+
+        // Strategy virtual balance: seed + push(ask+fee) - fee pull = seed + ask.
+        (,,,,,,,,,,,, bytes32 strategyHash,,,,) = vault.authorizations(authId);
+        (uint248 usdcBal,) = aqua.rawBalances(lp, address(router), strategyHash, address(usdc));
+        assertEq(uint256(usdcBal), 25e6 + ask);
+    }
+
+    function test_sellbackWithFee_reverseDirectionIsFeeFree() public {
+        uint256 authId = _authorizeCallWithFee(5e18);
+        vm.prank(buyer);
+        (address optionToken,) = vault.buy(authId, STRIKE, 1e18, type(uint256).max);
+
+        uint256 daoAfterBuy = usdc.balanceOf(dao);
+        vm.prank(buyer);
+        uint256 bidReceived = vault.close(optionToken, lp, 1e18, 0);
+
+        // jumpIfTokenIn skipped the fee opcode on the reverse (collateral-in) leg.
+        assertGt(bidReceived, 0);
+        assertEq(usdc.balanceOf(dao), daoAfterBuy);
+    }
+
+    function test_buyPutWithFee_sameGrossUp() public {
+        vault.setProtocolFee(FEE_BPS, dao);
+        uint256 authId = _authorizePut(10_000e6);
+        uint256 lpUsdcBefore = usdc.balanceOf(lp);
+
+        vm.prank(buyer);
+        (, uint256 premiumPaid) = vault.buy(authId, 2800e18, 1e18, type(uint256).max);
+
+        uint256 fee = usdc.balanceOf(dao);
+        assertGt(fee, 0);
+        // Buyer paid LP-premium + fee; LP netted premium minus the collateral pull.
+        uint256 collateral = (2800e18 * 1e18) / 1e30;
+        assertEq(usdc.balanceOf(lp), lpUsdcBefore + (premiumPaid - fee) - collateral);
     }
 }

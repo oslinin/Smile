@@ -115,6 +115,12 @@ contract Deploy is Script, StdCheats {
         settlement.setRegistrar(address(vault));
         vault.setSettlement(address(settlement));
 
+        // ── Protocol fee: 1% of every premium, grossed up on the Ask and
+        //    routed through the official SwapVM fee opcode to the DAO
+        //    treasury (FEE_RECIPIENT env; deployer placeholder locally) ─────
+        address dao = vm.envOr("FEE_RECIPIENT", deployer);
+        vault.setProtocolFee(0.01e9, dao);
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
