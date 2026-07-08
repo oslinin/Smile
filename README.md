@@ -13,13 +13,15 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 3. [Mathematical Specification](#-mathematical-specification)
 4. [Flow Diagrams](#-flow-diagrams)
 5. [Deployed Addresses (Sepolia)](#-deployed-addresses-sepolia)
-6. [Deployment Notes & Failures](#%EF%B8%8F-deployment-notes--failures)
-7. [How to Run the Project](#%EF%B8%8F-how-to-run-the-project)
-8. [End-to-End Demo Walkthrough](#end-to-end-demo-walkthrough)
-9. [Glossary](#-glossary)
-10. [Project Structure](#%EF%B8%8F-project-structure)
-11. [Technical Stack](#technical-stack)
-12. [Foundry Usage](#foundry-usage)
+6. [How to Run the Project](#%EF%B8%8F-how-to-run-the-project)
+7. [End-to-End Demo Walkthrough](#end-to-end-demo-walkthrough)
+8. [Glossary](#-glossary)
+9. [Project Structure](#%EF%B8%8F-project-structure)
+10. [Technical Stack](#technical-stack)
+
+More docs: [Aqua Incubator grant proposal](docs/aqua-incubator-proposal.md) ·
+[build notes & war stories](docs/build-notes.md) ·
+[verified CRE simulation transcript](docs/cre-simulation.md)
 
 ---
 
@@ -44,7 +46,7 @@ Smile attempts to overcome these limitations to on-chain standard opions trading
 | :------------- | :-------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Pricing**    | `SmileSwapVMRouter` + `OptionPricingEngine`   | Custom instruction (opcode 33) on the **official 1inch SwapVM** pricing off a **multiparameter vol surface**: σ per tenor bucket + skew, $\sigma_{strike} = \sigma_{tenor} \cdot (1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S))$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$. The instruction is **two-sided**: forward direction prices the Ask, reverse the Bid. Oracle reads enforce Chainlink freshness. |
 | **Liquidity**  | **official 1inch `Aqua`** + `AquaCollateralVault` | LP calls `authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})`, then ships the strategy with the official `Aqua.ship()`. On `buy()`, the SwapVM swap `Aqua.push()`es the premium into the LP wallet and `Aqua.pull()`s collateral JIT into escrow. OptionToken deployed lazily per strike. |
-| **Market**     | `OptionPricingHook` + **Uniswap Trading API** | v4 Hook: `beforeSwap` vetoes mispriced trades; `afterSwap` adjusts $\sigma_{global}$. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer's ETH→USDC premium swap via the Universal Router on each trade. |
+| **Market**     | `OptionPricingHook` + **Uniswap Trading API** | v4 Hook: `beforeSwap` vetoes mispriced trades; `afterSwap` shifts the vol surface. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer's ETH→USDC premium swap via the Universal Router on each trade. |
 | **Settlement** | `AquaOptionSettlement` + Chainlink CRE        | Every minted series is registered at buy time. At expiry, settlement is **permissionless**: anyone supplies the Chainlink roundId covering expiry and the contract verifies on-chain that it is the first post-expiry round (`settleWithChainlinkRound`) — no trusted writer. The scheduled CRE DON path (`settleSeries`) remains as a keeper. Holders `redeem()` the cash-settled intrinsic from the vault; LPs `reclaimCollateral()` for the exact remainder. |
 | **Asset**      | `OptionToken`                                 | ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.                                                                                                |
 
@@ -86,30 +88,33 @@ This model unlocks capital efficiency but requires an on-chain margin engine, a 
 
 ## 📐 Mathematical Specification
 
-### 1. Parametric Volatility Smile
+### 1. Multiparameter Volatility Surface
 
-$$\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$$
+$$\sigma_{strike}(T) = \sigma_{tenor}(T) \cdot \max\!\big(0.1,\; 1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S)\big)$$
 
-- $\sigma_{global}$: demand-weighted baseline IV, adjusted by every primary-market trade and secondary-market swap.
-- $\alpha$: smile curvature (default 2.0). OTM/ITM strikes price above $\sigma_{global}$; ATM returns $\sigma_{global}$ exactly.
-- $K/S$: moneyness ratio.
+- $\sigma_{tenor}(T)$: demand-driven IV stored **per tenor bucket** — $[0,7d)$, $[7,30d)$, $[30,90d)$, $[90d,\infty)$ — the term structure of the surface (`OptionPricingHook.sigmaFor`).
+- $\alpha$: smile curvature (default 2.0). OTM/ITM strikes price above the tenor σ; ATM returns it exactly.
+- $\beta$: signed **skew** tilt (default 0; negative = downside/put skew, matching empirical crypto markets).
+- The multiplier is floored at 0.1 so deep wings can never collapse σ to zero.
 
 ### 2. Premium Calculation
 
-$$P = \underbrace{\max(S - K,\, 0)}_{\text{intrinsic}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T}}_{\text{time-value}}$$
+$$P = \underbrace{\max(\pm(S - K),\, 0)}_{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}$$
 
-- **Ask (buy):** rounds up 1 wei.
-- **Bid (sell):** floor.
+- **Ask** (forward swap direction, opening): rounds against the taker (up).
+- **Bid** (reverse direction, sellback): rounds down. One strategy quotes both sides; the rounding asymmetry is the spread engine.
+- A protocol fee (default 1%) is grossed up **on top of** the Ask via the official SwapVM fee opcode — the LP always nets the full premium. Sellbacks are fee-free.
 
 Gas-efficient on-chain approximation — omits $N(d_1)$ and $N(d_2)$ to avoid square-root-heavy distributions.
 
-### 3. σ Feedback Loop
+### 3. σ Feedback Loop (tenor-aware)
 
-$$\sigma_{global,\,t+1} = \sigma_{global,\,t} + \gamma \cdot \text{sign}(\text{trade})$$
+$$\sigma_{tenor,\,t+1} = \sigma_{tenor,\,t} + \gamma \cdot \text{sign}(\text{trade})$$
 
-- $+\gamma$ on every `buy()` or secondary-market `exactOut` swap (demand signal).
-- $-\gamma$ on every `close()` or secondary-market `exactIn` swap (supply signal).
-- $\gamma = 0.5\%$ per trade. This creates a price-impact-like mechanism: heavy buying steepens the smile and raises premiums, attracting arbitrageurs who sell/close to earn the spread.
+- $+\gamma$ on every `buy()` — bumps **only the traded tenor bucket**.
+- $-\gamma$ on every `close()` sellback — decays the same bucket.
+- Uniswap v4 `afterSwap` (no tenor info) shifts the whole surface.
+- $\gamma = 0.5\%$ per trade. This creates a price-impact-like mechanism: heavy buying steepens the surface and raises premiums, attracting arbitrageurs who sell back to earn the spread.
 
 ### 4. Black-Scholes Delta (Frontend)
 
@@ -121,22 +126,21 @@ $N(\cdot)$ is approximated via Abramowitz & Stegun 26.2.17 (max error $1.5 \time
 
 > Delta ranges 0–1 for calls (0 = deep OTM, 1 = deep ITM). A 0.5-delta call is approximately ATM.
 
-### 5. Chainlink CRE — Decentralized Expiry Settlement
+### 5. Expiry Settlement — Permissionless + Chainlink CRE
 
-**Why the app needs CRE.** A parametric option is only as trustworthy as the price it settles against. At expiry every open series needs one **final spot price** $S_{final}$ written on-chain, because that single number decides every payout: holders redeem the in-the-money difference and the LP reclaims the remaining collateral (see [§6 flow](#6-settlement--redemption-chainlink-cre)). Settlement is the one part of the option lifecycle that can't be a pure on-chain formula — it needs an external price *and* a guaranteed trigger at $\text{DTE}=0$, with no trusted keeper in the loop.
+A parametric option is only as trustworthy as the price it settles against. At expiry every open series needs one **final spot price** $S_{final}$ written on-chain, because that single number decides every payout: holders redeem the in-the-money intrinsic and the LP reclaims the remainder (see [§6 flow](#6-settlement--redemption)). Every series is registered with `AquaOptionSettlement` at first mint, and can then be settled by **either of two paths**:
 
-**What CRE does for Smile** — it is the settlement layer:
+**Path A — permissionless Chainlink-round settlement (trustless).** Anyone — a keeper, the holder, the LP — calls `settleWithChainlinkRound(seriesId, roundId)` with the Chainlink ETH/USD round covering expiry. The contract verifies on-chain that the round was updated **at/after expiry** and that its predecessor was updated **before** expiry (i.e. it is the *first* post-expiry round), so nobody can cherry-pick a later, more favorable price:
 
-- **Scheduled, not poked** — a CRE *cron trigger* fires the settlement workflow at expiry, so no keeper bot or user transaction is required to settle a series.
-- **Reads the canonical feed** — the DON reads the same **Chainlink ETH/USD aggregator** the frontend uses for live spot ([`0x694AA1…25306`](frontend/hooks/useUniswapSpot.ts#L11) on Sepolia) via `latestRoundData()` at the last *finalized* block, so every node observes an identical value:
+$$S_{final} = \mathtt{getRoundData(roundId).answer} \;\; (\text{8-dec}) \;\rightarrow\; \text{WAD 18-dec}$$
 
-$$S_{final} = \mathtt{latestRoundData().answer} \;\; (\text{8-dec}) \;\rightarrow\; \text{USDC 6-dec}$$
+No trusted writer exists on this path — settlement liveness reduces to the feed's.
 
-- **Signed, on-chain write** — the DON signs the consensus result and delivers it through the CRE forwarder, which calls `AquaOptionSettlement.settleSeries(seriesId, S_final)`. That call is the single on-chain state change that flips a series from *open* to *settled* and unlocks redemption.
+**Path B — Chainlink CRE (scheduled keeper).** A CRE *cron trigger* fires the settlement workflow at expiry: the DON reads the same aggregator at the last *finalized* block (every node observes an identical value), reaches consensus, and the DON-signed report calls `settleSeries(seriesId, S_final)` through the CRE forwarder — so a series settles on schedule even if nobody races to call Path A.
 
-In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, and **Chainlink CRE closes the loop at expiry** — turning a live series into a settled, redeemable claim using the project's canonical price feed, on a schedule, with no trusted keeper.
+In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, and settlement is **available trustlessly to anyone** with Chainlink CRE as the scheduled closer.
 
-> **Design note.** Because the settlement price is read from an on-chain Chainlink feed, the DON's role here is a *scheduled, trust-minimized keeper* (deterministic read + signed write) rather than novel off-chain data sourcing. Swapping the on-chain feed read for direct CEX fetches with median DON consensus is a localized change to the workflow's price-read step if a venue price is ever preferred over the aggregator.
+> **Design note.** Because both paths resolve to the on-chain Chainlink feed, the DON's role is a *scheduled, trust-minimized keeper* (deterministic read + signed write) rather than novel off-chain data sourcing.
 
 ---
 
@@ -157,44 +161,49 @@ sequenceDiagram
     participant Settle as 🟢 AquaOptionSettlement
 
     rect rgba(60,80,120,0.12)
-    Note over Trader,Maker: Trade (pre-expiry) — no Chainlink CRE involved
-    Trader->>Frontend: Select strike & expiry
-    Frontend->>SwapVM: quote(S, K, T, σ)
-    SwapVM-->>Frontend: Bid / Ask
-    Frontend-->>Trader: Option matrix
-    Trader->>Aqua: buy(strike, amount)
-    Aqua->>SwapVM: validate price
-    Aqua->>Maker: pull collateral JIT
-    Aqua->>Maker: transfer premium
+    Note over Trader,Maker: Trade (pre-expiry)
+    Trader->>Frontend: Select strike & expiry (or compose a strategy)
+    Frontend->>SwapVM: quote(order, tokens, amount)
+    SwapVM-->>Frontend: Ask (fee-inclusive)
+    Frontend-->>Trader: Option matrix / strategy builder
+    Trader->>Aqua: buy(authId, K, amount, maxPremium)
+    Aqua->>SwapVM: swap — custom optionPremium opcode prices at Ask
+    SwapVM->>Maker: Aqua.push premium → LP wallet
+    SwapVM->>Maker: Aqua.pull collateral JIT → vault escrow
+    Note over SwapVM: Aqua.pull fee → DAO treasury (1%)
     Aqua-->>Trader: OptionToken minted
     end
 
     rect rgba(40,90,140,0.18)
-    Note over CRE,Settle: Expiry settlement (DTE = 0) — Chainlink CRE
-    CRE->>CRE: cron trigger → read Chainlink ETH/USD feed → DON consensus
-    CRE->>Settle: settleSeries(seriesId, S_final) · onlyCRE
+    Note over CRE,Settle: Expiry settlement (DTE = 0) — two paths
+    Trader->>Settle: settleWithChainlinkRound(seriesId, roundId) — ANYONE, trustless
+    Note over Settle: verifies first post-expiry round on-chain
+    CRE->>Settle: …or settleSeries(S_final) via scheduled DON (onlyCRE)
     Note over Settle: series settled=true → redemption unlocked
-    Trader->>Settle: redeem() → ITM payout
-    Maker->>Settle: reclaimCollateral() → remainder
+    Trader->>Aqua: redeem(optionToken, amount) → ITM intrinsic from escrow
+    Maker->>Aqua: reclaimCollateral(optionToken) → exact remainder
     end
 ```
 
-### 1. Range Authorization (LP)
+### 1. Range Authorization + Ship (LP)
 
-The LP authorizes a strike range from one collateral pool. No collateral moves at this stage — it stays in the LP's wallet earning yield. The LP also pre-approves the vault to spend up to `maxCollateral` JIT.
+The LP authorizes a strike range from one collateral pool, then ships it on the **official Aqua registry**. No collateral moves at any stage — it stays in the LP's wallet earning yield; `Aqua.ship()` only records virtual balances.
 
 ```mermaid
 sequenceDiagram
     participant LP
     participant Frontend
     participant Vault as 🟢 AquaCollateralVault
+    participant Aqua as 🟢 official 1inch Aqua
 
     LP->>Frontend: K_min, K_max, DTE, maxCollateral
-    Frontend->>LP: ERC20.approve(vault, maxCollateral)
+    Frontend->>Aqua: ERC20.approve(Aqua) — collateral + premium token
     Note over LP: collateral stays in wallet — earns yield until matched
-    Frontend->>Vault: authorizeRange(K_min..K_max, DTE, maxCollateral)
-    Vault-->>Frontend: authId
-    Frontend-->>LP: ✓ range active
+    Frontend->>Vault: authorizeRange(...) → authId
+    Vault-->>Frontend: getShipParams(authId) — exact official calldata
+    Frontend->>Aqua: ship(app, strategy, tokens, amounts)
+    Note over Aqua: strategy = real SwapVM bytecode (salt → deadline → jumpIfTokenIn → fee → optionPremium)
+    Aqua-->>LP: ✓ range live — one balance quotes the whole chain
 ```
 
 ### 2. Primary Market Buy (Trader)
@@ -206,43 +215,48 @@ sequenceDiagram
     participant Buyer
     participant UniAPI as 🩷 Uniswap Trading API
     participant Vault as 🟢 AquaCollateralVault
+    participant Router as 🟢 SmileSwapVMRouter (official SwapVM)
     participant LP as 🟢 LP Wallet
+    participant DAO as 🟢 Fee Recipient (DAO)
 
-    Note over Buyer: PricingEngine returns ask price (σ, K, DTE)
-    Buyer->>UniAPI: EXACT_OUTPUT ETH→USDC
+    Buyer->>UniAPI: EXACT_OUTPUT ETH→USDC (premium funding)
     UniAPI-->>Buyer: Universal Router calldata
-    Buyer->>Vault: buy(authId, K, amount)
-    Vault->>LP: pull collateral JIT
-    Vault->>LP: transfer USDC premium
+    Buyer->>Vault: buy(authId, K, amount, maxPremium)
+    Vault->>Router: quote + swap — taker picks K via instruction args
+    Note over Router: custom opcode 33 prices Ask off the live vol surface
+    Router->>LP: Aqua.push premium (ask + fee) → LP wallet
+    Router->>DAO: Aqua.pull fee (1% gross-up) → treasury
+    Router->>Vault: Aqua.pull collateral JIT → escrow
     Vault->>Buyer: mint OptionToken
-    Note over Vault: Hook bumps σ_global post-buy
+    Note over Vault: Hook bumps the traded tenor bucket σ += γ
 ```
 
-### 3. Close Position / Early Unwind (Holder)
+### 3. Close Position = Sellback at Bid (Holder)
 
-A holder unwinds before expiry. Vault burns their tokens, returns collateral to LP pro-rata, and decrements σ. This path is also exercised by arbitrageurs closing delta-hedged positions.
+A holder exits before expiry by **selling the option back at the live Bid** — a *reverse* swap through the same shipped SwapVM strategy. Escrowed collateral returns to the LP wallet via `Aqua.push()`, which **restores the range's JIT capacity**; the Bid premium is `Aqua.pull()`ed from the LP wallet straight to the holder (funded by premiums the LP already earned). Sellbacks are fee-free — the strategy bytecode jumps past the fee opcode in the reverse direction. This is also the path arbitrageurs use to monetize σ corrections.
 
 ```mermaid
 sequenceDiagram
     participant Holder
-    participant Frontend
     participant Vault as 🟢 AquaCollateralVault
+    participant Router as 🟢 SmileSwapVMRouter (official SwapVM)
     participant LP as 🟢 LP Wallet
     participant Hook as 🩷 OptionPricingHook
 
-    Holder->>Frontend: Click Close
-    Holder->>Vault: close(optionToken, lp, amount)
-    Note over Vault: collateralToRelease = locked * amount / supply
+    Holder->>Vault: close(optionToken, lp, amount, minPayout)
     Vault->>Vault: OptionToken.burn(holder, amount)
-    Vault->>LP: transfer collateral pro-rata
-    Vault->>Hook: bumpSigma(isBuy=false)
-    Note over Hook: σ_global -= γ
-    Vault-->>Holder: ✓ closed
+    Vault->>Router: reverse swap (collateral in → premium out)
+    Note over Router: jumpIfTokenIn skips the fee — Bid priced by opcode 33
+    Router->>LP: Aqua.push collateral → wallet (capacity self-restores)
+    Router->>Holder: Aqua.pull Bid premium → holder
+    Vault->>Hook: bumpSigma(false, timeToExpiry)
+    Note over Hook: traded tenor bucket σ -= γ
+    Vault-->>Holder: ✓ sold back at Bid
 ```
 
 ### 4. Arbitrageur as Emergent Market Maker
 
-When on-chain σ diverges from market IV, arbitrageurs can capture the spread by buying the primary market and hedging on spot. Their close activity re-equilibrates σ_global. This is the emergent market-making loop.
+When on-chain σ diverges from market IV, arbitrageurs capture the spread by buying at the Ask, delta-hedging on spot, and **selling back at the Bid** once their own demand re-rates σ. The sellback mechanism is what makes the round trip monetizable — their activity *is* the correction. This is the emergent market-making loop.
 
 ```mermaid
 sequenceDiagram
@@ -251,11 +265,11 @@ sequenceDiagram
     participant UniPool as 🩷 Uniswap v4 ETH/USDC
     participant Hook as 🩷 OptionPricingHook
 
-    Note over Arb: σ_global < market IV — options underpriced
-    Arb->>Vault: buy(authId, K, amount)
+    Note over Arb: σ_tenor < market IV — options underpriced
+    Arb->>Vault: buy(authId, K, amount, maxPremium) — at Ask
     Arb->>UniPool: short ETH delta hedge
-    Note over Arb: σ_global rises toward market IV
-    Arb->>Vault: close(optionToken, lp, amount)
+    Note over Arb: σ_tenor rises toward market IV
+    Arb->>Vault: close(optionToken, lp, amount, minPayout) — at Bid
     Arb->>UniPool: unwind delta hedge
     Note over Arb: profit = (σ_market - σ_entry) * vega
 ```
@@ -282,35 +296,48 @@ sequenceDiagram
     Hook-->>Pool: ✓ σ updated
 ```
 
-### 6. Settlement & Redemption (Chainlink CRE)
+### 6. Settlement & Redemption
 
-At expiry, the CRE DON reads the Chainlink ETH/USD feed (the same one the app uses for spot), reaches consensus on the finalized value, and calls `settleSeries()`. Holders redeem ITM payouts; LP reclaims remaining collateral.
+Every series is registered at first mint. At expiry it settles through either path — **permissionlessly** with the Chainlink round covering expiry (verified on-chain, no trusted writer), or via the scheduled **CRE DON**. Holders then redeem the cash-settled intrinsic from the vault's escrow; the LP reclaims the exact remainder — in any order, with full conservation.
 
 ```mermaid
 sequenceDiagram
+    participant Anyone
     participant CRE as 🔵 Chainlink CRE DON
     participant Feed as 🔵 Chainlink ETH/USD Feed
-    participant Settlement as 🟢 AquaOptionSettlement
+    participant Settlement as 🟢 AquaOptionSettlement (price registry)
+    participant Vault as 🟢 AquaCollateralVault (escrow)
     participant Maker as 🟢 Maker (LP)
     participant Holder as Trader (Holder)
 
-    Note over CRE,Settlement: Expiry settlement runs only through Chainlink CRE
-    Note over CRE: cron trigger at DTE=0
-    CRE->>Feed: latestRoundData() @ finalized block
-    Feed-->>CRE: answer (8-dec)
-    Note over CRE: DON consensus → S_final (→ USDC 6-dec)
-    CRE->>Settlement: settleSeries(seriesId, S_final) · onlyCRE forwarder
-    Note over Settlement: settled=true (redemption was blocked until now)
-    Holder->>Settlement: redeem(seriesId, amount)
-    Note over Settlement: ITM: payout = (S_final-K)*amount
-    Settlement->>Holder: transfer payout
-    Maker->>Settlement: reclaimCollateral(seriesId)
-    Settlement->>Maker: transfer remainder
+    alt Path A — permissionless (trustless)
+        Anyone->>Settlement: settleWithChainlinkRound(seriesId, roundId)
+        Settlement->>Feed: getRoundData(roundId) + predecessor
+        Note over Settlement: verify FIRST round at/after expiry → S_final (WAD)
+    else Path B — scheduled CRE keeper
+        CRE->>Feed: latestRoundData() @ finalized block
+        Note over CRE: DON consensus → S_final (WAD)
+        CRE->>Settlement: settleSeries(seriesId, S_final) · onlyCRE forwarder
+    end
+    Note over Settlement: settled=true — price written exactly once
+
+    Holder->>Vault: redeem(optionToken, amount)
+    Note over Vault: call → (S−K)/S of collateral per unit · put → (K−S) USDC
+    Vault->>Holder: transfer intrinsic from escrow
+    Maker->>Vault: reclaimCollateral(optionToken)
+    Vault->>Maker: everything not owed to outstanding holders
 ```
 
 ---
 
 ## 📍 Deployed Addresses (Sepolia)
+
+> ⚠️ **Stale — v1 deployment.** These are the original hackathon contracts, deployed
+> **before** the official Aqua/SwapVM integration, the two-sided sellback, trustless
+> settlement, and the protocol fee. Their ABIs are incompatible with the current
+> frontend; a redeploy of the new stack (Aqua, `SmileSwapVMRouter`, oracle, vault,
+> settlement) is pending. Until then, use the [local Anvil path](#4-deploy-to-anvil-local),
+> which deploys and exercises everything.
 
 | Contract                 | Address                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -321,16 +348,7 @@ sequenceDiagram
 | **USDC** (Circle Sepolia) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) |
 | **WETH** (canonical Sepolia) | [`0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9`](https://sepolia.etherscan.io/address/0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9) |
 
-> _Live on Sepolia testnet. Frontend deployed at **https://oslinin.github.io/Smile** (WalletConnect enabled — switch MetaMask to Sepolia to interact)._
-
----
-
-## ⚠️ Deployment Notes & Failures
-
-1. **HookMiner Latency**: Finding a Uniswap v4 Hook address with the required flag prefix took significantly longer than expected, delaying `OptionPricingHook` deployment.
-2. **SwapVM Instruction Set**: The first iteration modeled SwapVM with a stand-in Solidity engine. It has since been replaced by a real custom instruction (opcode 33) on the official `SwapVM` + `AquaOpcodes` base — the maker strategy is genuine VM bytecode (`salt → deadline → optionPremium`) shipped through the official `Aqua.ship()`. Packing the option terms into the 255-byte instruction-args budget required a hand-packed 126-byte layout. Stack-too-deep errors were resolved by enabling `via_ir = true` in `foundry.toml`.
-3. **Chainlink CRE Price Source**: An initial design fetched ETH/USD from CEX REST APIs per node, which hit Binance V3 rate limits and risked cross-node divergence during simulation. Resolved by reading the canonical Chainlink ETH/USD aggregator on-chain at the last finalized block — every DON node observes the same value, so settlement consensus is deterministic and matches the price the app displays.
-4. **GitHub Pages SPA Routing**: Next.js static export broke on refresh. Fixed with `.nojekyll` and static export config.
+> _Frontend deployed at **https://oslinin.github.io/Smile** (WalletConnect enabled). The live site currently targets the v1 contracts above — on-chain interactions there will work again after the Sepolia redeploy._
 
 ---
 
@@ -348,13 +366,19 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Connect MetaMask to Sepolia.
+Open http://localhost:3000. The UI includes the option-chain matrix, the LP
+range-authorization flow, and an OptionStrat-style **strategy builder** —
+20 named strategies (spreads, condors, butterflies, straddles, backspreads,
+calendars) grouped by market outlook, with up to 6 custom legs, per-leg expiry,
+a T+0 value curve, breakevens, probability of profit, and net greeks. Entry
+premiums are quoted with the same smile the on-chain instruction charges, so
+what you see is what `vault.buy()` costs.
 
 ### 3. Smart Contract Development (Foundry)
 
 ```bash
-forge build   # compile all contracts
-forge test    # run 34 tests
+forge build   # compile all contracts (incl. the vendored official 1inch stack)
+forge test    # run the 82-test suite
 ```
 
 ### 4. Deploy to Anvil (Local)
@@ -381,12 +405,16 @@ Copy `.env.example` → `.env`, fill in `PRIVATE_KEY` and `RPC_SEPOLIA`, then:
 
 ```bash
 source .env
-PRIVATE_KEY="$PRIVATE_KEY" forge script script/Deploy.s.sol:Deploy \
+PRIVATE_KEY="$PRIVATE_KEY" \
+FEE_RECIPIENT="$FEE_RECIPIENT" \
+forge script script/Deploy.s.sol:Deploy \
   --rpc-url "$RPC_SEPOLIA" \
   --broadcast
 ```
 
-The script outputs `NEXT_PUBLIC_*` addresses; copy them into `frontend/.env.local` (or set `NEXT_PUBLIC_CHAIN_ID=11155111`).
+`FEE_RECIPIENT` is where the 1% protocol fee accrues (e.g. a DAO treasury); it
+defaults to the deployer if unset. The script outputs `NEXT_PUBLIC_*` addresses;
+copy them into `frontend/.env.local` (or set `NEXT_PUBLIC_CHAIN_ID=11155111`).
 
 To verify contracts on Etherscan at the same time:
 
@@ -483,48 +511,8 @@ cre workflow simulate settlement --non-interactive --trigger-index 0
 # omit both to pick it from an interactive menu.
 ```
 
-Verified output (CLI v1.11.0, reading the live Sepolia ETH/USD feed — exit code `0`):
-
-```text
-Initializing...
-Loading settings...
-Checking RPC connectivity...
-Compiling workflow...
-✓ Workflow compiled
-✓ Simulation limits enabled
-  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite report=50kb gas=10000000 | WASM binary=100mb compressed=20mb
-  Binary hash: 9d57d352ac4d3e6ca2e4540cd52e22875e93e15e96f557c8a6c9bfc35fe24b38
-  Config hash: 09b81d8b718c888f7c668324102c18f369f49391a15adee7cbc76e576aea9331
-2026-06-14T07:00:26Z [SIMULATION] Simulator Initialized
-
-2026-06-14T07:00:26Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
-2026-06-14T07:00:26Z [USER LOG] [CRE] Option settlement workflow triggered
-2026-06-14T07:00:26Z [USER LOG] [CRE] Chainlink ETH/USD: $1675.28
-2026-06-14T07:00:26Z [USER LOG] [CRE] settleSeries(0x0000…0001, 1675280000) submitted — tx 0x0000…0000
-
-✓ Workflow Simulation Result:
-"1675280000"
-
-2026-06-14T07:00:26Z [SIMULATION] Execution finished signal received
-2026-06-14T07:00:26Z [SIMULATION] Skipping WorkflowEngineV2
-2026-06-14T07:00:26Z [SIMULATION] Failed to cleanup beholder error=BeholderClient has not been started: cannot stop unstarted service
-
-╭──────────────────────────────────────────────────────╮
-│ Simulation complete! Ready to deploy your workflow?  │
-│                                                      │
-│ Run cre account access to request deployment access. │
-╰──────────────────────────────────────────────────────╯
-```
-
-`1675280000` is the feed price ($1,675.28) in USDC 6-decimal fixed-point. Notes on the
-output:
-
-- **The tx hash is zero** because a plain simulation routes the EVM write through a
-  **mock** forwarder rather than broadcasting — the trigger → feed read → DON consensus →
-  report-signing path is fully exercised, which is what the CRE CLI simulation verifies.
-- **`Failed to cleanup beholder …`** is a benign teardown log printed *after* the result;
-  the simulator stops a telemetry client it never started in local mode. The run still
-  exits `0`. Filter it for a clean demo: `… | grep -v "Failed to cleanup beholder"`.
+Verified: CLI v1.11.0 reads the live Sepolia ETH/USD feed, runs DON consensus and
+signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.md](docs/cre-simulation.md).
 
 > **Note — live broadcast is out of scope here.** CRE delivers DON-signed reports through
 > a KeystoneForwarder that calls `onReport(bytes,bytes)` on the receiver, whereas
@@ -539,7 +527,8 @@ output:
 | Step | Actor  | Action                                                                     | Contract call                                              |
 | ---- | ------ | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 1    | LP     | Connect wallet → _Authorize Strike Range_ → approve **official Aqua** → register → **ship** | `ERC20.approve(Aqua)` + `AquaCollateralVault.authorizeRange()` + `Aqua.ship()` |
-| 2    | Trader | Click **Buy** on a strike within LP's range → approve USDC → buy           | `ERC20.approve(USDC)` + `AquaCollateralVault.buy(authId, K, amount, maxPremium)` (SwapVM-priced) |
+| 2    | Trader | Click **Buy** on a strike within LP's range → approve USDC → buy           | `ERC20.approve(USDC)` + `AquaCollateralVault.buy(authId, K, amount, maxPremium)` (SwapVM-priced, 1% fee → DAO) |
+| 2a   | Trader | Compose a multi-leg position in the **Strategy Builder** (20 named strategies or custom legs) — each buy leg is a `vault.buy()` | frontend only — payoff, T+0 curve, greeks, POP |
 | 3    | Trader | Click **Close** to sell back at the live Bid (reverse SwapVM swap; LP capacity restores) | `AquaCollateralVault.close(optionToken, lp, amount, minPayout)` |
 | 4    | —      | Settle at expiry — **anyone** may supply the Chainlink round covering expiry; or run `cre workflow simulate settlement` | `AquaOptionSettlement.settleWithChainlinkRound()` / `settleSeries()` via CRE |
 | 5    | Trader | Call `redeem()` to collect the cash-settled intrinsic (ITM only)           | `AquaCollateralVault.redeem(optionToken, amount)`          |
@@ -575,7 +564,7 @@ output:
 - **K_min / K_max:** The lower and upper bounds of an LP's authorized strike range.
 - **OTM (Out-of-The-Money):** No intrinsic value at expiry; LP reclaims 100% of collateral.
 - **ITM (In-The-Money):** Intrinsic value at expiry; holder receives payout, LP gets remainder.
-- **IV (Implied Volatility / σ):** Market's forecast of price movement. `σ_global` is demand-weighted and adjusts with every trade.
+- **IV (Implied Volatility / σ):** Market's forecast of price movement. Stored per tenor bucket (`sigmaFor`), demand-weighted, adjusting with every trade.
 - **Volatility Smile:** OTM/ITM options trade at higher IV than ATM; modeled by $\alpha \cdot \ln(K/S)^2$ curvature.
 - **Black-Scholes:** Mathematical option pricing model. This protocol uses a parametric approximation (gas-efficient, no $N(d_1)$ on-chain).
 
@@ -583,8 +572,8 @@ output:
 
 - **Range Authorization:** LP's single on-chain commitment to write options at any strike $K \in [K_{min}, K_{max}]$ from one collateral pool. First buy at a new strike deploys an OptionToken lazily.
 - **Yield Double-Dip:** LP earns staking/lending yield on collateral (because it stays in their wallet via Aqua JIT) _and_ option premium from buyers. Impossible in vault-locking designs.
-- **σ_global Feedback Loop:** Every primary-market buy bumps $\sigma_{global}$ up; every close/sell decrements it. Creates on-chain price discovery that arbitrageurs can trade against.
-- **Emergent Market Maker:** An arbitrageur who buys underpriced options (low $\sigma_{global}$) on the primary market, delta-hedges on Uniswap, and closes when σ corrects — capturing the spread while enforcing IV consistency.
+- **Vol Surface / σ Feedback Loop:** IV is stored per tenor bucket with a skew tilt. Every buy bumps the traded bucket up; every sellback decays it. Creates on-chain price discovery that arbitrageurs can trade against.
+- **Emergent Market Maker:** An arbitrageur who buys underpriced options (low $\sigma_{tenor}$) at the Ask, delta-hedges on Uniswap, and sells back at the Bid when σ corrects — capturing the spread while enforcing IV consistency.
 - **Covered Call / Cash-Secured Put:** Fully collateralized option: WETH backs calls (LP delivers ETH if exercised), USDC backs puts (LP purchases ETH if exercised). No naked writing; collateral IS the hedge.
 - **SwapVM:** 1inch highly-optimized VM for custom matching and pricing logic.
 - **1inch Aqua:** 1inch primitive for JIT transfer of assets from LP self-custodial wallets.
@@ -596,42 +585,38 @@ output:
 ## 🏗️ Project Structure
 
 ```text
-├── cre-workflow/             # Chainlink CRE Logic (TypeScript)
-│   ├── config.json           # Series ID + settlement contract config
-│   └── workflow.ts           # DON workflow (CRE SDK, compiled to WASM)
-├── frontend/                 # Next.js Application
-│   ├── components/           # AuthorizeRange, OptionMatrix, LPDashboard
-│   ├── config/               # Wagmi + contract addresses
-│   └── app/                  # Next.js App Router
-├── src/                      # Smart Contracts (Solidity)
-│   ├── hooks/                # OptionPricingHook (Uniswap v4)
-│   ├── swapvm/               # OptionPricingEngine (parametric B/S)
-│   ├── vaults/               # AquaCollateralVault + AquaOptionSettlement
+├── lib/                      # Vendored official contracts (compiled unmodified)
+│   ├── aqua/                 # 1inch/aqua — registry, AquaApp base, IAqua
+│   ├── swap-vm/              # 1inch/swap-vm release/1.2 — VM core, opcodes, routers
+│   └── forge-std/            # forge-std v1.11.0
+├── src/                      # Smile contracts (Solidity 0.8.30)
+│   ├── swapvm/               # SmileSwapVMRouter (opcode 33) + OptionPremiumInstruction
+│   │                         #   + SmileMath + OptionPricingEngine (quoting facade)
+│   ├── vaults/               # AquaCollateralVault (escrow/lifecycle)
+│   │                         #   + AquaOptionSettlement (expiry-price registry)
+│   ├── hooks/                # OptionPricingHook (Uniswap v4 + the vol surface)
+│   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
-├── test/                     # Foundry tests (34 passing)
-├── foundry.toml              # Foundry config (via_ir = true for stack depth)
-└── remappings.txt
+├── frontend/                 # Next.js app
+│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard
+│   ├── lib/                  # options engine + 20-strategy catalog
+│   └── config/               # Wagmi + contract addresses + official Aqua ABI
+├── cre-workflow/             # Chainlink CRE workflow (TypeScript → WASM)
+├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
+├── docs/                     # grant proposal, build notes, CRE transcript
+├── test/                     # Foundry tests (82 passing)
+└── foundry.toml              # solc 0.8.30, via_ir
 ```
 
 ---
 
 ## Technical Stack
 
-- **Smart Contracts**: Solidity 0.8.35 (Foundry, via_ir)
-- **Frontend**: Next.js 16, Tailwind CSS, Wagmi/Viem
-- **Oracle/Settlement**: Chainlink CRE SDK
-- **DEX Infrastructure**: Uniswap v4 Hooks, 1inch Aqua
+- **Smart Contracts**: Solidity 0.8.30 (Foundry, via_ir), on the **official 1inch Aqua + SwapVM** contracts (vendored, unmodified)
+- **Frontend**: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT `black-scholes` + `greeks` packages
+- **Oracle/Settlement**: Chainlink price feeds (permissionless round-verified settlement) + Chainlink CRE SDK (scheduled keeper)
+- **DEX Infrastructure**: Uniswap v4 Hooks, Uniswap Trading API
 
 ---
 
 _Built for the 1inch + Uniswap + Chainlink Hackathon._
-
-## Foundry Usage
-
-```shell
-forge build
-forge test
-forge --help
-anvil --help
-cast --help
-```
