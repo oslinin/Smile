@@ -8,9 +8,14 @@ import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/Pool
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import "../swapvm/OptionPricingEngine.sol";
 
-/// @notice Uniswap v4 hook for the options pool.
+/// @notice Uniswap v4 hook for the options pool — and the on-chain VOL SURFACE.
 /// beforeSwap: veto trades priced outside oracle-safe bounds.
-/// afterSwap: adjust demand-driven implied vol (σ_global) up on buy, down on sell.
+/// afterSwap: adjust demand-driven implied vol up on buy, down on sell.
+///
+/// The surface is multiparameter: σ is stored per TENOR BUCKET
+/// ([0,7d) [7d,30d) [30d,90d) [90d,∞)) and a signed skew β tilts the strike
+/// dimension (σ_strike = σ_tenor · (1 + α·ln²(K/S) + β·ln(K/S))). The SwapVM
+/// option-premium instruction reads σ live via {sigmaFor}.
 ///
 /// Hook address must encode BEFORE_SWAP_FLAG (bit 7) and AFTER_SWAP_FLAG (bit 6):
 ///   address & 0xFF == 0xC0  (1100_0000)
@@ -18,9 +23,18 @@ import "../swapvm/OptionPricingEngine.sol";
 contract OptionPricingHook is IHooks {
     OptionPricingEngine public immutable pricingEngine;
     address public immutable poolManager;
+    address public immutable admin;
 
-    /// @dev σ_global in WAD, adjusted by afterSwap demand feedback.
-    uint256 public sigmaGlobal;
+    /// @dev Tenor cutoffs for the σ term structure.
+    uint256 public constant TENOR_1 = 7 days;
+    uint256 public constant TENOR_2 = 30 days;
+    uint256 public constant TENOR_3 = 90 days;
+
+    /// @dev σ per tenor bucket in WAD, adjusted by demand feedback.
+    uint256[4] public sigmaBuckets;
+
+    /// @dev Signed skew β in WAD (0 = symmetric smile; negative = downside skew).
+    int256 public beta;
 
     /// @dev Demand feedback step: γ = 0.5% per trade (in WAD).
     uint256 public constant GAMMA = 0.005e18;
@@ -34,7 +48,8 @@ contract OptionPricingHook is IHooks {
     constructor(address pricingEngine_, address poolManager_, uint256 initialSigma_) {
         pricingEngine = OptionPricingEngine(pricingEngine_);
         poolManager = poolManager_;
-        sigmaGlobal = initialSigma_;
+        admin = msg.sender;
+        for (uint256 i = 0; i < 4; i++) sigmaBuckets[i] = initialSigma_;
     }
 
     /// @notice One-time registration of the vault that can drive σ updates on primary mints.
@@ -43,13 +58,51 @@ contract OptionPricingHook is IHooks {
         vault = vault_;
     }
 
-    /// @notice Called by the vault on every primary-market mint to update demand-driven IV.
+    /// @notice Set the skew tilt of the surface (deployer only).
+    function setBeta(int256 beta_) external {
+        require(msg.sender == admin, "only admin");
+        beta = beta_;
+    }
+
+    // ── Vol surface reads ─────────────────────────────────────────────────────
+
+    /// @notice σ for a given time-to-expiry — the tenor dimension of the surface.
+    /// This is the live σ source the SwapVM option-premium instruction queries.
+    function sigmaFor(uint256 timeToExpiry) public view returns (uint256) {
+        return sigmaBuckets[_bucketOf(timeToExpiry)];
+    }
+
+    /// @notice Back-compat scalar view: the 30-day bucket (legacy readers).
+    function sigmaGlobal() external view returns (uint256) {
+        return sigmaBuckets[1];
+    }
+
+    function _bucketOf(uint256 timeToExpiry) internal pure returns (uint256) {
+        if (timeToExpiry < TENOR_1) return 0;
+        if (timeToExpiry < TENOR_2) return 1;
+        if (timeToExpiry < TENOR_3) return 2;
+        return 3;
+    }
+
+    // ── Demand feedback ───────────────────────────────────────────────────────
+
+    /// @notice Tenor-aware demand feedback: bump only the bucket that traded.
+    function bumpSigma(bool isBuy, uint256 timeToExpiry) external {
+        require(msg.sender == vault, "only vault");
+        _bump(_bucketOf(timeToExpiry), isBuy);
+    }
+
+    /// @notice Legacy surface-wide feedback (no tenor info): bump every bucket.
     function bumpSigma(bool isBuy) external {
         require(msg.sender == vault, "only vault");
+        for (uint256 i = 0; i < 4; i++) _bump(i, isBuy);
+    }
+
+    function _bump(uint256 bucket, bool isBuy) internal {
         if (isBuy) {
-            sigmaGlobal = sigmaGlobal + GAMMA;
+            sigmaBuckets[bucket] += GAMMA;
         } else {
-            sigmaGlobal = sigmaGlobal > GAMMA ? sigmaGlobal - GAMMA : 0;
+            sigmaBuckets[bucket] = sigmaBuckets[bucket] > GAMMA ? sigmaBuckets[bucket] - GAMMA : 0;
         }
     }
 
@@ -104,7 +157,7 @@ contract OptionPricingHook is IHooks {
                 spot: spot,
                 strike: strike,
                 expiry: expiry,
-                sigmaGlobal: sigmaGlobal,
+                sigmaGlobal: sigmaFor(expiry > block.timestamp ? expiry - block.timestamp : 0),
                 alpha: alpha,
                 isBuy: isBuy
             });
@@ -131,11 +184,8 @@ contract OptionPricingHook is IHooks {
     ) external returns (bytes4, int128) {
         require(msg.sender == poolManager, "only pool manager");
         bool isBuy = params.amountSpecified < 0;
-        if (isBuy) {
-            sigmaGlobal = sigmaGlobal + GAMMA;
-        } else {
-            sigmaGlobal = sigmaGlobal > GAMMA ? sigmaGlobal - GAMMA : 0;
-        }
+        // Pool swaps carry no tenor info — treat as a surface-wide demand shift.
+        for (uint256 i = 0; i < 4; i++) _bump(i, isBuy);
         return (IHooks.afterSwap.selector, 0);
     }
 

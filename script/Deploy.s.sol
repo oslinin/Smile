@@ -103,13 +103,17 @@ contract Deploy is Script, StdCheats {
             deployer
         );
 
-        // deployer also acts as CRE forwarder in local testing
-        AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer);
+        // deployer also acts as CRE forwarder in local testing; the Chainlink
+        // feed enables PERMISSIONLESS settlement (anyone supplies the round
+        // covering expiry)
+        AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer, oracleAddr);
 
-        // ── Wire hook ↔ vault (before any range is authorized, so strategies
-        //    snapshot the hook as their live σ source) ──────────────────────
+        // ── Wire hook ↔ vault ↔ settlement (before any range is authorized,
+        //    so strategies snapshot the hook as their live σ source) ────────
         vault.setHook(address(hook));
         hook.setVault(address(vault));
+        settlement.setRegistrar(address(vault));
+        vault.setSettlement(address(settlement));
 
         vm.stopBroadcast();
 

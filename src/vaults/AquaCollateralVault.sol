@@ -19,10 +19,12 @@ import { OptionToken } from "../OptionToken.sol";
 import { SmileMath } from "../swapvm/SmileMath.sol";
 import { SmileSwapVMRouter } from "../swapvm/SmileSwapVMRouter.sol";
 import { OptionPremiumArgsBuilder } from "../swapvm/OptionPremiumInstruction.sol";
+import { AquaOptionSettlement } from "./AquaOptionSettlement.sol";
 
 interface IOptionPricingHook {
-    function bumpSigma(bool isBuy) external;
-    function sigmaGlobal() external view returns (uint256);
+    function bumpSigma(bool isBuy, uint256 timeToExpiry) external;
+    function sigmaFor(uint256 timeToExpiry) external view returns (uint256);
+    function beta() external view returns (int256);
 }
 
 /// @notice JIT collateral vault built on the official 1inch Aqua protocol.
@@ -51,9 +53,14 @@ contract AquaCollateralVault is AquaApp, Ownable {
     SmileSwapVMRouter public immutable router;
     IPriceOracle public immutable oracle;
     IOptionPricingHook public hook;
+    AquaOptionSettlement public settlement;
     uint256 public constant ALPHA = 2e18;          // smile curvature — matches frontend
     uint256 public constant DEFAULT_SIGMA = 0.8e18; // fallback σ when no hook wired
     bytes32 private constant PUT_STRATEGY_TYPE = "SMILE-PUT-1";
+
+    /// @notice Max age of the Chainlink spot answer accepted when pricing.
+    /// Snapshotted into each strategy at authorize time (strategies are immutable).
+    uint256 public maxSpotStaleness = 1 hours;
 
     struct LPAuthorization {
         address lp;
@@ -71,6 +78,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         address sigmaSource;     // hook snapshot — baked into the immutable strategy
         uint8 premiumDecimals;   // premiumToken decimals snapshot
         bytes32 strategyHash;    // Aqua strategy hash (order hash for calls)
+        int256 beta;             // skew snapshot (surface tilt at authorize time)
+        uint16 spotStaleness;    // oracle staleness bound baked into the strategy
     }
 
     struct LPPosition {
@@ -78,10 +87,17 @@ contract AquaCollateralVault is AquaApp, Ownable {
         address collateralToken;
     }
 
+    struct SeriesRef {
+        uint256 authId;
+        uint256 strike; // WAD
+    }
+
     uint256 public nextAuthId;
     mapping(uint256 => LPAuthorization) public authorizations;
     // authId => strike (WAD) => OptionToken address (deployed lazily on first buy)
     mapping(uint256 => mapping(uint256 => address)) public optionTokens;
+    // optionToken => (authId, strike) reverse lookup
+    mapping(address => SeriesRef) public seriesOf;
     // optionToken => lp => locked position
     mapping(address => mapping(address => LPPosition)) public positions;
 
@@ -91,6 +107,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
     event PremiumPaid(address indexed optionToken, address indexed buyer, address indexed lp, uint256 premium);
     event OptionClosed(address indexed optionToken, address indexed holder, uint256 amount);
     event CollateralReleased(address indexed optionToken, address indexed lp, uint256 amount);
+    event Redeemed(address indexed optionToken, address indexed holder, uint256 amount, uint256 payout);
 
     constructor(address aqua_, address payable router_, address oracle_, address owner_)
         AquaApp(IAqua(aqua_))
@@ -102,6 +119,24 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     function setHook(address hook_) external onlyOwner {
         hook = IOptionPricingHook(hook_);
+    }
+
+    /// @notice Update the staleness bound applied to NEW authorizations
+    /// (existing shipped strategies keep their snapshot).
+    function setMaxSpotStaleness(uint256 maxSpotStaleness_) external onlyOwner {
+        maxSpotStaleness = maxSpotStaleness_;
+    }
+
+    /// @notice One-time wiring of the settlement price registry. Every series
+    /// minted afterwards is registered there and becomes redeemable at expiry.
+    function setSettlement(address settlement_) external onlyOwner {
+        require(address(settlement) == address(0), "already set");
+        settlement = AquaOptionSettlement(settlement_);
+    }
+
+    /// @notice Canonical series id for a (range, strike) pair.
+    function seriesId(uint256 authId, uint256 strike) public pure returns (bytes32) {
+        return keccak256(abi.encode(authId, strike));
     }
 
     // ── LP Range Authorization ────────────────────────────────────────────────
@@ -139,6 +174,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         auth.active = true;
         auth.sigmaSource = address(hook);
         auth.premiumDecimals = IERC20Metadata(premiumToken).decimals();
+        auth.beta = address(hook) != address(0) ? hook.beta() : int256(0);
+        auth.spotStaleness = SafeCast.toUint16(maxSpotStaleness);
         auth.strategyHash = isCall
             ? keccak256(abi.encode(buildOrder(authId)))   // == router.hash() for Aqua orders
             : keccak256(_putStrategy(authId));
@@ -171,7 +208,9 @@ contract AquaCollateralVault is AquaApp, Ownable {
             auth.strikeMin.toUint128(),
             auth.strikeMax.toUint128(),
             auth.expiry.toUint40(),
-            ALPHA.toUint64()
+            ALPHA.toUint64(),
+            SafeCast.toInt64(auth.beta),
+            auth.spotStaleness
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), uint64(authId),                        // Controls._salt
@@ -202,6 +241,10 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     /// @notice Everything the LP needs to pass to the official
     /// `Aqua.ship(app, strategy, tokens, amounts)` to activate a range.
+    /// @dev The LP must ERC-20 approve Aqua for BOTH tokens: the collateral
+    /// (JIT pulls on buys — approve above maxCollateral, since capacity
+    /// restored by sellbacks can be pulled again) and the premium token
+    /// (Bid pulls on holder sellbacks via {close}).
     function getShipParams(uint256 authId)
         external
         view
@@ -303,7 +346,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
         optionToken = _mintSeries(authId, auth, strike, amount, collateralNeeded);
 
-        if (address(hook) != address(0)) hook.bumpSigma(true);
+        if (address(hook) != address(0)) hook.bumpSigma(true, auth.expiry - block.timestamp);
 
         emit PremiumPaid(optionToken, msg.sender, auth.lp, premiumPaid);
         emit OptionBought(authId, optionToken, msg.sender, strike, amount, premiumPaid);
@@ -359,13 +402,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 collateralNeeded,
         uint256 maxPremium
     ) internal nonReentrantStrategy(auth.lp, auth.strategyHash) returns (uint256 premiumPaid) {
-        uint256 spot = _spotWad();
-        uint256 sigma = auth.sigmaSource != address(0)
-            ? IOptionPricingHook(auth.sigmaSource).sigmaGlobal()
-            : DEFAULT_SIGMA;
-        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigma, ALPHA);
-        uint256 premiumWadPerUnit = SmileMath.premium(spot, strike, auth.expiry - block.timestamp, sigmaStrike, false, true);
-        uint256 totalWad = Math.ceilDiv(premiumWadPerUnit * amount, 1e18);
+        uint256 totalWad = Math.ceilDiv(_putUnitPremiumWad(auth, strike, true) * amount, 1e18);
         premiumPaid = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, true);
         require(premiumPaid <= maxPremium, "premium above max");
 
@@ -395,6 +432,10 @@ contract AquaCollateralVault is AquaApp, Ownable {
                 address(this)
             ));
             optionTokens[authId][strike] = optionToken;
+            seriesOf[optionToken] = SeriesRef({authId: authId, strike: strike});
+            if (address(settlement) != address(0)) {
+                settlement.registerSeries(seriesId(authId, strike), optionToken, auth.expiry, strike, auth.isCall);
+            }
         }
 
         LPPosition storage pos = positions[optionToken][auth.lp];
@@ -404,35 +445,194 @@ contract AquaCollateralVault is AquaApp, Ownable {
         OptionToken(optionToken).mint(msg.sender, amount);
     }
 
-    // ── Close ────────────────────────────────────────────────────────────────
+    // ── Close (sellback at Bid) ──────────────────────────────────────────────
 
-    /// @notice Early close: burn holder's OptionTokens, return collateral to LP pro-rata.
-    /// Vault is OptionToken owner so can burn without allowance from holder.
+    /// @notice Early close = SELLBACK: the holder sells the option back to the
+    /// LP at the live Bid (same smile/surface math that priced the Ask), so a
+    /// long position always has a mark-to-market exit.
+    ///
+    /// Covered calls execute as a REVERSE SwapVM swap through the same shipped
+    /// strategy: escrowed collateral is `Aqua.push()`ed back into the LP wallet
+    /// (restoring the range's JIT capacity) and the Bid premium is
+    /// `Aqua.pull()`ed from the LP wallet straight to the holder. Puts do the
+    /// symmetric pull/push with this vault as the official AquaApp.
+    ///
+    /// The buyback is funded by premiums the LP has already earned — if their
+    /// premium balance can't cover the Bid, the sellback reverts and the
+    /// holder can instead hold to expiry and `redeem()`.
+    ///
+    /// @param optionToken Series being sold back.
+    /// @param lp          The LP whose position is unwound (must match the series' LP).
+    /// @param amount      Option units to sell back (WAD).
+    /// @param minPayout   Bid-slippage bound in premiumToken units.
     function close(
         address optionToken,
         address lp,
-        uint256 amount
-    ) external {
+        uint256 amount,
+        uint256 minPayout
+    ) external returns (uint256 payout) {
         require(amount > 0, "zero amount");
+        SeriesRef memory ref = seriesOf[optionToken];
+        require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
+        LPAuthorization storage auth = authorizations[ref.authId];
+        require(lp == auth.lp, "wrong lp");
         LPPosition storage pos = positions[optionToken][lp];
-        require(pos.lockedCollateral > 0, "no position");
 
-        uint256 supply = IERC20(optionToken).totalSupply();
-        uint256 collateralToRelease = (pos.lockedCollateral * amount) / supply;
-
-        pos.lockedCollateral -= collateralToRelease;
         OptionToken(optionToken).burn(msg.sender, amount);
-        IERC20(pos.collateralToken).safeTransfer(lp, collateralToRelease);
 
-        if (address(hook) != address(0)) hook.bumpSigma(false);
+        uint256 collateralReturned;
+        if (auth.isCall) {
+            collateralReturned = amount;
+            pos.lockedCollateral -= collateralReturned;
+            payout = _sellbackCallViaSwapVM(ref.authId, auth, ref.strike, amount, minPayout);
+        } else {
+            collateralReturned = (ref.strike * amount) / 1e30;
+            pos.lockedCollateral -= collateralReturned;
+            payout = _sellbackPutViaAqua(auth, ref.strike, amount, collateralReturned, minPayout);
+        }
+
+        if (address(hook) != address(0)) {
+            hook.bumpSigma(false, auth.expiry > block.timestamp ? auth.expiry - block.timestamp : 0);
+        }
 
         emit OptionClosed(optionToken, msg.sender, amount);
-        emit CollateralReleased(optionToken, lp, collateralToRelease);
+        emit CollateralReleased(optionToken, lp, collateralReturned);
     }
 
-    // ── Settlement support ───────────────────────────────────────────────────
+    /// @dev Covered-call sellback: reverse swap through the official SwapVM.
+    /// exactIn = option units → Bid side; `to` routes the premium to the holder.
+    function _sellbackCallViaSwapVM(
+        uint256 authId,
+        LPAuthorization storage auth,
+        uint256 strike,
+        uint256 amount,
+        uint256 minPayout
+    ) internal returns (uint256 payout) {
+        ISwapVM.Order memory order = buildOrder(authId);
+        bytes memory takerData = TakerTraitsLib.build(TakerTraitsLib.Args({
+            taker: address(this),
+            isExactIn: true,                     // exactIn: fixed option units → Bid side
+            shouldUnwrapWeth: false,
+            isStrictThresholdAmount: false,
+            isFirstTransferFromTaker: true,      // collateral back to LP before premium out
+            useTransferFromAndAquaPush: true,    // push restores the strategy's JIT capacity
+            threshold: abi.encode(minPayout),    // exactIn → minimum amountOut
+            to: msg.sender,                      // Bid premium goes straight to the holder
+            deadline: 0,
+            hasPreTransferInCallback: false,
+            hasPreTransferOutCallback: false,
+            preTransferInHookData: "",
+            postTransferInHookData: "",
+            preTransferOutHookData: "",
+            postTransferOutHookData: "",
+            preTransferInCallbackData: "",
+            preTransferOutCallbackData: "",
+            instructionsArgs: abi.encodePacked(strike),
+            signature: ""
+        }));
 
-    /// @notice Release locked collateral back to LP (called by settlement contract after expiry).
+        IERC20(auth.collateralToken).forceApprove(address(router), amount);
+        (, payout,) = router.swap(order, auth.collateralToken, auth.premiumToken, amount, takerData);
+    }
+
+    /// @dev Put sellback: this vault is the official AquaApp. Bid premium is
+    /// pulled from the LP wallet to the holder; escrowed USDC collateral is
+    /// pushed back, restoring the strategy's capacity.
+    function _sellbackPutViaAqua(
+        LPAuthorization storage auth,
+        uint256 strike,
+        uint256 amount,
+        uint256 collateralReturned,
+        uint256 minPayout
+    ) internal nonReentrantStrategy(auth.lp, auth.strategyHash) returns (uint256 payout) {
+        require(block.timestamp < auth.expiry, "expired");
+        uint256 totalWad = (_putUnitPremiumWad(auth, strike, false) * amount) / 1e18; // floor → Bid
+        payout = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, false);
+        require(payout >= minPayout, "payout below min");
+
+        if (payout > 0) {
+            AQUA.pull(auth.lp, auth.strategyHash, auth.premiumToken, payout, msg.sender);
+        }
+        IERC20(auth.collateralToken).forceApprove(address(AQUA), collateralReturned);
+        AQUA.push(auth.lp, address(this), auth.strategyHash, auth.collateralToken, collateralReturned);
+    }
+
+    // ── Settlement: redeem & reclaim ─────────────────────────────────────────
+
+    /// @notice Holder redeems option tokens for the cash-settled intrinsic
+    /// after the series settled (via CRE or permissionless Chainlink-round
+    /// settlement in {AquaOptionSettlement}). Paid from the locked collateral:
+    ///   call → (S−K)/S of collateral (WETH) per unit, i.e. the intrinsic in
+    ///          collateral terms at the settlement price;
+    ///   put  → (K−S) USDC per unit.
+    /// OTM redeems burn for zero — the collateral belongs to the LP.
+    function redeem(address optionToken, uint256 amount) external returns (uint256 payout) {
+        require(amount > 0, "zero amount");
+        SeriesRef memory ref = seriesOf[optionToken];
+        require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
+        LPAuthorization storage auth = authorizations[ref.authId];
+
+        (bool settled, uint256 settlementPrice) = _settlementOf(ref);
+        require(settled, "not settled");
+
+        OptionToken(optionToken).burn(msg.sender, amount);
+
+        payout = _intrinsicPayout(auth.isCall, settlementPrice, ref.strike, amount);
+        LPPosition storage pos = positions[optionToken][auth.lp];
+        if (payout > pos.lockedCollateral) payout = pos.lockedCollateral;
+        if (payout > 0) {
+            pos.lockedCollateral -= payout;
+            IERC20(auth.collateralToken).safeTransfer(msg.sender, payout);
+        }
+        emit Redeemed(optionToken, msg.sender, amount, payout);
+    }
+
+    /// @notice LP reclaims collateral no longer needed after settlement: the
+    /// locked amount minus the worst-case still owed to outstanding holders
+    /// (OTM → everything; ITM → the non-intrinsic remainder).
+    function reclaimCollateral(address optionToken) external returns (uint256 amount) {
+        SeriesRef memory ref = seriesOf[optionToken];
+        require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
+        LPAuthorization storage auth = authorizations[ref.authId];
+        require(msg.sender == auth.lp, "not lp");
+
+        (bool settled, uint256 settlementPrice) = _settlementOf(ref);
+        require(settled, "not settled");
+
+        uint256 outstanding = IERC20(optionToken).totalSupply();
+        uint256 owed = _intrinsicPayout(auth.isCall, settlementPrice, ref.strike, outstanding);
+        LPPosition storage pos = positions[optionToken][auth.lp];
+        require(pos.lockedCollateral > owed, "nothing to reclaim");
+
+        amount = pos.lockedCollateral - owed;
+        pos.lockedCollateral = owed;
+        IERC20(auth.collateralToken).safeTransfer(auth.lp, amount);
+        emit CollateralReleased(optionToken, auth.lp, amount);
+    }
+
+    /// @dev Cash-settled intrinsic in COLLATERAL-TOKEN units for `amount`
+    /// (WAD) option units — decimals-consistent for both legs:
+    ///   call: intrinsic (S−K) USD converted to WETH at S → amount·(S−K)/S
+    ///   put:  intrinsic (K−S) USD in 6-dec USDC → amount·(K−S)/1e30
+    function _intrinsicPayout(bool isCall, uint256 settlementPrice, uint256 strike, uint256 amount)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (isCall) {
+            if (settlementPrice <= strike) return 0;
+            return (amount * (settlementPrice - strike)) / settlementPrice;
+        }
+        if (strike <= settlementPrice) return 0;
+        return (amount * (strike - settlementPrice)) / 1e30;
+    }
+
+    function _settlementOf(SeriesRef memory ref) internal view returns (bool settled, uint256 settlementPrice) {
+        require(address(settlement) != address(0), "settlement not set");
+        (,,,, settled, settlementPrice) = settlement.series(seriesId(ref.authId, ref.strike));
+    }
+
+    /// @notice Owner escape hatch to release locked collateral back to an LP.
     function releaseCollateral(address optionToken, address lp, uint256 amount) external onlyOwner {
         LPPosition storage pos = positions[optionToken][lp];
         require(pos.lockedCollateral >= amount, "insufficient locked");
@@ -442,9 +642,29 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    function _spotWad() internal view returns (uint256) {
-        (, int256 answer,,,) = oracle.latestRoundData();
+    /// @dev Per-unit put premium in WAD USD from the live surface (Ask when
+    /// isBuy, Bid otherwise) — the vault-side twin of the SwapVM instruction.
+    function _putUnitPremiumWad(
+        LPAuthorization storage auth,
+        uint256 strike,
+        bool isBuy
+    ) internal view returns (uint256) {
+        uint256 spot = _spotWad(auth.spotStaleness);
+        uint256 timeToExpiry = auth.expiry - block.timestamp;
+        uint256 sigma = auth.sigmaSource != address(0)
+            ? IOptionPricingHook(auth.sigmaSource).sigmaFor(timeToExpiry)
+            : DEFAULT_SIGMA;
+        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigma, ALPHA, auth.beta);
+        return SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, false, isBuy);
+    }
+
+    function _spotWad(uint256 maxStaleness) internal view returns (uint256) {
+        (, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
         require(answer > 0, "bad oracle price");
+        require(
+            maxStaleness == 0 || (updatedAt != 0 && block.timestamp <= updatedAt + maxStaleness),
+            "stale oracle price"
+        );
         return SmileMath.scaleToWad(uint256(answer), oracle.decimals());
     }
 

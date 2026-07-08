@@ -27,6 +27,16 @@ contract OptionPricingEngine {
         premium = computePremium(p.spot, p.strike, p.expiry, sigmaStrike, p.isBuy);
     }
 
+    /// @notice Surface-aware quote: like {quote} but with the skew tilt β
+    /// applied, matching what the SwapVM instruction computes when the maker
+    /// strategy carries a non-zero β. `p.sigmaGlobal` should be the tenor σ
+    /// (e.g. `hook.sigmaFor(expiry - now)`).
+    function quoteSurface(PricingParams calldata p, int256 beta) external view returns (uint256 premium) {
+        require(block.timestamp < p.expiry, "expired");
+        uint256 sigmaStrike = SmileMath.smileVol(p.spot, p.strike, p.sigmaGlobal, p.alpha, beta);
+        premium = computePremium(p.spot, p.strike, p.expiry, sigmaStrike, p.isBuy);
+    }
+
     /// @notice σ_strike = σ_global · (1 + α · ln(K/S)²)  — multiplicative smile.
     function smileVol(
         uint256 spot,

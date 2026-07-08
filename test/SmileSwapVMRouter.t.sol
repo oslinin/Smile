@@ -42,6 +42,7 @@ contract SmileSwapVMRouterTest is Test {
     uint256 constant ALPHA      = 2e18;
     uint256 constant SIGMA      = 0.8e18; // instruction default (no sigma source wired)
     uint256 constant MAX_COLLATERAL = 10e18;
+    uint256 constant MAX_STALENESS  = 1 hours;
     uint256 expiry;
 
     ISwapVM.Order order;
@@ -77,7 +78,9 @@ contract SmileSwapVMRouterTest is Test {
             uint128(STRIKE_MIN),
             uint128(STRIKE_MAX),
             uint40(expiry),
-            uint64(ALPHA)
+            uint64(ALPHA),
+            int64(0),
+            uint16(MAX_STALENESS)
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), salt,                                   // Controls._salt
@@ -145,25 +148,23 @@ contract SmileSwapVMRouterTest is Test {
     }
 
     function test_quote_bidAskSpread() public {
-        // Ask side (exactOut) rounds the premium UP; Bid side (exactIn) values
-        // premium with the rounded-DOWN quote. Ask must never sit below Bid,
-        // and spending one Bid premium buys at most one option unit.
+        // The SAME strategy quotes both sides. Forward exactOut = Ask (buy 1
+        // unit); reverse exactIn = Bid (sell 1 unit back). Ask must never sit
+        // below Bid — that's the spread engine.
         (uint256 ask,,) = router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3200e18));
-
-        OptionPricingEngine.PricingParams memory p = OptionPricingEngine.PricingParams({
-            spot: SPOT,
-            strike: 3200e18,
-            expiry: expiry,
-            sigmaGlobal: SIGMA,
-            alpha: ALPHA,
-            isBuy: false
-        });
-        uint256 bid = engine.quote(p) / 1e12; // floor to USDC 6-dec
+        (, uint256 bid,) = router.quote(order, address(weth), address(usdc), 1e18, _takerData(true, 3200e18));
         assertGe(ask, bid);
+        assertApproxEqRel(bid, ask, 0.01e18); // tight spread: rounding asymmetry only
+    }
 
-        (, uint256 unitsForBid,) = router.quote(order, address(usdc), address(weth), bid, _takerData(true, 3200e18));
-        assertLe(unitsForBid, 1e18);
-        assertApproxEqRel(unitsForBid, 1e18, 0.01e18);
+    function test_quote_forwardExactIn_isAskPriced() public {
+        // Spending exactly one Ask premium buys at most 1 unit (floor at Ask).
+        (uint256 ask,,) = router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3200e18));
+        (, uint256 units,) = router.quote(order, address(usdc), address(weth), ask, _takerData(true, 3200e18));
+        // The 6-dec ceil on the Ask grants at most 1e-6 USDC of extra budget,
+        // i.e. < 1e12·1e18/premiumWad ≈ a few 1e9 wei of a unit at this price.
+        assertLe(units, 1e18 + 1e10);
+        assertApproxEqRel(units, 1e18, 0.01e18);
     }
 
     function test_quote_strikeOutOfRangeReverts() public {
@@ -177,15 +178,36 @@ contract SmileSwapVMRouterTest is Test {
     }
 
     function test_quote_wrongTokensReverts() public {
-        // Direction flipped: instruction refuses to price WETH-in / USDC-out.
+        // A token outside the strategy's pinned pair is refused.
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         vm.expectRevert();
-        router.quote(order, address(weth), address(usdc), 1e18, _takerData(false, 3000e18));
+        router.quote(order, address(dai), address(weth), 1e18, _takerData(false, 3000e18));
     }
 
     function test_quote_afterExpiryReverts() public {
         vm.warp(expiry + 1);
         vm.expectRevert();
         router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+    }
+
+    function test_quote_staleOracleReverts() public {
+        // Feed last updated at t0; warp past the strategy's staleness bound.
+        vm.warp(block.timestamp + MAX_STALENESS + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OptionPremiumInstruction.OptionPremiumStaleOraclePrice.selector,
+                1, MAX_STALENESS, block.timestamp
+            )
+        );
+        router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+    }
+
+    function test_quote_freshOracleAfterUpdatePasses() public {
+        vm.warp(block.timestamp + MAX_STALENESS + 1);
+        oracle.setAnswer(3000e8); // refresh updatedAt
+        (uint256 amountIn,,) =
+            router.quote(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+        assertGt(amountIn, 0);
     }
 
     // ── swap ─────────────────────────────────────────────────────────────────
@@ -241,6 +263,27 @@ contract SmileSwapVMRouterTest is Test {
 
         vm.expectRevert();
         router.swap(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+    }
+
+    function test_swap_reverseSellbackAtBid() public {
+        // Open: buy 1 unit at Ask (forward). LP must allow Aqua to pull USDC
+        // for the buyback leg.
+        vm.prank(lp);
+        usdc.approve(address(aqua), type(uint256).max);
+        (uint256 ask,,) = router.swap(order, address(usdc), address(weth), 1e18, _takerData(false, 3000e18));
+
+        // Close: sell the 1 WETH back at Bid (reverse direction, same strategy).
+        weth.approve(address(router), 1e18);
+        uint256 usdcBefore = usdc.balanceOf(address(this));
+        (, uint256 bid,) = router.swap(order, address(weth), address(usdc), 1e18, _takerData(true, 3000e18));
+
+        assertGt(bid, 0);
+        assertLe(bid, ask); // spread: taker pays Ask, receives Bid
+        assertEq(usdc.balanceOf(address(this)), usdcBefore + bid);
+        // Collateral round-tripped back to the LP wallet and virtual capacity restored.
+        assertEq(weth.balanceOf(lp), MAX_COLLATERAL);
+        (uint248 wethBal,) = aqua.rawBalances(lp, address(router), router.hash(order), address(weth));
+        assertEq(uint256(wethBal), MAX_COLLATERAL);
     }
 
     function test_swap_unshippedStrategyReverts() public {

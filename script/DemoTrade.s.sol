@@ -32,7 +32,10 @@ contract DemoTrade is Script {
 
         // ── LP: authorize a $2500–$3500 covered-call range and ship it ───────
         vm.startBroadcast(lpKey);
-        weth.approve(address(aqua), maxCollateral);
+        // Collateral allowance covers cumulative pulls (sellbacks restore
+        // capacity); USDC allowance funds Bid pulls on holder sellbacks.
+        weth.approve(address(aqua), type(uint256).max);
+        usdc.approve(address(aqua), type(uint256).max);
         uint256 authId = vault.authorizeRange(
             2500e18, 3500e18, expiry, maxCollateral, address(weth), address(usdc), true
         );
@@ -56,5 +59,15 @@ contract DemoTrade is Script {
         console.log("  vault WETH escrow:     %s", weth.balanceOf(address(vault)));
         console.log("  LP WETH after JIT pull:%s", weth.balanceOf(lp));
         console.log("  LP USDC premium:       %s", usdc.balanceOf(lp));
+
+        // ── Buyer: sell half back at the live Bid (reverse SwapVM swap) ──────
+        vm.startBroadcast(buyerKey);
+        uint256 bidReceived = vault.close(optionToken, lp, 0.5e18, 0);
+        vm.stopBroadcast();
+
+        console.log("Buyer sold 0.5 back at Bid, received (USDC 6-dec): %s", bidReceived);
+        console.log("  buyer option balance:  %s", OptionToken(optionToken).balanceOf(buyer));
+        console.log("  vault WETH escrow:     %s", weth.balanceOf(address(vault)));
+        console.log("  LP WETH (capacity restored): %s", weth.balanceOf(lp));
     }
 }
