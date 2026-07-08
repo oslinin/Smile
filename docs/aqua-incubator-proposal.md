@@ -54,6 +54,19 @@ Everything above is inspectable in the repo's commit history (a per-feature, ver
 
 Because the fee is charged on *premium* rather than notional, revenue scales with volatility as well as volume — a countercyclical property most swap-fee strategies lack.
 
+## The emergent market-maker flywheel: on-chain IV you can trade
+
+Smile does not depend on professional market makers showing up — it is designed so that market making **emerges from arbitrage**, and the object being arbitraged is itself a new tradeable: an on-chain implied-volatility surface.
+
+The surface (σ per tenor bucket, skewed per strike) is **demand-driven**: buys bump σ, sellbacks decay it. That turns σ into an on-chain price signal for volatility, and the two-sided strategy makes both directions of the trade executable against the same shipped Aqua balance:
+
+- **σ below market IV** → options are underpriced. An arbitrageur buys at the Ask, delta-hedges on spot (Uniswap), and — as their own demand re-rates σ upward — sells back at the Bid, capturing `(σ_market − σ_entry) · vega`. Their activity *is* the correction.
+- **σ above market IV** → premiums are rich. LPs shipping ranges are effectively **investors in the volatility risk premium**: they harvest overpriced time-value on capital that stays in their own wallets, fully collateralized.
+
+In other words, participants can **bet on volatility directly** (long vol by buying the chain, short vol by writing ranges; calendar views across tenor buckets, skew views across strikes) without any new instrument — the option chain and the reflexive σ feedback are the market. The sellback-at-Bid mechanism shipped in this codebase is what closes the loop: a σ correction is monetizable round-trip, so the arbitrage is real, recurring, and self-balancing.
+
+**Why the DAO should care:** arbitrage and vol-trading flow is *structural* volume — it arrives whenever σ diverges from consensus IV, without marketing spend, and every round trip pays the protocol fee on its buy leg. The flywheel converts pricing-model imperfection (our stated weakness) into fee-generating order flow, while simultaneously calibrating the surface.
+
 ## Milestones & budget (mapped to the program's release schedule)
 
 | # | Program milestone | Deliverables | Release | Amount |
@@ -61,9 +74,9 @@ Because the fee is charged on *premium* rather than notional, revenue scales wit
 | M1 | **Idea verification (5%)** | This proposal; working repo with the custom instruction, two-sided strategy, and fee layer (already public) | on acceptance | $2,500 |
 | M2 | **Proof of concept (10%)** | Already delivered and exceeded: 82-test suite, live-node lifecycle demo, DemoTrade script reviewers can run in minutes. Remaining: reviewer walkthrough + testnet deployment with public addresses | week 1–2 | $5,000 |
 | M3 | **Mainnet deployment with verified activity (35%)** | Independent security review of the ~1,200 LoC of Smile-specific contracts (audit is the main budget item); mainnet deployment against the **production Aqua** (`0x4999…6D31`); ≥3 live LP ranges; first verified fee accruals to the DAO treasury; settlement keeper live | month 2–3 | $17,500 |
-| M4 | **Full integration (50%)** | Production frontend (LP + taker flows, surface display); vol-surface calibration upgrade (per-tenor IV from realized quotes); LP onboarding docs & risk disclosures; analytics dashboard for DAO revenue tracking; sustained activity report | month 4–6 | $25,000 |
+| M4 | **Full integration (50%)** | Production frontend (LP + taker flows, surface display); vol-surface calibration upgrade (per-tenor IV from realized quotes); LP onboarding docs & risk disclosures; analytics dashboard for DAO revenue tracking; **ecosystem marketing** (trading-points program for early takers, co-marketing with 1inch channels, vol-arb bounty for the first emergent market makers — all with attributable on-chain results, no generic paid ads); sustained activity report | month 4–6 | $25,000 |
 
-Budget allocation across milestones: ~40% security review, ~35% engineering, ~15% LP/market-maker onboarding and liquidity ops, ~10% frontend/analytics.
+Budget allocation across milestones: ~40% security review, ~30% engineering, ~15% LP/market-maker onboarding and liquidity ops, ~7.5% frontend/analytics, ~7.5% ecosystem marketing (attributable programs only).
 
 ## KPIs we commit to reporting
 
@@ -71,6 +84,7 @@ Budget allocation across milestones: ~40% security review, ~35% engineering, ~15
 - Protocol-fee revenue accrued to the DAO treasury (on-chain, per Aqua `Pulled` events to the treasury)
 - Number of live LP ranges and aggregate shipped capacity (Aqua virtual balances)
 - Two-sided quality: average Bid/Ask spread and sellback fill rate
+- Emergent market making: round-trip (buy → sellback) volume share, and σ tracking error vs a reference IV (e.g. Deribit ATM) — a direct measure of whether the arbitrage flywheel is calibrating the surface
 - Settlement health: % of expiries settled permissionlessly within 1 hour
 
 All KPIs are verifiable directly from chain data — no self-reporting required.
