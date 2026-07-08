@@ -15,6 +15,9 @@ import { MakerTraitsLib } from "@1inch/swap-vm/src/libs/MakerTraits.sol";
 import { TakerTraitsLib } from "@1inch/swap-vm/src/libs/TakerTraits.sol";
 import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceOracle.sol";
 
+import { ControlsArgsBuilder } from "@1inch/swap-vm/src/instructions/Controls.sol";
+import { FeeArgsBuilder, BPS } from "@1inch/swap-vm/src/instructions/Fee.sol";
+
 import { OptionToken } from "../OptionToken.sol";
 import { SmileMath } from "../swapvm/SmileMath.sol";
 import { SmileSwapVMRouter } from "../swapvm/SmileSwapVMRouter.sol";
@@ -62,6 +65,15 @@ contract AquaCollateralVault is AquaApp, Ownable {
     /// Snapshotted into each strategy at authorize time (strategies are immutable).
     uint256 public maxSpotStaleness = 1 hours;
 
+    /// @notice Protocol fee on option BUYS (1e9 = 100%), grossed up on top of
+    /// the Ask so the LP always nets the full premium; sellbacks are fee-free.
+    /// Snapshotted per authorization; applies to ranges authorized afterwards.
+    uint32 public protocolFeeBps;
+    /// @notice Where the protocol fee accrues (e.g. the 1inch DAO treasury).
+    address public feeRecipient;
+    /// @dev Sanity ceiling: 5% (scale 1e9 = 100%).
+    uint32 public constant MAX_PROTOCOL_FEE_BPS = 0.05e9;
+
     struct LPAuthorization {
         address lp;
         uint256 strikeMin;       // WAD lower bound
@@ -80,6 +92,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         bytes32 strategyHash;    // Aqua strategy hash (order hash for calls)
         int256 beta;             // skew snapshot (surface tilt at authorize time)
         uint16 spotStaleness;    // oracle staleness bound baked into the strategy
+        uint32 feeBps;           // protocol fee snapshot (1e9 = 100%), 0 = no fee
+        address feeRecipient;    // DAO treasury the fee accrues to
     }
 
     struct LPPosition {
@@ -134,6 +148,15 @@ contract AquaCollateralVault is AquaApp, Ownable {
         settlement = AquaOptionSettlement(settlement_);
     }
 
+    /// @notice Set the protocol fee for NEW authorizations (existing shipped
+    /// strategies keep their snapshot — fee terms are immutable per range).
+    function setProtocolFee(uint32 feeBps_, address feeRecipient_) external onlyOwner {
+        require(feeBps_ <= MAX_PROTOCOL_FEE_BPS, "fee too high");
+        require(feeBps_ == 0 || feeRecipient_ != address(0), "no recipient");
+        protocolFeeBps = feeBps_;
+        feeRecipient = feeRecipient_;
+    }
+
     /// @notice Canonical series id for a (range, strike) pair.
     function seriesId(uint256 authId, uint256 strike) public pure returns (bytes32) {
         return keccak256(abi.encode(authId, strike));
@@ -176,6 +199,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
         auth.premiumDecimals = IERC20Metadata(premiumToken).decimals();
         auth.beta = address(hook) != address(0) ? hook.beta() : int256(0);
         auth.spotStaleness = SafeCast.toUint16(maxSpotStaleness);
+        auth.feeBps = protocolFeeBps;
+        auth.feeRecipient = feeRecipient;
         auth.strategyHash = isCall
             ? keccak256(abi.encode(buildOrder(authId)))   // == router.hash() for Aqua orders
             : keccak256(_putStrategy(authId));
@@ -194,9 +219,21 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
 
+    /// @dev Program counter of the pricing instruction when the fee prefix is
+    /// present: salt (2+8) + deadline (2+5) + jumpIfTokenIn (2+22) +
+    /// aquaProtocolFee (2+24) = 67. The jump lands sellbacks here, skipping
+    /// the fee.
+    uint16 private constant PC_AFTER_FEE = 67;
+
     /// @notice Rebuilds the canonical SwapVM order for a call range. The
-    /// program composes three instructions: salt (uniqueness), deadline
-    /// (VM-level expiry guard) and the custom option-premium instruction.
+    /// program composes up to five instructions — four official plus the
+    /// custom pricing opcode:
+    ///   salt            — order-hash uniqueness per range
+    ///   deadline        — VM-level expiry guard
+    ///   jumpIfTokenIn   — sellbacks (collateral in) skip the fee
+    ///   aquaProtocolFee — official protocol fee, grossed up on the Ask and
+    ///                     pulled to the fee recipient through Aqua
+    ///   optionPremium   — the vol-surface pricing instruction
     function buildOrder(uint256 authId) public view returns (ISwapVM.Order memory) {
         LPAuthorization storage auth = authorizations[authId];
         bytes memory premiumArgs = OptionPremiumArgsBuilder.build(
@@ -214,7 +251,19 @@ contract AquaCollateralVault is AquaApp, Ownable {
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), uint64(authId),                        // Controls._salt
-            uint8(13), uint8(5), auth.expiry.toUint40(),                // Controls._deadline
+            uint8(13), uint8(5), auth.expiry.toUint40()                 // Controls._deadline
+        );
+        if (auth.feeBps > 0) {
+            bytes memory jumpArgs = ControlsArgsBuilder.buildJumpIfToken(auth.collateralToken, PC_AFTER_FEE);
+            bytes memory feeArgs = FeeArgsBuilder.buildProtocolFee(auth.feeBps, auth.feeRecipient);
+            program = abi.encodePacked(
+                program,
+                uint8(11), uint8(jumpArgs.length), jumpArgs,            // Controls._jumpIfTokenIn
+                uint8(28), uint8(feeArgs.length), feeArgs               // Fee._aquaProtocolFeeAmountInXD
+            );
+        }
+        program = abi.encodePacked(
+            program,
             uint8(router.OPCODE_OPTION_PREMIUM()), uint8(premiumArgs.length), premiumArgs
         );
         return MakerTraitsLib.build(MakerTraitsLib.Args({
@@ -244,7 +293,12 @@ contract AquaCollateralVault is AquaApp, Ownable {
     /// @dev The LP must ERC-20 approve Aqua for BOTH tokens: the collateral
     /// (JIT pulls on buys — approve above maxCollateral, since capacity
     /// restored by sellbacks can be pulled again) and the premium token
-    /// (Bid pulls on holder sellbacks via {close}).
+    /// (Bid pulls on holder sellbacks via {close}, and protocol-fee pulls
+    /// on buys). Fee-enabled ranges ship with a small premium-token virtual
+    /// seed: the official fee instruction pulls the fee BEFORE the buyer's
+    /// premium push lands, so early trades draw on that headroom (it is an
+    /// allowance number — no tokens move at ship time — but the LP wallet
+    /// must hold a matching float when a trade executes).
     function getShipParams(uint256 authId)
         external
         view
@@ -260,7 +314,9 @@ contract AquaCollateralVault is AquaApp, Ownable {
             tokens[1] = auth.premiumToken;
             amounts = new uint256[](2);
             amounts[0] = auth.maxCollateral;
-            amounts[1] = 0; // premium balance grows via Aqua.push on every match
+            // Premium balance grows via Aqua.push on every match; fee-enabled
+            // ranges start with $25 of headroom for the first fee pulls.
+            amounts[1] = auth.feeBps > 0 ? 25 * (10 ** auth.premiumDecimals) : 0;
         } else {
             app = address(this);
             strategy = _putStrategy(authId);
@@ -403,11 +459,18 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 maxPremium
     ) internal nonReentrantStrategy(auth.lp, auth.strategyHash) returns (uint256 premiumPaid) {
         uint256 totalWad = Math.ceilDiv(_putUnitPremiumWad(auth, strike, true) * amount, 1e18);
-        premiumPaid = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, true);
+        uint256 lpPremium = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, true);
+        // Same gross-up as the SwapVM fee opcode on the call leg: the buyer
+        // pays premium + fee, the LP nets the full premium.
+        uint256 fee = auth.feeBps > 0 ? Math.ceilDiv(lpPremium * auth.feeBps, BPS - auth.feeBps) : 0;
+        premiumPaid = lpPremium + fee;
         require(premiumPaid <= maxPremium, "premium above max");
 
-        if (premiumPaid > 0) {
-            IERC20(auth.premiumToken).safeTransferFrom(msg.sender, auth.lp, premiumPaid);
+        if (lpPremium > 0) {
+            IERC20(auth.premiumToken).safeTransferFrom(msg.sender, auth.lp, lpPremium);
+        }
+        if (fee > 0) {
+            IERC20(auth.premiumToken).safeTransferFrom(msg.sender, auth.feeRecipient, fee);
         }
         AQUA.pull(auth.lp, auth.strategyHash, auth.collateralToken, collateralNeeded, address(this));
     }

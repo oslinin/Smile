@@ -89,13 +89,13 @@
 </thead>
 <tbody><tr>
 <td align="left"><strong>Pricing</strong></td>
-<td align="left"><code>OptionPricingEngine</code></td>
-<td align="left">Stateless parametric premium: $\sigma_{strike} = \sigma_{global} \cdot (1 + \alpha \cdot \ln(K/S)^2)$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$.</td>
+<td align="left"><code>SmileSwapVMRouter</code> + <code>OptionPricingEngine</code></td>
+<td align="left">Custom instruction (opcode 33) on the <strong>official 1inch SwapVM</strong> pricing off a <strong>multiparameter vol surface</strong>: σ per tenor bucket + skew, $\sigma_{strike} = \sigma_{tenor} \cdot (1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S))$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$. The instruction is <strong>two-sided</strong>: forward direction prices the Ask, reverse the Bid. Oracle reads enforce Chainlink freshness.</td>
 </tr>
 <tr>
 <td align="left"><strong>Liquidity</strong></td>
-<td align="left"><code>AquaCollateralVault</code></td>
-<td align="left">LP calls <code>authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})</code>. On <code>buy()</code>, collateral is pulled JIT from LP wallet; premium flows buyer → LP directly. OptionToken deployed lazily per strike.</td>
+<td align="left"><strong>official 1inch <code>Aqua</code></strong> + <code>AquaCollateralVault</code></td>
+<td align="left">LP calls <code>authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})</code>, then ships the strategy with the official <code>Aqua.ship()</code>. On <code>buy()</code>, the SwapVM swap <code>Aqua.push()</code>es the premium into the LP wallet and <code>Aqua.pull()</code>s collateral JIT into escrow. OptionToken deployed lazily per strike.</td>
 </tr>
 <tr>
 <td align="left"><strong>Market</strong></td>
@@ -105,7 +105,7 @@
 <tr>
 <td align="left"><strong>Settlement</strong></td>
 <td align="left"><code>AquaOptionSettlement</code> + Chainlink CRE</td>
-<td align="left">At expiry a scheduled CRE DON reads the canonical Chainlink ETH/USD feed (the same feed the app shows for spot), reaches consensus on the finalized value, and writes $S_{final}$ on-chain via <code>settleSeries()</code>; holders redeem ITM payouts.</td>
+<td align="left">Every minted series is registered at buy time. At expiry, settlement is <strong>permissionless</strong>: anyone supplies the Chainlink roundId covering expiry and the contract verifies on-chain that it is the first post-expiry round (<code>settleWithChainlinkRound</code>) — no trusted writer. The scheduled CRE DON path (<code>settleSeries</code>) remains as a keeper. Holders <code>redeem()</code> the cash-settled intrinsic from the vault; LPs <code>reclaimCollateral()</code> for the exact remainder.</td>
 </tr>
 <tr>
 <td align="left"><strong>Asset</strong></td>
@@ -113,6 +113,24 @@
 <td align="left">ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.</td>
 </tr>
 </tbody></table>
+<h3>Official 1inch Aqua + SwapVM integration</h3>
+<p>The liquidity layer runs on the <strong>official contracts</strong> — <a href="https://github.com/1inch/aqua"><code>1inch/aqua</code></a> and <a href="https://github.com/1inch/swap-vm"><code>1inch/swap-vm</code></a> (release/1.2), vendored under <code>lib/</code> and compiled unmodified:</p>
+<ul>
+<li><strong><code>SmileSwapVMRouter</code></strong> (<code>src/swapvm/SmileSwapVMRouter.sol</code>) inherits the official <code>SwapVM</code> core + <code>AquaOpcodes</code> instruction set and registers one custom instruction at <strong>opcode 33</strong>: <code>_optionPremiumXD</code>. This router <em>is</em> the Aqua app LPs ship to.</li>
+<li><strong>The strategy is a real SwapVM program</strong>: <code>salt(authId) → deadline(expiry) → optionPremium(oracle, σ-source, tokens, K-range, expiry, α)</code> — composed from two official <code>Controls</code> instructions plus the custom pricing opcode.</li>
+<li><strong>The taker picks the strike per swap</strong> via SwapVM taker instruction args, so <em>one</em> shipped Aqua balance quotes the <strong>entire option chain</strong> in $[K_{min}, K_{max}]$ — displayed depth is a function of wallet balance, not per-strike pre-allocation.</li>
+<li><strong>Two-sided market from swap direction</strong>: the forward direction (premium → collateral) prices at <strong>Ask</strong> (rounds against the taker, up); the reverse direction (collateral → premium) prices at <strong>Bid</strong> (rounds down). <code>close()</code> executes the reverse swap: the holder is paid the live Bid, the escrowed collateral is <code>Aqua.push()</code>ed back into the LP wallet, and the range&#39;s JIT capacity <strong>self-restores</strong> — the buyback funded by premiums the LP already earned.</li>
+<li><strong>Covered calls</strong> execute as official SwapVM swaps (premium <code>Aqua.push()</code>ed to the LP wallet, collateral <code>Aqua.pull()</code>ed JIT). <strong>Cash-secured puts</strong> use the vault itself as an official <code>AquaApp</code> (same JIT <code>pull()</code>, under the official per-strategy reentrancy lock) since premium and collateral share one token (USDC).</li>
+<li><strong>Capacity is enforced by Aqua itself</strong>: over-buying a range underflows the maker&#39;s virtual balance inside the official <code>Aqua.pull()</code> — the vault keeps no parallel accounting. On a mainnet fork the deploy script reuses the <strong>production Aqua deployment</strong> (<code>0x4999…6D31</code>).</li>
+</ul>
+<h3>Revenue model (protocol fee via the official fee opcode)</h3>
+<p>Every option <strong>buy</strong> carries a protocol fee (default 1%, capped at 5%) that accrues to a fee recipient — e.g. the 1inch DAO treasury — routed through the <strong>official SwapVM fee instruction</strong>, not custom plumbing:</p>
+<ul>
+<li>The call-strategy program grows to five instructions: <code>salt → deadline → jumpIfTokenIn → aquaProtocolFee → optionPremium</code>. The official <code>Fee._aquaProtocolFeeAmountInXD</code> (opcode 28) grosses the fee up <strong>on top of the Ask</strong> — the buyer pays <code>ask + fee</code>, the fee recipient is paid through the official <code>Aqua.pull()</code>, and <strong>the LP always nets the full premium</strong>.</li>
+<li>The official <code>Controls._jumpIfTokenIn</code> (opcode 11) makes fees <strong>direction-aware in bytecode</strong>: sellbacks (collateral-in) jump past the fee instruction, so closing a position is fee-free and never double-charges.</li>
+<li>Puts (the vault-as-AquaApp leg) apply the identical gross-up vault-side.</li>
+<li>Fee terms are <strong>snapshotted per authorization</strong> — an LP sees the exact fee at ship time and it can never change under them; governance changes apply only to new ranges. Fee-enabled ranges ship with $25 of premium-token virtual headroom (an allowance number, no tokens move) because the official opcode pulls the fee before the buyer&#39;s premium push lands.</li>
+</ul>
 <h3>Collateralization Model</h3>
 <p><strong>V1 (current) — Cash-Secured / Covered (Fully Collateralized)</strong></p>
 <p>The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP backs it with 1 WETH (Covered Call). To mint a Put, the LP backs it with 3,500 USDC (Cash-Secured Put). The collateral is authorized JIT via Aqua — it never leaves the LP&#39;s wallet until a buyer matches — but it is always fully present and earmarked.</p>
@@ -348,7 +366,7 @@
 <h2>⚠️ Deployment Notes &amp; Failures</h2>
 <ol>
 <li><strong>HookMiner Latency</strong>: Finding a Uniswap v4 Hook address with the required flag prefix took significantly longer than expected, delaying <code>OptionPricingHook</code> deployment.</li>
-<li><strong>SwapVM Instruction Set</strong>: Implementing a stateless pricing engine in Solidity to mirror SwapVM bytecode required several iterations. Stack-too-deep errors in <code>buy()</code> were resolved by enabling <code>via_ir = true</code> in <code>foundry.toml</code>.</li>
+<li><strong>SwapVM Instruction Set</strong>: The first iteration modeled SwapVM with a stand-in Solidity engine. It has since been replaced by a real custom instruction (opcode 33) on the official <code>SwapVM</code> + <code>AquaOpcodes</code> base — the maker strategy is genuine VM bytecode (<code>salt → deadline → optionPremium</code>) shipped through the official <code>Aqua.ship()</code>. Packing the option terms into the 255-byte instruction-args budget required a hand-packed 126-byte layout. Stack-too-deep errors were resolved by enabling <code>via_ir = true</code> in <code>foundry.toml</code>.</li>
 <li><strong>Chainlink CRE Price Source</strong>: An initial design fetched ETH/USD from CEX REST APIs per node, which hit Binance V3 rate limits and risked cross-node divergence during simulation. Resolved by reading the canonical Chainlink ETH/USD aggregator on-chain at the last finalized block — every DON node observes the same value, so settlement consensus is deterministic and matches the price the app displays.</li>
 <li><strong>GitHub Pages SPA Routing</strong>: Next.js static export broke on refresh. Fixed with <code>.nojekyll</code> and static export config.</li>
 </ol>
@@ -541,38 +559,38 @@ forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the 
 <tbody><tr>
 <td>1</td>
 <td>LP</td>
-<td>Connect wallet → <em>Authorize Strike Range</em> → approve collateral + authorize</td>
-<td><code>ERC20.approve()</code> + <code>AquaCollateralVault.authorizeRange()</code></td>
+<td>Connect wallet → <em>Authorize Strike Range</em> → approve <strong>official Aqua</strong> → register → <strong>ship</strong></td>
+<td><code>ERC20.approve(Aqua)</code> + <code>AquaCollateralVault.authorizeRange()</code> + <code>Aqua.ship()</code></td>
 </tr>
 <tr>
 <td>2</td>
 <td>Trader</td>
 <td>Click <strong>Buy</strong> on a strike within LP&#39;s range → approve USDC → buy</td>
-<td><code>ERC20.approve(USDC)</code> + <code>AquaCollateralVault.buy()</code></td>
+<td><code>ERC20.approve(USDC)</code> + <code>AquaCollateralVault.buy(authId, K, amount, maxPremium)</code> (SwapVM-priced)</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Trader</td>
-<td>Click <strong>Close</strong> to unwind early</td>
-<td><code>AquaCollateralVault.close()</code></td>
+<td>Click <strong>Close</strong> to sell back at the live Bid (reverse SwapVM swap; LP capacity restores)</td>
+<td><code>AquaCollateralVault.close(optionToken, lp, amount, minPayout)</code></td>
 </tr>
 <tr>
 <td>4</td>
 <td>—</td>
-<td>Paste <code>seriesId</code> into <code>cre-workflow/settlement/config.json</code>, run <code>cre workflow simulate settlement</code></td>
-<td><code>AquaOptionSettlement.settleSeries()</code> via CRE</td>
+<td>Settle at expiry — <strong>anyone</strong> may supply the Chainlink round covering expiry; or run <code>cre workflow simulate settlement</code></td>
+<td><code>AquaOptionSettlement.settleWithChainlinkRound()</code> / <code>settleSeries()</code> via CRE</td>
 </tr>
 <tr>
 <td>5</td>
 <td>Trader</td>
-<td>Call <code>redeem()</code> to collect payout (ITM only)</td>
-<td><code>AquaOptionSettlement.redeem()</code></td>
+<td>Call <code>redeem()</code> to collect the cash-settled intrinsic (ITM only)</td>
+<td><code>AquaCollateralVault.redeem(optionToken, amount)</code></td>
 </tr>
 <tr>
 <td>6</td>
 <td>LP</td>
-<td>Call <code>reclaimCollateral()</code> to recover remaining collateral</td>
-<td><code>AquaOptionSettlement.reclaimCollateral()</code></td>
+<td>Call <code>reclaimCollateral()</code> to recover everything not owed to holders</td>
+<td><code>AquaCollateralVault.reclaimCollateral(optionToken)</code></td>
 </tr>
 </tbody></table>
 <hr>
