@@ -160,8 +160,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex items-center justify-between">
-        <div className="flex flex-col items-start gap-0.5">
+      <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-col items-start gap-0.5 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/smile-icon.svg`} alt="Smile" height={28} className="block" style={{ height: 28 }} />
           <p className="text-gray-500 text-xs">
@@ -169,7 +169,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <a
             href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html`}
             target="_blank"
@@ -305,8 +305,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 border-b border-gray-800">
+        {/* Tab bar — wraps on narrow screens instead of overflowing */}
+        <div className="flex flex-wrap gap-1 border-b border-gray-800">
           {TABS.map((tab) => (
             <button
               key={tab.id}
