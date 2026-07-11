@@ -1,0 +1,489 @@
+{
+  "name": "smile-contracts",
+  "description": "Smile is a non-custodial, parametric options marketplace that combines 1inch Aqua, Uniswap v4 Hooks, and Chainlink CRE so LPs can quote an entire strike range from one capital pool while their collateral keeps earning DeFi yield. This repository is a monorepo containing the Foundry-based Solidity contracts, a Next.js/TypeScript frontend, and a Chainlink CRE settlement workflow.",
+  "languages": [
+    "config",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "markdown",
+    "shell",
+    "sol",
+    "toml",
+    "txt",
+    "typescript",
+    "yaml"
+  ],
+  "frameworks": [
+    "GitHub Actions",
+    "Next.js",
+    "React",
+    "Tailwind CSS"
+  ],
+  "files": [
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/workflows/pages.yml",
+      "language": "yaml",
+      "sizeLines": 60,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "complete-graph.mjs",
+      "language": "javascript",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "convert-batches.mjs",
+      "language": "javascript",
+      "sizeLines": 348,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "language": "typescript",
+      "sizeLines": 690,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/contracts/evm/ts/generated/index.ts",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/contracts/package.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/package.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/project.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/settlement/config.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/settlement/main.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/settlement/package.json",
+      "language": "json",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/settlement/tsconfig.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cre-workflow/settlement/workflow.ts",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cre-workflow/settlement/workflow.yaml",
+      "language": "yaml",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "foundry.toml",
+      "language": "toml",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "frontend/AGENTS.md",
+      "language": "markdown",
+      "sizeLines": 5,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/app/globals.css",
+      "language": "css",
+      "sizeLines": 26,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/app/layout.tsx",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/app/page.tsx",
+      "language": "typescript",
+      "sizeLines": 369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/app/providers.tsx",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/CLAUDE.md",
+      "language": "markdown",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/components/AuthorizeRange.tsx",
+      "language": "typescript",
+      "sizeLines": 480,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/LPDashboard.tsx",
+      "language": "typescript",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/OptionMatrix.tsx",
+      "language": "typescript",
+      "sizeLines": 994,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/PayoffBuilder.tsx",
+      "language": "typescript",
+      "sizeLines": 336,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/RegisterSeries.tsx",
+      "language": "typescript",
+      "sizeLines": 232,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/TradeButton.tsx",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/components/TxProof.tsx",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/config/wagmi.ts",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/hooks/useUniswapSpot.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/hooks/useUniswapTrade.ts",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/package.json",
+      "language": "json",
+      "sizeLines": 38,
+      "fileCategory": "config"
+    },
+    {
+      "path": "frontend/postcss.config.mjs",
+      "language": "javascript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/public/help.html",
+      "language": "html",
+      "sizeLines": 683,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/README.md",
+      "language": "markdown",
+      "sizeLines": 36,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/scripts/gen-help.mjs",
+      "language": "javascript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "language": "json",
+      "sizeLines": 34,
+      "fileCategory": "config"
+    },
+    {
+      "path": "frontend/types/finance.d.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "local.sh",
+      "language": "shell",
+      "sizeLines": 163,
+      "fileCategory": "script"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "PLAN.md",
+      "language": "markdown",
+      "sizeLines": 171,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 622,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "remappings.txt",
+      "language": "txt",
+      "sizeLines": 6,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "run-phases.mjs",
+      "language": "javascript",
+      "sizeLines": 397,
+      "fileCategory": "code"
+    },
+    {
+      "path": "script/DemoTrade.s.sol",
+      "language": "sol",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "script/Deploy.s.sol",
+      "language": "sol",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "skills-lock.json",
+      "language": "json",
+      "sizeLines": 227,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/hooks/OptionPricingHook.sol",
+      "language": "sol",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/mocks/MockV3Aggregator.sol",
+      "language": "sol",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/OptionToken.sol",
+      "language": "sol",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/swapvm/OptionPremiumInstruction.sol",
+      "language": "sol",
+      "sizeLines": 199,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/swapvm/OptionPricingEngine.sol",
+      "language": "sol",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/swapvm/SmileMath.sol",
+      "language": "sol",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/swapvm/SmileSwapVMRouter.sol",
+      "language": "sol",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/vaults/AquaCollateralVault.sol",
+      "language": "sol",
+      "sizeLines": 743,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/vaults/AquaOptionSettlement.sol",
+      "language": "sol",
+      "sizeLines": 121,
+      "fileCategory": "code"
+    }
+  ],
+  "totalFiles": 61,
+  "filteredByIgnore": 152,
+  "estimatedComplexity": "moderate",
+  "importMap": {
+    ".env.example": [],
+    ".github/workflows/pages.yml": [],
+    "complete-graph.mjs": [],
+    "convert-batches.mjs": [],
+    "cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json": [],
+    "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts": [
+      "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts"
+    ],
+    "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts": [],
+    "cre-workflow/contracts/evm/ts/generated/index.ts": [],
+    "cre-workflow/contracts/package.json": [],
+    "cre-workflow/package.json": [],
+    "cre-workflow/project.yaml": [],
+    "cre-workflow/settlement/config.json": [],
+    "cre-workflow/settlement/main.ts": [
+      "cre-workflow/settlement/workflow.ts"
+    ],
+    "cre-workflow/settlement/package.json": [],
+    "cre-workflow/settlement/tsconfig.json": [],
+    "cre-workflow/settlement/workflow.ts": [
+      "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts"
+    ],
+    "cre-workflow/settlement/workflow.yaml": [],
+    "foundry.toml": [],
+    "frontend/AGENTS.md": [],
+    "frontend/app/globals.css": [],
+    "frontend/app/layout.tsx": [
+      "frontend/app/globals.css",
+      "frontend/app/providers.tsx"
+    ],
+    "frontend/app/page.tsx": [
+      "frontend/components/AuthorizeRange.tsx",
+      "frontend/components/LPDashboard.tsx",
+      "frontend/components/OptionMatrix.tsx",
+      "frontend/components/PayoffBuilder.tsx",
+      "frontend/components/TxProof.tsx",
+      "frontend/config/wagmi.ts",
+      "frontend/hooks/useUniswapSpot.ts"
+    ],
+    "frontend/app/providers.tsx": [
+      "frontend/config/wagmi.ts"
+    ],
+    "frontend/CLAUDE.md": [],
+    "frontend/components/AuthorizeRange.tsx": [
+      "frontend/config/wagmi.ts"
+    ],
+    "frontend/components/LPDashboard.tsx": [
+      "frontend/components/AuthorizeRange.tsx",
+      "frontend/config/wagmi.ts"
+    ],
+    "frontend/components/OptionMatrix.tsx": [
+      "frontend/components/AuthorizeRange.tsx",
+      "frontend/components/PayoffBuilder.tsx",
+      "frontend/config/wagmi.ts",
+      "frontend/hooks/useUniswapTrade.ts"
+    ],
+    "frontend/components/PayoffBuilder.tsx": [],
+    "frontend/components/RegisterSeries.tsx": [],
+    "frontend/components/TradeButton.tsx": [
+      "frontend/config/wagmi.ts"
+    ],
+    "frontend/components/TxProof.tsx": [],
+    "frontend/config/wagmi.ts": [],
+    "frontend/eslint.config.mjs": [],
+    "frontend/hooks/useUniswapSpot.ts": [],
+    "frontend/hooks/useUniswapTrade.ts": [],
+    "frontend/next.config.ts": [],
+    "frontend/package.json": [],
+    "frontend/postcss.config.mjs": [],
+    "frontend/public/help.html": [],
+    "frontend/README.md": [],
+    "frontend/scripts/gen-help.mjs": [],
+    "frontend/tsconfig.json": [],
+    "frontend/types/finance.d.ts": [],
+    "local.sh": [],
+    "package.json": [],
+    "PLAN.md": [],
+    "README.md": [],
+    "remappings.txt": [],
+    "run-phases.mjs": [],
+    "script/DemoTrade.s.sol": [],
+    "script/Deploy.s.sol": [],
+    "skills-lock.json": [],
+    "src/hooks/OptionPricingHook.sol": [],
+    "src/mocks/MockV3Aggregator.sol": [],
+    "src/OptionToken.sol": [],
+    "src/swapvm/OptionPremiumInstruction.sol": [],
+    "src/swapvm/OptionPricingEngine.sol": [],
+    "src/swapvm/SmileMath.sol": [],
+    "src/swapvm/SmileSwapVMRouter.sol": [],
+    "src/vaults/AquaCollateralVault.sol": [],
+    "src/vaults/AquaOptionSettlement.sol": []
+  }
+}
