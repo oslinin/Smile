@@ -1,5 +1,15 @@
 # Implementation Plan: Phase 0 + Phase 1 Hardening
 
+> **Status note:** Tasks 1–5 were implemented (with Phase 2 folded in). One
+> deliberate deviation: the args layout went to **v3 = 150 bytes**, adding
+> `sigmaMulBps` (uint16 at offset 148) for S5 alongside the three fields
+> planned below, so the layout only had to version once. Per-auth runtime
+> state lives in a separate `AuthPricing` struct/mapping (`pricingOf`)
+> instead of appending to `LPAuthorization` — appending would have pushed
+> the auto-generated getter past the stack limit and broken every existing
+> tuple destructuring. Tasks 6–7 (frontend depth display, markout job)
+> remain open.
+
 **Goal:** implement Phases 0–1 of [solutions.md](../solutions.md) — markout
 instrumentation, honest depth display, adverse-selection hardening (per-block
 caps, size-convex pricing, staleness-scaled spread), the firmness bond, and

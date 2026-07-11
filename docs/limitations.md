@@ -115,6 +115,16 @@ range.
 
 ## Part 2 — The limitations
 
+> **Status update:** since this document was written, the Phase 1–2
+> mitigations have been implemented: L3 (post-trade-only repricing) is
+> addressed by size-convex intra-trade pricing, L4 (unbounded per-block
+> drain) by per-authorization block caps, L1/L2 partially by the
+> staleness-scaled spread plus the optional Pyth quoting adapter, and L11
+> (soft liquidity) by the firmness bond, reliability counters, and
+> phantom-depth-aware `bestQuote` routing. The sections below describe the
+> UNMITIGATED design so the reasoning stays legible; see
+> [solutions.md](./solutions.md) for what is now in place.
+
 ### L1. Stale-quote sniping — the oracle latency gap
 
 The premium is computed from Chainlink's last published price

@@ -223,6 +223,15 @@ before.
 > **Executable task-level plan for Phases 0–1** (exact files, signatures,
 > tests, commands, written for mechanical execution):
 > [plans/2026-07-11-phase01-hardening.md](./plans/2026-07-11-phase01-hardening.md)
+>
+> **Status:** the contract side of Phases 1–2 is IMPLEMENTED — R1 (per-block
+> caps), R2 (size-convex pricing), R3+R4 (staleness-scaled spread with a
+> configurable floor), S2 (firmness bond, deploy-opt-in via
+> `FIRMNESS_BOND_BPS`), S3 (fills/failedPulls counters), S5 (per-range
+> `sigmaMulBps`), S6 (`bestQuote`/`buyBest` with S1 phantom-depth skipping),
+> and R5 (`PythSpotAdapter` pull-oracle for quoting, deploy-opt-in via
+> `PYTH`/`PYTH_PRICE_ID`). Still open: S1 frontend depth display, S8
+> markout job, and all of Phases 3–5.
 
 Sequenced by (value ÷ effort), with a measurable gate before each phase.
 Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted
@@ -231,8 +240,8 @@ even if later phases never happen.
 | Phase | Contents | Effort | Gate to proceed |
 |---|---|---|---|
 | **0 — Measure & be honest** | S1 honest depth display · S8 markout job | Frontend + off-chain script; no contracts | — (do unconditionally) |
-| **1 — Harden** | R1 per-block caps · R2 size-convex pricing · R3 staleness spread · R4 spread floor · S2 firmness bond · S3 reliability score | One contract PR: vault + instruction + tests | Markouts confirm pick-offs exist (they will) |
-| **2 — Compete** | S5 LP-quoted vol · S6 best-quote routing · R5 Pyth quoting oracle | Contract PR (router index + instruction arg) + frontend | Phase-1 markouts improved but spread still uncompetitive vs Deribit mid |
+| **1 — Harden** ✅ | R1 per-block caps · R2 size-convex pricing · R3 staleness spread · R4 spread floor · S2 firmness bond · S3 reliability score | One contract PR: vault + instruction + tests | Markouts confirm pick-offs exist (they will) |
+| **2 — Compete** ✅ (contracts) | S5 LP-quoted vol · S6 best-quote routing · R5 Pyth quoting oracle | Contract PR (router index + instruction arg) + frontend | Phase-1 markouts improved but spread still uncompetitive vs Deribit mid |
 | **3 — Firm up** | S4 escrowed firm tier w/ wstETH & sDAI · router firm-first preference | New vault path + settlement FX reads + tests | S3 data shows fill-failure rate matters (>~1–2% of attempts) |
 | **4 — Sell it** | S9 covered-call one-click + auto-roll keeper · S10 1inch distribution · S11 first long-tail listing | Frontend + keeper + BD, minimal contracts | Phases 1–3 metrics: LP markouts ≥ 0 over a month — i.e. the product is safe to market |
 | **5 — Scale capital** | S12 defined-risk netting · S7 IV anchor if passive tier drifts | Significant contract design | Real volume; LP demand for spreads |
