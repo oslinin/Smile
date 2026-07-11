@@ -116,6 +116,27 @@ $$\sigma_{tenor,\,t+1} = \sigma_{tenor,\,t} + \gamma \cdot \text{sign}(\text{tra
 - Uniswap v4 `afterSwap` (no tenor info) shifts the whole surface.
 - $\gamma = 0.5\%$ per trade. This creates a price-impact-like mechanism: heavy buying steepens the surface and raises premiums, attracting arbitrageurs who sell back to earn the spread.
 
+> **Design note — why pricing is on-chain, and why $\sigma_{tenor}$ is a step function.**
+> `OptionPricingHook.sigmaFor` is read **atomically inside the same swap** that buys or
+> sells the option, so the price a trader gets is exactly whatever the bucket lookup
+> returns at that block — no off-chain quote to go stale or be front-run. This isn't
+> architecturally required: `AquaOptionSettlement` already sources its *expiry* price
+> off-chain via the Chainlink CRE forwarder (§5), so an RFQ-style premium quote (a
+> signed off-chain price, verified on-chain much like a CRE report) is possible in
+> principle. The tradeoff:
+> - **On-chain step lookup (current):** fully permissionless and atomic, no quoting
+>   service to keep live — but $\sigma_{tenor}(T)$ is discontinuous at the 7d/30d/90d
+>   bucket edges (visible as terraces on the Vol Surface tab), and each trade can only
+>   afford to move the one bucket it landed in.
+> - **Off-chain quoted pricing:** could interpolate $\sigma_{tenor}(T)$ smoothly across
+>   tenors, but reintroduces a liveness/trust dependency on the quoter, and blending a
+>   trade's demand feedback across neighboring buckets (instead of bumping one bucket)
+>   opens a manipulation surface — trading right at a bucket edge could nudge a bucket
+>   nothing actually traded in.
+>
+> V1 keeps pricing on-chain and discrete; smooth interpolation is left for a future
+> RFQ-style quoting layer.
+
 ### 4. Black-Scholes Delta (Frontend)
 
 Delta ($\Delta$) is computed client-side for the matrix display. Not used in on-chain pricing.

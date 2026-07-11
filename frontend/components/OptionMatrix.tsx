@@ -747,8 +747,9 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
   const putAsk  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, true)  : undefined;
 
   const isATM       = Math.abs((strike - spot) / spot) < 0.01;
-  const callBuyable = !!activeAuth && activeAuth.isCall;
-  const putBuyable  = !!activeAuth && !activeAuth.isCall;
+  const inAuthRange = !!activeAuth && strike >= activeAuth.strikeMin && strike <= activeAuth.strikeMax;
+  const callBuyable = inAuthRange && activeAuth!.isCall;
+  const putBuyable  = inAuthRange && !activeAuth!.isCall;
 
   const toggle = (side: "call" | "put", action: "buy" | "sell" | "close") =>
     setPanel(p => (p?.side === side && p.action === action) ? null : { side, action });
