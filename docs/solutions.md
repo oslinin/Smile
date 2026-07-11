@@ -220,6 +220,10 @@ before.
 
 ## The plan
 
+> **Executable task-level plan for Phases 0–1** (exact files, signatures,
+> tests, commands, written for mechanical execution):
+> [plans/2026-07-11-phase01-hardening.md](./plans/2026-07-11-phase01-hardening.md)
+
 Sequenced by (value ÷ effort), with a measurable gate before each phase.
 Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted
 even if later phases never happen.
