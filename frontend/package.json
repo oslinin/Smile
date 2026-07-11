@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.10.0",
   "scripts": {
     "gen-help": "node scripts/gen-help.mjs",
     "predev": "node scripts/gen-help.mjs",
@@ -31,6 +32,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "katex": "^0.17.0",
     "marked": "^18.0.5",
     "tailwindcss": "^4",
     "typescript": "^5"

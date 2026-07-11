@@ -9,13 +9,62 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
+import katex from "katex";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..");
 const readmePath = join(repoRoot, "README.md");
 const outPath = join(here, "..", "public", "help.html");
 
-const body = marked.parse(readFileSync(readmePath, "utf8"), { gfm: true });
+// The README uses GitHub's native $ / $$ math delimiters (so it also renders
+// correctly on github.com). Those spans have to be pulled out and rendered
+// to static KaTeX HTML *before* marked.parse() runs, for two reasons:
+//  1. Markdown's backslash-escaping (`\_`, `\!`, `\;`, ...) and emphasis
+//     rules (`_..._`) would otherwise mangle the LaTeX source.
+//  2. A lone `$` is also used for plain currency in prose (e.g. "$25 of
+//     headroom"), which is ambiguous with math delimiters in general. Since
+//     every genuine inline math span here contains a LaTeX-signal character
+//     (\, ^, _, {, }, [, ]) and currency mentions never do, that's used to
+//     tell them apart deterministically at build time — far safer than
+//     asking a browser-side delimiter scanner to guess.
+function extractMath(markdown) {
+  const spans = [];
+  const protect = (source, display) => {
+    const rendered = katex.renderToString(source, { throwOnError: false, displayMode: display });
+    spans.push(rendered);
+    return `MATHSPANPLACEHOLDER${spans.length - 1}ENDMATHSPAN`;
+  };
+
+  // Display math: $$...$$, unambiguous since currency never uses double $.
+  let text = markdown.replace(/\$\$([\s\S]+?)\$\$/g, (_, source) => protect(source, true));
+
+  // Inline math: scan for $...$ pairs on a single line whose content looks
+  // like LaTeX. Anything else (currency, an unpaired $) is left untouched.
+  const looksLikeMath = /[\\^_{}[\]]/;
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "$") {
+      let j = i + 1;
+      while (j < text.length && text[j] !== "$" && text[j] !== "\n") j++;
+      const inner = text.slice(i + 1, j);
+      if (text[j] === "$" && inner.length > 0 && !/^\s|\s$/.test(inner) && looksLikeMath.test(inner)) {
+        out += protect(inner, false);
+        i = j;
+        continue;
+      }
+    }
+    out += text[i];
+  }
+  return { text: out, spans };
+}
+
+const { text: protectedReadme, spans: mathSpans } = extractMath(readFileSync(readmePath, "utf8"));
+
+let body = marked.parse(protectedReadme, { gfm: true });
+body = body.replace(
+  /MATHSPANPLACEHOLDER(\d+)ENDMATHSPAN/g,
+  (_, i) => mathSpans[Number(i)],
+);
 
 const html = `<!doctype html>
 <html lang="en">
@@ -23,6 +72,7 @@ const html = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Smile — Docs</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.17/dist/katex.min.css" />
 <style>
   :root { color-scheme: dark; }
   body {

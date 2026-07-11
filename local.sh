@@ -135,7 +135,7 @@ grep "NEXT_PUBLIC_" "$ENV_FILE" | grep -v "KEY\|API"
 echo ""
 echo "Starting Next.js dev server on http://localhost:3000 …"
 cd frontend
-npm run dev > /tmp/next-options.log 2>&1 &
+pnpm run dev > /tmp/next-options.log 2>&1 &
 echo $! > "$NEXT_PID_FILE"
 
 # Tail logs until Next.js is ready
