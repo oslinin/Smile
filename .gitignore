@@ -12,6 +12,10 @@ node_modules/
 frontend/.next/
 frontend/out/
 
+# Python vol-surface renderer
+volsurface/.venv/
+volsurface/__pycache__/
+
 # OS
 .DS_Store
 frontend/.env.local

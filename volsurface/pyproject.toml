@@ -1,0 +1,14 @@
+[project]
+name = "smile-volsurface"
+version = "0.1.0"
+description = "3-D volatility-surface renderer for the Smile options marketplace"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.0",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+]
+
+[tool.uv]
+# server.py is a plain script, not an installable package — don't try to build it.
+package = false

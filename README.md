@@ -366,6 +366,12 @@ pnpm install
 pnpm run dev
 ```
 
+Or, from the repo root (no `cd` needed — pnpm targets the workspace by name):
+
+```bash
+pnpm --filter frontend dev
+```
+
 Open http://localhost:3000. The UI includes the option-chain matrix, the LP
 range-authorization flow, and an OptionStrat-style **strategy builder** —
 20 named strategies (spreads, condors, butterflies, straddles, backspreads,
@@ -373,6 +379,15 @@ calendars) grouped by market outlook, with up to 6 custom legs, per-leg expiry,
 a T+0 value curve, breakevens, probability of profit, and net greeks. Entry
 premiums are quoted with the same smile the on-chain instruction charges, so
 what you see is what `vault.buy()` costs.
+
+The **Vol Surface · Python** tab renders the live 3-D volatility surface
+$\sigma_{strike}(K,T)$ with **matplotlib** (a Flask service in
+[`volsurface/`](volsurface/)). Every confirmed buy/sell POSTs to the renderer,
+which bumps the traded tenor bucket by $\pm\gamma$ — the same feedback loop the
+on-chain [`OptionPricingHook.bumpSigma`](src/hooks/OptionPricingHook.sol) applies
+— so the surface visibly re-rates as order flow arrives. Start it standalone with
+`./volsurface/run.sh` (it also comes up automatically with `./local.sh`); the tab
+shows a hint instead of a broken image when the service is offline.
 
 ### 3. Smart Contract Development (Foundry)
 
@@ -383,7 +398,17 @@ forge test    # run the 82-test suite
 
 ### 4. Deploy to Anvil (Local)
 
-The quickest path: `./local.sh` starts Anvil, deploys all contracts, writes `frontend/.env.local`, and launches the dev server in one step.
+The quickest path: `./local.sh` starts Anvil, deploys all contracts, writes `frontend/.env.local`, launches the vol-surface renderer, and starts the dev server in one step.
+
+When you're done, stop everything it started:
+
+```bash
+fuser -k 8545/tcp 3000/tcp 8000/tcp
+```
+
+(This is the same port-based cleanup `local.sh` runs on every invocation, so it's safe even if a previous run didn't finish cleanly — unlike `kill $(cat /tmp/*-options.pid)`, it won't error out on a missing PID file.)
+
+Re-running `./local.sh` also stops any previous instances automatically before starting fresh.
 
 To deploy manually (e.g., to iterate on the script):
 
@@ -598,9 +623,11 @@ signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.m
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
 ├── frontend/                 # Next.js app
-│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard
+│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface
 │   ├── lib/                  # options engine + 20-strategy catalog
 │   └── config/               # Wagmi + contract addresses + official Aqua ABI
+├── volsurface/               # Python (Flask + matplotlib) 3-D vol-surface renderer
+│                             #   — evolves with each trade via the σ feedback loop
 ├── cre-workflow/             # Chainlink CRE workflow (TypeScript → WASM)
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 ├── docs/                     # grant proposal, build notes, CRE transcript
