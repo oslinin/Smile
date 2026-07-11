@@ -230,9 +230,30 @@ professional desks operate — but it trades away exactly what Smile is for:
 See R6 for the hybrid that captures most of the benefit without giving up the
 on-chain floor.
 
+### L11. Aqua liquidity is soft — quoted depth can be phantom
+
+The flip side of unrehypothecation (L8's virtue): because the balance backing
+a quote sits in the LP's own wallet, it can be spent, transferred, or
+de-approved at any moment. A displayed quote is an unfunded intention until
+the block it executes — the JIT `Aqua.pull()` simply reverts at fill time if
+the collateral left. At small scale this is a UX annoyance (failed
+transactions); at scale it is a market-quality problem: takers and
+integrators cannot rely on displayed depth, and an adversarial LP could
+display size they never intend to honor, learning takers' intentions for
+free. Contrast: an order on Deribit's book is firm; an escrowed-vault quote
+is firm; an Aqua quote is indicative. Mitigations — honest depth display,
+slashable firmness bonds, fill-reliability scores, and a parallel firm tier
+with yield-bearing escrowed collateral — are specified in
+[solutions.md](./solutions.md) (S1–S4).
+
 ---
 
 ## Part 3 — Recommendations
+
+> **Note:** these recommendations are expanded into a full sequenced build
+> plan — with the soft-liquidity solutions, the LP-quoted-vol competitive
+> pricing design, demand strategy, and phase gates — in
+> [solutions.md](./solutions.md).
 
 Ordered by benefit-to-complexity. Phases 1–2 are contained contract changes;
 each is testable in isolation. The guiding principle, from L5: **stop trying
