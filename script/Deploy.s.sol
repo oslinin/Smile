@@ -14,6 +14,8 @@ import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
 import { AquaOptionSettlement } from "../src/vaults/AquaOptionSettlement.sol";
 import { MockV3Aggregator } from "../src/mocks/MockV3Aggregator.sol";
 import { PythSpotAdapter } from "../src/oracles/PythSpotAdapter.sol";
+import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
+import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -108,12 +110,19 @@ contract Deploy is Script, StdCheats {
             oracleAddr = address(new PythSpotAdapter(pythAddr, pythPriceId, 8));
         }
 
+        OptionTokenFactory tokenFactory = new OptionTokenFactory();
+
         AquaCollateralVault vault = new AquaCollateralVault(
             aquaAddr,
             payable(address(router)),
             oracleAddr,
-            deployer
+            deployer,
+            address(tokenFactory)
         );
+
+        // S6: best-quote routing periphery — scans all ranges, skips phantom
+        // depth, routes buys to the tightest executable vol quote.
+        SmileQuoteLens lens = new SmileQuoteLens(address(vault), payable(address(router)), aquaAddr);
 
         // deployer also acts as CRE forwarder in local testing; the Chainlink
         // feed enables PERMISSIONLESS settlement (anyone supplies the round
@@ -157,6 +166,7 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_PRICING_HOOK=%s",    address(hook));
         console.log("NEXT_PUBLIC_AQUA_VAULT=%s",      address(vault));
         console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
+        console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }

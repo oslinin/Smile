@@ -230,8 +230,11 @@ before.
 > `FIRMNESS_BOND_BPS`), S3 (fills/failedPulls counters), S5 (per-range
 > `sigmaMulBps`), S6 (`bestQuote`/`buyBest` with S1 phantom-depth skipping),
 > and R5 (`PythSpotAdapter` pull-oracle for quoting, deploy-opt-in via
-> `PYTH`/`PYTH_PRICE_ID`). Still open: S1 frontend depth display, S8
-> markout job, and all of Phases 3–5.
+> `PYTH`/`PYTH_PRICE_ID`). Phase 0 is implemented too: S1 honest depth
+> (`useFirmDepth` hook — firm-depth readout, soft badge, buy gating) and S8
+> markouts (`analytics/markouts.mjs`, verified live on Anvil). S6 routing
+> lives in the `SmileQuoteLens` periphery so the vault stays under the
+> EIP-170 size limit. Still open: Phases 3–5.
 
 Sequenced by (value ÷ effort), with a measurable gate before each phase.
 Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted

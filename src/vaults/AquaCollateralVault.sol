@@ -19,6 +19,7 @@ import { ControlsArgsBuilder } from "@1inch/swap-vm/src/instructions/Controls.so
 import { FeeArgsBuilder, BPS } from "@1inch/swap-vm/src/instructions/Fee.sol";
 
 import { OptionToken } from "../OptionToken.sol";
+import { OptionTokenFactory } from "../OptionTokenFactory.sol";
 import { SmileMath } from "../swapvm/SmileMath.sol";
 import { SmileSwapVMRouter } from "../swapvm/SmileSwapVMRouter.sol";
 import { OptionPremiumArgsBuilder } from "../swapvm/OptionPremiumInstruction.sol";
@@ -53,8 +54,26 @@ contract AquaCollateralVault is AquaApp, Ownable {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
+    error AuthInactive();
+    error ZeroAmount();
+    error ExpiryInPast();
+    error ZeroCapacity();
+    error BadTokenPair();
+    error PremiumAboveMax();
+    error SelfOnly();
+    error NotLp();
+    error WrongLp();
+    error UnknownAuth();
+    error PayoutBelowMin();
+    error SettlementNotSet();
+    error NothingToReclaim();
+    error InsufficientLocked();
+    error BadOraclePrice();
+    error StaleOraclePrice();
+
     SmileSwapVMRouter public immutable router;
     IPriceOracle public immutable oracle;
+    OptionTokenFactory public immutable tokenFactory;
     IOptionPricingHook public hook;
     AquaOptionSettlement public settlement;
     uint256 public constant ALPHA = 2e18;          // smile curvature — matches frontend
@@ -137,8 +156,8 @@ contract AquaCollateralVault is AquaApp, Ownable {
     /// @notice S2: firmness bond as bps of maxCollateral (1e4 scale); 0 = disabled.
     uint16 public firmnessBondBps;
     /// @dev Spread caps mirror the instruction's MAX_HALF_SPREAD_BPS.
-    uint16 public constant MAX_HALF_SPREAD_BPS = 2000;
-    uint16 public constant MAX_BOND_BPS = 500; // 5% of maxCollateral
+    uint16 internal constant MAX_HALF_SPREAD_BPS = 2000;
+    uint16 internal constant MAX_BOND_BPS = 500; // 5% of maxCollateral
     // authId => strike (WAD) => OptionToken address (deployed lazily on first buy)
     mapping(uint256 => mapping(uint256 => address)) public optionTokens;
     // optionToken => (authId, strike) reverse lookup
@@ -155,12 +174,13 @@ contract AquaCollateralVault is AquaApp, Ownable {
     event Redeemed(address indexed optionToken, address indexed holder, uint256 amount, uint256 payout);
     event PullFailed(uint256 indexed authId, address indexed lp, address indexed buyer, uint256 compensation);
 
-    constructor(address aqua_, address payable router_, address oracle_, address owner_)
+    constructor(address aqua_, address payable router_, address oracle_, address owner_, address tokenFactory_)
         AquaApp(IAqua(aqua_))
         Ownable(owner_)
     {
         router = SmileSwapVMRouter(router_);
         oracle = IPriceOracle(oracle_);
+        tokenFactory = OptionTokenFactory(tokenFactory_);
     }
 
     function setHook(address hook_) external onlyOwner {
@@ -251,9 +271,9 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint16 sigmaMulBps
     ) public returns (uint256 authId) {
         require(strikeMin <= strikeMax, "invalid range");
-        require(expiry > block.timestamp, "expiry in past");
-        require(maxCollateral > 0, "zero capacity");
-        require(isCall ? collateralToken != premiumToken : collateralToken == premiumToken, "bad token pair");
+        require(expiry > block.timestamp, ExpiryInPast());
+        require(maxCollateral > 0, ZeroCapacity());
+        require(isCall ? collateralToken != premiumToken : collateralToken == premiumToken, BadTokenPair());
         require(sigmaMulBps == 0 || (sigmaMulBps >= 1000 && sigmaMulBps <= 30000), "sigma mult out of bounds");
 
         authId = nextAuthId++;
@@ -302,7 +322,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
     /// Aqua allowance, the LP calls `Aqua.dock()` with {getDockParams}.
     /// Already-matched positions (optionTokens in circulation) are unaffected.
     function revokeAuthorization(uint256 authId) external {
-        require(authorizations[authId].lp == msg.sender, "not lp");
+        require(authorizations[authId].lp == msg.sender, NotLp());
         authorizations[authId].active = false;
         // S2: honest exit returns the firmness bond in full.
         uint256 bond = bondOf[authId];
@@ -406,7 +426,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         returns (address app, bytes memory strategy, address[] memory tokens, uint256[] memory amounts)
     {
         LPAuthorization storage auth = authorizations[authId];
-        require(auth.lp != address(0), "unknown auth");
+        require(auth.lp != address(0), UnknownAuth());
         if (auth.isCall) {
             app = address(router);
             strategy = abi.encode(buildOrder(authId));
@@ -435,7 +455,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         returns (address app, bytes32 strategyHash, address[] memory tokens)
     {
         LPAuthorization storage auth = authorizations[authId];
-        require(auth.lp != address(0), "unknown auth");
+        require(auth.lp != address(0), UnknownAuth());
         strategyHash = auth.strategyHash;
         if (auth.isCall) {
             app = address(router);
@@ -500,10 +520,10 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 maxPremium
     ) internal returns (address optionToken, uint256 premiumPaid) {
         LPAuthorization storage auth = authorizations[authId];
-        require(auth.active, "authorization inactive");
+        require(auth.active, AuthInactive());
         require(block.timestamp < auth.expiry, "expired");
         require(strike >= auth.strikeMin && strike <= auth.strikeMax, "strike out of range");
-        require(amount > 0, "zero amount");
+        require(amount > 0, ZeroAmount());
 
         uint256 collateralNeeded = auth.isCall ? amount : (strike * amount) / 1e30; // puts: 6-dec USDC cash security
 
@@ -552,7 +572,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         bytes memory takerData = _callTakerData(strike, maxPremium);
 
         (uint256 quoted,,) = router.quote(order, auth.premiumToken, auth.collateralToken, amount, takerData);
-        require(quoted <= maxPremium, "premium above max");
+        require(quoted <= maxPremium, PremiumAboveMax());
 
         try this.execCallLeg(order, auth.premiumToken, auth.collateralToken, amount, takerData, buyer, quoted)
             returns (uint256 paid)
@@ -582,7 +602,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
     ) internal returns (bool filled, uint256 premiumPaid) {
         (uint256 lpPremium, uint256 fee) = _putQuote(authId, auth, strike, amount);
         premiumPaid = lpPremium + fee;
-        require(premiumPaid <= maxPremium, "premium above max");
+        require(premiumPaid <= maxPremium, PremiumAboveMax());
 
         try this.execPutLeg(
             auth.lp, auth.strategyHash, auth.premiumToken, auth.collateralToken,
@@ -610,7 +630,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         address buyer,
         uint256 premium
     ) external returns (uint256 premiumPaid) {
-        require(msg.sender == address(this), "self only");
+        require(msg.sender == address(this), SelfOnly());
         IERC20(premiumToken).safeTransferFrom(buyer, address(this), premium);
         IERC20(premiumToken).forceApprove(address(router), premium);
         (premiumPaid,,) = router.swap(order, premiumToken, collateralToken, amount, takerData);
@@ -629,7 +649,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 fee,
         uint256 collateralNeeded
     ) external nonReentrantStrategy(lp, strategyHash) {
-        require(msg.sender == address(this), "self only");
+        require(msg.sender == address(this), SelfOnly());
         if (lpPremium > 0) {
             IERC20(premiumToken).safeTransferFrom(buyer, lp, lpPremium);
         }
@@ -692,70 +712,17 @@ contract AquaCollateralVault is AquaApp, Ownable {
         fee = auth.feeBps > 0 ? Math.ceilDiv(lpPremium * auth.feeBps, BPS - auth.feeBps) : 0;
     }
 
-    // ── Best-quote routing (S6) ──────────────────────────────────────────────
+    // ── Quote surface for the periphery (S6 lives in SmileQuoteLens) ────────
 
-    /// @notice Scan every authorization covering (strike, expiry, isCall) and
-    /// return the cheapest executable Ask for `amount` — skipping phantom
-    /// quotes the LP wallet can't honor (S1), ranges out of per-block capacity
-    /// (R1), and candidates whose quote reverts. Overlapping ranges quoting
-    /// different vols (S5) compete here: the touch IS the discovered vol.
-    /// @dev O(nextAuthId) with an external quote per call candidate — meant
-    /// for eth_call (it is static-callable) and small on-chain marketplaces.
-    /// Returns (type(uint256).max, type(uint256).max) when nothing quotes.
-    function bestQuote(uint256 strike, uint256 expiry, bool isCall, uint256 amount)
-        public
-        returns (uint256 bestAuthId, uint256 bestPremium)
-    {
-        bestAuthId = type(uint256).max;
-        bestPremium = type(uint256).max;
-        uint256 n = nextAuthId;
-        for (uint256 i = 0; i < n; i++) {
-            LPAuthorization storage auth = authorizations[i];
-            if (!auth.active || auth.isCall != isCall || auth.expiry != expiry) continue;
-            if (strike < auth.strikeMin || strike > auth.strikeMax) continue;
-
-            uint256 collateralNeeded = isCall ? amount : (strike * amount) / 1e30;
-            if (_shippedCapacity(auth) < collateralNeeded) continue; // sold out / docked
-            if (_lpCannotCover(auth, collateralNeeded)) continue;    // S1: phantom depth
-
-            AuthPricing storage pricing = pricingOf[i];
-            if (pricing.maxBlockNotional > 0) {
-                uint256 usedThisBlock = pricing.lastTradeBlock == uint64(block.number) ? pricing.blockNotional : 0;
-                if (usedThisBlock + collateralNeeded > pricing.maxBlockNotional) continue; // R1
-            }
-
-            uint256 premium;
-            if (isCall) {
-                try router.quote(
-                    buildOrder(i), auth.premiumToken, auth.collateralToken, amount,
-                    _callTakerData(strike, type(uint256).max)
-                ) returns (uint256 amountIn, uint256, bytes32) {
-                    premium = amountIn;
-                } catch {
-                    continue;
-                }
-            } else {
-                (uint256 lpPremium, uint256 fee) = _putQuote(i, auth, strike, amount);
-                premium = lpPremium + fee;
-            }
-
-            if (premium < bestPremium) {
-                bestPremium = premium;
-                bestAuthId = i;
-            }
-        }
-    }
-
-    /// @notice Buy `amount` options at `strike`/`expiry` from whichever LP
-    /// quotes the best executable Ask (S6). Reverts when no range quotes.
-    function buyBest(uint256 strike, uint256 expiry, bool isCall, uint256 amount, uint256 maxPremium)
+    /// @notice Ask-side put quote for (range, strike, amount): the LP premium
+    /// plus the protocol-fee gross-up. The call-side twin is `router.quote`
+    /// against {buildOrder}. Used by the best-quote lens.
+    function putQuote(uint256 authId, uint256 strike, uint256 amount)
         external
-        returns (address optionToken, uint256 premiumPaid)
+        view
+        returns (uint256 lpPremium, uint256 fee)
     {
-        (uint256 authId, uint256 premium) = bestQuote(strike, expiry, isCall, amount);
-        require(authId != type(uint256).max, "no executable quote");
-        require(premium <= maxPremium, "premium above max");
-        return _buy(msg.sender, authId, strike, amount, maxPremium);
+        return _putQuote(authId, authorizations[authId], strike, amount);
     }
 
     /// @dev Taker traits for the call leg: the vault is the taker (exactOut →
@@ -796,15 +763,9 @@ contract AquaCollateralVault is AquaApp, Ownable {
     ) internal returns (address optionToken) {
         optionToken = optionTokens[authId][strike];
         if (optionToken == address(0)) {
-            optionToken = address(new OptionToken(
-                string(abi.encodePacked(auth.isCall ? "CALL-" : "PUT-", _uint2str(strike / 1e18))),
-                auth.isCall ? "CALL" : "PUT",
-                auth.collateralToken,
-                strike,
-                auth.expiry,
-                auth.isCall,
-                address(this)
-            ));
+            optionToken = tokenFactory.deployOption(
+                auth.collateralToken, strike, auth.expiry, auth.isCall, address(this)
+            );
             optionTokens[authId][strike] = optionToken;
             seriesOf[optionToken] = SeriesRef({authId: authId, strike: strike});
             if (address(settlement) != address(0)) {
@@ -845,11 +806,11 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 amount,
         uint256 minPayout
     ) external returns (uint256 payout) {
-        require(amount > 0, "zero amount");
+        require(amount > 0, ZeroAmount());
         SeriesRef memory ref = seriesOf[optionToken];
         require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
         LPAuthorization storage auth = authorizations[ref.authId];
-        require(lp == auth.lp, "wrong lp");
+        require(lp == auth.lp, WrongLp());
         LPPosition storage pos = positions[optionToken][lp];
 
         OptionToken(optionToken).burn(msg.sender, amount);
@@ -923,7 +884,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         require(block.timestamp < auth.expiry, "expired");
         uint256 totalWad = (_putUnitPremiumWad(authId, auth, strike, amount, false) * amount) / 1e18; // floor → Bid
         payout = SmileMath.scaleFromWad(totalWad, auth.premiumDecimals, false);
-        require(payout >= minPayout, "payout below min");
+        require(payout >= minPayout, PayoutBelowMin());
 
         if (payout > 0) {
             AQUA.pull(auth.lp, auth.strategyHash, auth.premiumToken, payout, msg.sender);
@@ -942,7 +903,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
     ///   put  → (K−S) USDC per unit.
     /// OTM redeems burn for zero — the collateral belongs to the LP.
     function redeem(address optionToken, uint256 amount) external returns (uint256 payout) {
-        require(amount > 0, "zero amount");
+        require(amount > 0, ZeroAmount());
         SeriesRef memory ref = seriesOf[optionToken];
         require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
         LPAuthorization storage auth = authorizations[ref.authId];
@@ -969,7 +930,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         SeriesRef memory ref = seriesOf[optionToken];
         require(optionTokens[ref.authId][ref.strike] == optionToken, "unknown series");
         LPAuthorization storage auth = authorizations[ref.authId];
-        require(msg.sender == auth.lp, "not lp");
+        require(msg.sender == auth.lp, NotLp());
 
         (bool settled, uint256 settlementPrice) = _settlementOf(ref);
         require(settled, "not settled");
@@ -977,7 +938,7 @@ contract AquaCollateralVault is AquaApp, Ownable {
         uint256 outstanding = IERC20(optionToken).totalSupply();
         uint256 owed = _intrinsicPayout(auth.isCall, settlementPrice, ref.strike, outstanding);
         LPPosition storage pos = positions[optionToken][auth.lp];
-        require(pos.lockedCollateral > owed, "nothing to reclaim");
+        require(pos.lockedCollateral > owed, NothingToReclaim());
 
         amount = pos.lockedCollateral - owed;
         pos.lockedCollateral = owed;
@@ -1003,14 +964,14 @@ contract AquaCollateralVault is AquaApp, Ownable {
     }
 
     function _settlementOf(SeriesRef memory ref) internal view returns (bool settled, uint256 settlementPrice) {
-        require(address(settlement) != address(0), "settlement not set");
+        require(address(settlement) != address(0), SettlementNotSet());
         (,,,, settled, settlementPrice) = settlement.series(seriesId(ref.authId, ref.strike));
     }
 
     /// @notice Owner escape hatch to release locked collateral back to an LP.
     function releaseCollateral(address optionToken, address lp, uint256 amount) external onlyOwner {
         LPPosition storage pos = positions[optionToken][lp];
-        require(pos.lockedCollateral >= amount, "insufficient locked");
+        require(pos.lockedCollateral >= amount, InsufficientLocked());
         pos.lockedCollateral -= amount;
         IERC20(pos.collateralToken).safeTransfer(lp, amount);
     }
@@ -1064,22 +1025,12 @@ contract AquaCollateralVault is AquaApp, Ownable {
 
     function _spotWad(uint256 maxStaleness) internal view returns (uint256 spotWad, uint256 ageSec) {
         (, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
-        require(answer > 0, "bad oracle price");
+        require(answer > 0, BadOraclePrice());
         require(
             maxStaleness == 0 || (updatedAt != 0 && block.timestamp <= updatedAt + maxStaleness),
-            "stale oracle price"
+            StaleOraclePrice()
         );
         spotWad = SmileMath.scaleToWad(uint256(answer), oracle.decimals());
         ageSec = updatedAt >= block.timestamp ? 0 : block.timestamp - updatedAt;
-    }
-
-    function _uint2str(uint256 v) internal pure returns (string memory) {
-        if (v == 0) return "0";
-        uint256 tmp = v;
-        uint256 digits;
-        while (tmp != 0) { digits++; tmp /= 10; }
-        bytes memory b = new bytes(digits);
-        while (v != 0) { digits--; b[digits] = bytes1(uint8(48 + v % 10)); v /= 10; }
-        return string(b);
     }
 }

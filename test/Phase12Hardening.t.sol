@@ -9,6 +9,8 @@ import { ISwapVM } from "@1inch/swap-vm/src/interfaces/ISwapVM.sol";
 import { TakerTraitsLib } from "@1inch/swap-vm/src/libs/TakerTraits.sol";
 
 import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
+import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
+import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
 import { SmileSwapVMRouter } from "../src/swapvm/SmileSwapVMRouter.sol";
 import { OptionToken } from "../src/OptionToken.sol";
 import { MockV3Aggregator } from "../src/mocks/MockV3Aggregator.sol";
@@ -30,6 +32,8 @@ contract Phase12HardeningTest is Test {
     Aqua aqua;
     SmileSwapVMRouter router;
     AquaCollateralVault vault;
+    OptionTokenFactory tokenFactory;
+    SmileQuoteLens lens;
     MockV3Aggregator oracle;
     MockERC20 usdc;
     MockERC20 weth;
@@ -50,12 +54,16 @@ contract Phase12HardeningTest is Test {
         aqua   = new Aqua();
         router = new SmileSwapVMRouter(address(aqua), address(weth), owner);
         oracle = new MockV3Aggregator(8, 3000e8);
-        vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner);
+        tokenFactory = new OptionTokenFactory();
+        vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner, address(tokenFactory));
+        lens   = new SmileQuoteLens(address(vault), payable(address(router)), address(aqua));
         expiry = block.timestamp + 30 days;
 
         usdc.mint(buyer, 10_000_000e6);
-        vm.prank(buyer);
+        vm.startPrank(buyer);
         usdc.approve(address(vault), type(uint256).max);
+        usdc.approve(address(lens), type(uint256).max); // buyBest routes premium via the lens
+        vm.stopPrank();
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -212,7 +220,7 @@ contract Phase12HardeningTest is Test {
 
     /// @dev Put Ask read through bestQuote (the vault's only external put quote).
     function _putAsk(uint256 authId, uint256 amount) internal returns (uint256) {
-        (uint256 id, uint256 premium) = vault.bestQuote(STRIKE, expiry, false, amount);
+        (uint256 id, uint256 premium) = lens.bestQuote(STRIKE, expiry, false, amount);
         assertEq(id, authId, "quoted a different range");
         return premium;
     }
@@ -434,14 +442,14 @@ contract Phase12HardeningTest is Test {
         // simpler — read through a 1-unit buy simulation is overkill; bestQuote
         // over a single-candidate window: temporarily revoke nothing, so use
         // the fact that cheaper wins: capture both ids.
-        (uint256 id, uint256 p) = vault.bestQuote(STRIKE, expiry, false, 1e18);
+        (uint256 id, uint256 p) = lens.bestQuote(STRIKE, expiry, false, 1e18);
         if (id == authId) return p;
         // Not the best — revoke the winner and re-quote.
         address winnerLp = id == 0 ? lp : (id == 1 ? lp : lp2);
         (address storedLp,,,,,,,,,,,,,,,,) = vault.authorizations(id);
         vm.prank(storedLp);
         vault.revokeAuthorization(id);
-        (uint256 id2, uint256 p2) = vault.bestQuote(STRIKE, expiry, false, 1e18);
+        (uint256 id2, uint256 p2) = lens.bestQuote(STRIKE, expiry, false, 1e18);
         assertEq(id2, authId);
         winnerLp; // silence
         return p2;
@@ -453,7 +461,7 @@ contract Phase12HardeningTest is Test {
         uint256 authDefault = _authorizeCallAs(lp, 10e18, 0, 0);
         uint256 authCheap   = _authorizeCallAs(lp2, 10e18, 0, 8000);
 
-        (uint256 bestId, uint256 bestPremium) = vault.bestQuote(STRIKE, expiry, true, 1e18);
+        (uint256 bestId, uint256 bestPremium) = lens.bestQuote(STRIKE, expiry, true, 1e18);
         assertEq(bestId, authCheap, "router must find the tighter vol quote");
         assertEq(bestPremium, _askCall(authCheap, STRIKE, 1e18));
         authDefault; // silence
@@ -468,7 +476,7 @@ contract Phase12HardeningTest is Test {
         vm.prank(lp2);
         weth.transfer(address(0xdead), lp2Bal);
 
-        (uint256 bestId,) = vault.bestQuote(STRIKE, expiry, true, 1e18);
+        (uint256 bestId,) = lens.bestQuote(STRIKE, expiry, true, 1e18);
         assertEq(bestId, authHonest, "phantom depth must be skipped, not quoted");
         authPhantom; // silence
     }
@@ -480,12 +488,12 @@ contract Phase12HardeningTest is Test {
         vm.prank(buyer);
         vault.buy(authCapped, STRIKE, 1e18, type(uint256).max); // cap consumed
 
-        (uint256 bestId,) = vault.bestQuote(STRIKE, expiry, true, 1e18);
+        (uint256 bestId,) = lens.bestQuote(STRIKE, expiry, true, 1e18);
         assertEq(bestId, authOpen, "block-capped range must be skipped this block");
     }
 
     function test_bestQuote_noCandidatesReturnsSentinel() public {
-        (uint256 bestId, uint256 bestPremium) = vault.bestQuote(STRIKE, expiry, true, 1e18);
+        (uint256 bestId, uint256 bestPremium) = lens.bestQuote(STRIKE, expiry, true, 1e18);
         assertEq(bestId, type(uint256).max);
         assertEq(bestPremium, type(uint256).max);
     }
@@ -496,7 +504,7 @@ contract Phase12HardeningTest is Test {
         uint256 lp2WethBefore = weth.balanceOf(lp2);
 
         vm.prank(buyer);
-        (address token, uint256 paid) = vault.buyBest(STRIKE, expiry, true, 1e18, type(uint256).max);
+        (address token, uint256 paid) = lens.buyBest(STRIKE, expiry, true, 1e18, type(uint256).max);
 
         assertEq(OptionToken(token).balanceOf(buyer), 1e18);
         assertEq(weth.balanceOf(lp2), lp2WethBefore - 1e18, "cheaper LP's collateral must be pulled");
@@ -513,7 +521,7 @@ contract Phase12HardeningTest is Test {
     function test_buyBest_revertsWhenNothingQuotes() public {
         vm.prank(buyer);
         vm.expectRevert("no executable quote");
-        vault.buyBest(STRIKE, expiry, true, 1e18, type(uint256).max);
+        lens.buyBest(STRIKE, expiry, true, 1e18, type(uint256).max);
     }
 
     // ── R5: Pyth pull-oracle adapter ─────────────────────────────────────────
@@ -524,7 +532,7 @@ contract Phase12HardeningTest is Test {
         pyth = new MockPyth();
         pyth.setPrice(ETH_USD_ID, 3000e8, -8, block.timestamp);
         adapter = new PythSpotAdapter(address(pyth), ETH_USD_ID, 8);
-        pythVault = new AquaCollateralVault(address(aqua), payable(address(router)), address(adapter), owner);
+        pythVault = new AquaCollateralVault(address(aqua), payable(address(router)), address(adapter), owner, address(tokenFactory));
         pythVault.setMaxSpotStaleness(5); // seconds-tight: THE pull-oracle security parameter
         vm.prank(buyer);
         usdc.approve(address(pythVault), type(uint256).max);
