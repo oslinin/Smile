@@ -17,7 +17,7 @@ interface ISigmaSource {
 /// @notice Builder for the packed maker args of `_optionPremiumXD`, mirroring
 /// the official SwapVM `*ArgsBuilder` style (e.g. ControlsArgsBuilder).
 library OptionPremiumArgsBuilder {
-    /// @dev Packed layout v2 (136 bytes total):
+    /// @dev Packed layout v3 (150 bytes total):
     ///   oracle          | 20 bytes — Chainlink-style aggregator for spot
     ///   sigmaSource     | 20 bytes — ISigmaSource (0 → DEFAULT_SIGMA)
     ///   premiumToken    | 20 bytes — the premium leg of the pair
@@ -29,6 +29,13 @@ library OptionPremiumArgsBuilder {
     ///   alpha           |  8 bytes — uint64, WAD smile curvature
     ///   beta            |  8 bytes — int64, WAD skew tilt (signed)
     ///   maxStaleness    |  2 bytes — uint16 seconds; 0 = no staleness check
+    ///   baseSpreadBps   |  2 bytes — uint16, half-spread floor (1e4 = 100%)
+    ///   stalenessSpreadBpsPerHour | 2 bytes — uint16, extra half-spread per
+    ///                     hour of oracle age (staleness-scaled spread)
+    ///   impactPerUnit   |  8 bytes — uint64, WAD σ added per option unit
+    ///                     traded (size-convex intra-trade impact)
+    ///   sigmaMulBps     |  2 bytes — uint16, LP vol multiplier (1e4 = 1.0x;
+    ///                     0 = protocol default surface)
     function build(
         address oracle,
         address sigmaSource,
@@ -40,11 +47,18 @@ library OptionPremiumArgsBuilder {
         uint40 expiry,
         uint64 alpha,
         int64 beta,
-        uint16 maxStaleness
+        uint16 maxStaleness,
+        uint16 baseSpreadBps,
+        uint16 stalenessSpreadBpsPerHour,
+        uint64 impactPerUnit,
+        uint16 sigmaMulBps
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
-            oracle, sigmaSource, premiumToken, collateralToken,
-            premiumDecimals, strikeMin, strikeMax, expiry, alpha, beta, maxStaleness
+            abi.encodePacked(
+                oracle, sigmaSource, premiumToken, collateralToken,
+                premiumDecimals, strikeMin, strikeMax, expiry, alpha, beta, maxStaleness
+            ),
+            baseSpreadBps, stalenessSpreadBpsPerHour, impactPerUnit, sigmaMulBps
         );
     }
 }
@@ -60,6 +74,16 @@ library OptionPremiumArgsBuilder {
 /// The strategy quotes a TWO-SIDED market — swap direction selects the side:
 ///   forward (premium → collateral): open a position  → priced at Ask (rounds up)
 ///   reverse (collateral → premium): sell back / close → priced at Bid (rounds down)
+///
+/// Adverse-selection defenses baked into the quote (see docs/limitations.md
+/// and docs/solutions.md):
+///   - staleness-scaled spread: the Ask−Bid half-spread widens continuously
+///     with the oracle answer's age on top of a base floor (R3+R4);
+///   - size-convex impact: a trade executes at the σ it would itself cause,
+///     averaged over the fill — large informed orders pay their own price
+///     impact at execution time instead of the pre-bump price (R2);
+///   - LP-quoted vol: an optional per-strategy σ multiplier lets makers
+///     compete on vol, turning overlapping ranges into vol discovery (S5).
 contract OptionPremiumInstruction {
     using Calldata for bytes;
     using ContextLib for Context;
@@ -76,7 +100,11 @@ contract OptionPremiumInstruction {
     /// @dev Fallback σ when no sigma source is wired (80% IV).
     uint256 internal constant DEFAULT_SIGMA = 0.8e18;
     uint256 internal constant WAD = 1e18;
-    uint256 internal constant ARGS_LENGTH = 136;
+    uint256 internal constant ARGS_LENGTH = 150;
+    /// @dev Spread math scale: 1e4 bps = 100%.
+    uint256 internal constant BPS_DENOM = 1e4;
+    /// @dev Hard cap on the half-spread — quotes never widen past 20%.
+    uint256 internal constant MAX_HALF_SPREAD_BPS = 2000;
 
     struct OptionTerms {
         address oracle;
@@ -90,6 +118,21 @@ contract OptionPremiumInstruction {
         uint256 alpha;
         int256 beta;
         uint256 maxStaleness;
+        uint256 baseSpreadBps;
+        uint256 stalenessSpreadBpsPerHour;
+        uint256 impactPerUnit;
+        uint256 sigmaMulBps;
+    }
+
+    /// @dev Everything the per-side pricing needs, bundled to keep the
+    /// four exact-in/out branches readable under the stack limit.
+    struct QuoteVars {
+        uint256 spot;
+        uint256 ageSec;
+        uint256 strike;
+        uint256 timeToExpiry;
+        uint256 sigmaStrike;
+        bool forward;
     }
 
     /// @dev Custom instruction body. Maker args are the packed option terms
@@ -103,52 +146,95 @@ contract OptionPremiumInstruction {
     function _optionPremiumXD(Context memory ctx, bytes calldata args) internal view {
         OptionTerms memory terms = _parseArgs(args);
 
-        bool forward;
+        QuoteVars memory v;
         if (ctx.query.tokenIn == terms.premiumToken && ctx.query.tokenOut == terms.collateralToken) {
-            forward = true;
+            v.forward = true;
         } else if (ctx.query.tokenIn == terms.collateralToken && ctx.query.tokenOut == terms.premiumToken) {
-            forward = false;
+            v.forward = false;
         } else {
             revert OptionPremiumWrongTokenPair(ctx.query.tokenIn, ctx.query.tokenOut);
         }
         require(block.timestamp < terms.expiry, OptionPremiumExpired(terms.expiry, block.timestamp));
 
-        uint256 strike = _takerStrike(ctx, terms);
-        uint256 spot = _oracleSpotWad(terms.oracle, terms.maxStaleness);
-        uint256 timeToExpiry = terms.expiry - block.timestamp;
+        v.strike = _takerStrike(ctx, terms);
+        (v.spot, v.ageSec) = _oracleSpotWad(terms.oracle, terms.maxStaleness);
+        v.timeToExpiry = terms.expiry - block.timestamp;
         // Live vol surface: σ per tenor from the sigma source, skewed per strike.
         uint256 sigmaTenor = terms.sigmaSource != address(0)
-            ? ISigmaSource(terms.sigmaSource).sigmaFor(timeToExpiry)
+            ? ISigmaSource(terms.sigmaSource).sigmaFor(v.timeToExpiry)
             : DEFAULT_SIGMA;
-        uint256 sigmaStrike = SmileMath.smileVol(spot, strike, sigmaTenor, terms.alpha, terms.beta);
+        // S5: LP-quoted vol — the maker's own multiplier on the tenor σ
+        // (1e4 = 1.0x; 0 = take the protocol surface as-is). Competing ranges
+        // with different multipliers form an order book in vol space.
+        if (terms.sigmaMulBps != 0) {
+            sigmaTenor = (sigmaTenor * terms.sigmaMulBps) / BPS_DENOM;
+        }
+        v.sigmaStrike = SmileMath.smileVol(v.spot, v.strike, sigmaTenor, terms.alpha, terms.beta);
 
-        // forward → Ask (rounds up), reverse → Bid (rounds down): the spread engine.
-        uint256 premiumWad = SmileMath.premium(spot, strike, timeToExpiry, sigmaStrike, true, forward);
-
-        if (forward) {
+        if (v.forward) {
             if (ctx.query.isExactIn) {
                 // Buyer fixed the premium budget; option units round DOWN at Ask.
+                // Units depend on impact which depends on units — two
+                // fixed-point iterations, biased maker-safe (the first pass
+                // over-estimates units, so the priced impact is an upper bound).
                 require(ctx.swap.amountOut == 0, OptionPremiumRecomputeDetected());
                 uint256 paidWad = SmileMath.scaleToWad(ctx.swap.amountIn, terms.premiumDecimals);
-                ctx.swap.amountOut = (paidWad * WAD) / premiumWad;
+                uint256 units = (paidWad * WAD) / _unitPremiumWad(terms, v, 0);
+                ctx.swap.amountOut = (paidWad * WAD) / _unitPremiumWad(terms, v, units);
             } else {
                 // Buyer fixed the option units; premium rounds UP at Ask.
                 require(ctx.swap.amountIn == 0, OptionPremiumRecomputeDetected());
-                uint256 costWad = Math.ceilDiv(ctx.swap.amountOut * premiumWad, WAD);
+                uint256 costWad = Math.ceilDiv(ctx.swap.amountOut * _unitPremiumWad(terms, v, ctx.swap.amountOut), WAD);
                 ctx.swap.amountIn = SmileMath.scaleFromWad(costWad, terms.premiumDecimals, true);
             }
         } else {
             if (ctx.query.isExactIn) {
                 // Holder sells a fixed number of units; premium out rounds DOWN at Bid.
                 require(ctx.swap.amountOut == 0, OptionPremiumRecomputeDetected());
-                uint256 valueWad = (ctx.swap.amountIn * premiumWad) / WAD;
+                uint256 valueWad = (ctx.swap.amountIn * _unitPremiumWad(terms, v, ctx.swap.amountIn)) / WAD;
                 ctx.swap.amountOut = SmileMath.scaleFromWad(valueWad, terms.premiumDecimals, false);
             } else {
                 // Holder wants fixed premium out; units in round UP at Bid.
                 require(ctx.swap.amountIn == 0, OptionPremiumRecomputeDetected());
                 uint256 outWad = SmileMath.scaleToWad(ctx.swap.amountOut, terms.premiumDecimals);
-                ctx.swap.amountIn = Math.ceilDiv(outWad * WAD, premiumWad);
+                uint256 units = Math.ceilDiv(outWad * WAD, _unitPremiumWad(terms, v, 0));
+                ctx.swap.amountIn = Math.ceilDiv(outWad * WAD, _unitPremiumWad(terms, v, units));
             }
+        }
+    }
+
+    /// @dev Per-unit premium (WAD) for a trade of `unitsWad`, with the
+    /// size-convex impact (R2) and the staleness-scaled spread (R3/R4)
+    /// applied on top of the raw surface premium.
+    function _unitPremiumWad(
+        OptionTerms memory terms,
+        QuoteVars memory v,
+        uint256 unitsWad
+    ) private pure returns (uint256 premiumWad) {
+        // R2: the trade executes at the σ it would itself cause, averaged
+        // over the fill. Ask walks σ up; Bid walks it down, floored at 10%
+        // of the surface σ so huge sellbacks can't zero the quote.
+        uint256 impact = (terms.impactPerUnit * unitsWad) / (2 * WAD);
+        uint256 sigmaEff;
+        if (v.forward) {
+            sigmaEff = v.sigmaStrike + impact;
+        } else {
+            uint256 floorSigma = v.sigmaStrike / 10;
+            sigmaEff = v.sigmaStrike > impact ? v.sigmaStrike - impact : floorSigma;
+            if (sigmaEff < floorSigma) sigmaEff = floorSigma;
+        }
+
+        premiumWad = SmileMath.premium(v.spot, v.strike, v.timeToExpiry, sigmaEff, true, v.forward);
+
+        // R3/R4: half-spread = base floor + slope · oracle age, capped at 20%.
+        // A fresh round quotes tight; a stale-but-within-bounds round quotes
+        // wide, pricing the latency risk continuously instead of cliffing.
+        uint256 halfSpreadBps = terms.baseSpreadBps + (terms.stalenessSpreadBpsPerHour * v.ageSec) / 3600;
+        if (halfSpreadBps > MAX_HALF_SPREAD_BPS) halfSpreadBps = MAX_HALF_SPREAD_BPS;
+        if (halfSpreadBps > 0) {
+            premiumWad = v.forward
+                ? Math.ceilDiv(premiumWad * (BPS_DENOM + halfSpreadBps), BPS_DENOM)
+                : (premiumWad * (BPS_DENOM - halfSpreadBps)) / BPS_DENOM;
         }
     }
 
@@ -165,6 +251,10 @@ contract OptionPremiumInstruction {
         terms.alpha = uint64(bytes8(args.slice(118, 126, OptionPremiumMissingArgs.selector)));
         terms.beta = int64(uint64(bytes8(args.slice(126, 134, OptionPremiumMissingArgs.selector))));
         terms.maxStaleness = uint16(bytes2(args.slice(134, 136, OptionPremiumMissingArgs.selector)));
+        terms.baseSpreadBps = uint16(bytes2(args.slice(136, 138, OptionPremiumMissingArgs.selector)));
+        terms.stalenessSpreadBpsPerHour = uint16(bytes2(args.slice(138, 140, OptionPremiumMissingArgs.selector)));
+        terms.impactPerUnit = uint64(bytes8(args.slice(140, 148, OptionPremiumMissingArgs.selector)));
+        terms.sigmaMulBps = uint16(bytes2(args.slice(148, 150, OptionPremiumMissingArgs.selector)));
     }
 
     /// @dev Reads the taker-chosen strike (32 bytes) from taker instruction
@@ -186,7 +276,12 @@ contract OptionPremiumInstruction {
 
     /// @dev Chainlink-style spot read, normalized to WAD, with a staleness
     /// guard mirroring the official SwapVM OraclePriceAdjuster instruction.
-    function _oracleSpotWad(address oracle, uint256 maxStaleness) private view returns (uint256) {
+    /// Also returns the answer's age so the spread can scale with it (R3).
+    function _oracleSpotWad(address oracle, uint256 maxStaleness)
+        private
+        view
+        returns (uint256 spotWad, uint256 ageSec)
+    {
         (, int256 answer,, uint256 updatedAt,) = IPriceOracle(oracle).latestRoundData();
         require(answer > 0, OptionPremiumBadOraclePrice(answer));
         require(
@@ -194,6 +289,7 @@ contract OptionPremiumInstruction {
             OptionPremiumStaleOraclePrice(updatedAt, maxStaleness, block.timestamp)
         );
         uint8 decimals = IPriceOracle(oracle).decimals();
-        return SmileMath.scaleToWad(uint256(answer), decimals);
+        spotWad = SmileMath.scaleToWad(uint256(answer), decimals);
+        ageSec = updatedAt >= block.timestamp ? 0 : block.timestamp - updatedAt;
     }
 }
