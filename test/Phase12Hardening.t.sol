@@ -56,7 +56,7 @@ contract Phase12HardeningTest is Test {
         oracle = new MockV3Aggregator(8, 3000e8);
         tokenFactory = new OptionTokenFactory();
         vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner, address(tokenFactory));
-        lens   = new SmileQuoteLens(address(vault), payable(address(router)), address(aqua));
+        lens   = new SmileQuoteLens(address(vault), payable(address(router)), address(aqua), address(0));
         expiry = block.timestamp + 30 days;
 
         usdc.mint(buyer, 10_000_000e6);
