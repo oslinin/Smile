@@ -136,6 +136,45 @@ The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP bac
 
 Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.
 
+**What V1 can do — because the premium is a deterministic on-chain function of (spot, strike, T, σ):**
+
+| Capability | Why the mechanism allows it |
+|---|---|
+| Known upfront premium, fixed European expiry | Computable at click time from the surface — the instrument OptionStrat sellers actually trade |
+| Sell covered calls **and** cash-secured puts | Full collateral makes writing safe with zero margin machinery |
+| Buy calls & puts at any strike in a range | Taker picks the strike per swap; one Aqua balance quotes the whole chain |
+| Exit anytime at a live Bid | The same strategy quotes both sides — no counterparty search to close |
+| Calendars & diagonals | Fixed expiries + per-tenor σ buckets give a real term structure |
+| Vol competition | LPs quote their own σ multiplier; `bestQuote` routes to the touch (S5/S6) |
+| Trustless settlement, ERC-20 positions | Chainlink-round-verified expiry price; options compose anywhere |
+| Free quoting | The entire pricing path is `view` — scanning every range costs nothing |
+
+**What V1 cannot do — and the mechanism's root cause for each:**
+
+| Gap | Root cause |
+|---|---|
+| Know its vol is right without trades | σ only moves on fills; an untraded range quotes yesterday's vol ([L6/L7](docs/limitations.md), S7 is the fix) |
+| Avoid paying informed flow | Quotes derive from a lagging oracle; adverse selection is *priced* (R1–R5), never eliminated ([L1/L2/L5](docs/limitations.md)) |
+| Capital-efficient short legs | A spread's short leg posts full collateral as if naked until S12 netting — condors work but are capital-hungry |
+| Naked writing | No mark, no liquidations — that is the entire V2 ladder below |
+| Assets without a price feed | The mechanism needs external spot; long-tail listings are feed-constrained (S11) |
+| Exact Black-Scholes prices | The on-chain formula deliberately omits N(d₁)/N(d₂) — gas-cheap, roughest deep-ITM and near expiry |
+
+**Versus the Uniswap mechanism (Panoptic)** — really *oracle-quoted implied vol* vs *pool-realized fee flow*:
+
+| | Smile: surface + oracle | Panoptic: Uniswap LP synthesis |
+|---|---|---|
+| Premium known at entry | ✔ fixed, upfront | ✘ streams while spot sits near strike; path-dependent |
+| Seller paid for jump risk | ✔ implied vol charges upfront | ✘ paid realized fees; gaps deliver loss with no premium |
+| Expiries / calendars / expire-worthless | ✔ native | ✘ structurally impossible (perpetual) |
+| Pricing-oracle risk | ✘ inherent — priced by spreads | ✔ none — its genuine win |
+| Vol staleness in quiet markets | ✘ σ waits for a trade | ✔ n/a — no vol model at all |
+| Asset universe | Needs a feed | Any Uniswap v3 pool |
+| Solvency | Guaranteed, no liquidations | Margined: liquidations + forced exercise |
+| Capital efficiency today | Low until S12 | Higher (partial collateral on spreads) |
+
+One line: **Smile's mechanism trades oracle risk for a real options contract; Uniswap's trades the contract for freedom from oracles.** Smile can state a price and a date and guarantee payment, at the cost of defending a lagging oracle and a trade-gated vol surface; Panoptic never has a wrong oracle price, at the cost of never telling you what your hedge costs or when it ends.
+
 **V2 (designed, deliberately deferred) — The capital-efficiency ladder**
 
 The obvious V2 question is *"when do we allow uncovered calls?"* — and the answer

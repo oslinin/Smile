@@ -258,6 +258,131 @@ how it&#39;s made.</p>
 <p><strong>V1 (current) — Cash-Secured / Covered (Fully Collateralized)</strong></p>
 <p>The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP backs it with 1 WETH (Covered Call). To mint a Put, the LP backs it with 3,500 USDC (Cash-Secured Put). The collateral is authorized JIT via Aqua — it never leaves the LP&#39;s wallet until a buyer matches — but it is always fully present and earmarked.</p>
 <p>Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.</p>
+<p><strong>What V1 can do — because the premium is a deterministic on-chain function of (spot, strike, T, σ):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Why the mechanism allows it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Known upfront premium, fixed European expiry</td>
+<td>Computable at click time from the surface — the instrument OptionStrat sellers actually trade</td>
+</tr>
+<tr>
+<td>Sell covered calls <strong>and</strong> cash-secured puts</td>
+<td>Full collateral makes writing safe with zero margin machinery</td>
+</tr>
+<tr>
+<td>Buy calls &amp; puts at any strike in a range</td>
+<td>Taker picks the strike per swap; one Aqua balance quotes the whole chain</td>
+</tr>
+<tr>
+<td>Exit anytime at a live Bid</td>
+<td>The same strategy quotes both sides — no counterparty search to close</td>
+</tr>
+<tr>
+<td>Calendars &amp; diagonals</td>
+<td>Fixed expiries + per-tenor σ buckets give a real term structure</td>
+</tr>
+<tr>
+<td>Vol competition</td>
+<td>LPs quote their own σ multiplier; <code>bestQuote</code> routes to the touch (S5/S6)</td>
+</tr>
+<tr>
+<td>Trustless settlement, ERC-20 positions</td>
+<td>Chainlink-round-verified expiry price; options compose anywhere</td>
+</tr>
+<tr>
+<td>Free quoting</td>
+<td>The entire pricing path is <code>view</code> — scanning every range costs nothing</td>
+</tr>
+</tbody></table>
+<p><strong>What V1 cannot do — and the mechanism&#39;s root cause for each:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Root cause</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Know its vol is right without trades</td>
+<td>σ only moves on fills; an untraded range quotes yesterday&#39;s vol (<a href="docs/limitations.md">L6/L7</a>, S7 is the fix)</td>
+</tr>
+<tr>
+<td>Avoid paying informed flow</td>
+<td>Quotes derive from a lagging oracle; adverse selection is <em>priced</em> (R1–R5), never eliminated (<a href="docs/limitations.md">L1/L2/L5</a>)</td>
+</tr>
+<tr>
+<td>Capital-efficient short legs</td>
+<td>A spread&#39;s short leg posts full collateral as if naked until S12 netting — condors work but are capital-hungry</td>
+</tr>
+<tr>
+<td>Naked writing</td>
+<td>No mark, no liquidations — that is the entire V2 ladder below</td>
+</tr>
+<tr>
+<td>Assets without a price feed</td>
+<td>The mechanism needs external spot; long-tail listings are feed-constrained (S11)</td>
+</tr>
+<tr>
+<td>Exact Black-Scholes prices</td>
+<td>The on-chain formula deliberately omits N(d₁)/N(d₂) — gas-cheap, roughest deep-ITM and near expiry</td>
+</tr>
+</tbody></table>
+<p><strong>Versus the Uniswap mechanism (Panoptic)</strong> — really <em>oracle-quoted implied vol</em> vs <em>pool-realized fee flow</em>:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Smile: surface + oracle</th>
+<th>Panoptic: Uniswap LP synthesis</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Premium known at entry</td>
+<td>✔ fixed, upfront</td>
+<td>✘ streams while spot sits near strike; path-dependent</td>
+</tr>
+<tr>
+<td>Seller paid for jump risk</td>
+<td>✔ implied vol charges upfront</td>
+<td>✘ paid realized fees; gaps deliver loss with no premium</td>
+</tr>
+<tr>
+<td>Expiries / calendars / expire-worthless</td>
+<td>✔ native</td>
+<td>✘ structurally impossible (perpetual)</td>
+</tr>
+<tr>
+<td>Pricing-oracle risk</td>
+<td>✘ inherent — priced by spreads</td>
+<td>✔ none — its genuine win</td>
+</tr>
+<tr>
+<td>Vol staleness in quiet markets</td>
+<td>✘ σ waits for a trade</td>
+<td>✔ n/a — no vol model at all</td>
+</tr>
+<tr>
+<td>Asset universe</td>
+<td>Needs a feed</td>
+<td>Any Uniswap v3 pool</td>
+</tr>
+<tr>
+<td>Solvency</td>
+<td>Guaranteed, no liquidations</td>
+<td>Margined: liquidations + forced exercise</td>
+</tr>
+<tr>
+<td>Capital efficiency today</td>
+<td>Low until S12</td>
+<td>Higher (partial collateral on spreads)</td>
+</tr>
+</tbody></table>
+<p>One line: <strong>Smile&#39;s mechanism trades oracle risk for a real options contract; Uniswap&#39;s trades the contract for freedom from oracles.</strong> Smile can state a price and a date and guarantee payment, at the cost of defending a lagging oracle and a trade-gated vol surface; Panoptic never has a wrong oracle price, at the cost of never telling you what your hedge costs or when it ends.</p>
 <p><strong>V2 (designed, deliberately deferred) — The capital-efficiency ladder</strong></p>
 <p>The obvious V2 question is <em>&quot;when do we allow uncovered calls?&quot;</em> — and the answer
 starts by untangling two things that usually get conflated: <strong>margin is what
