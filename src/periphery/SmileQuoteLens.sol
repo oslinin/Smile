@@ -8,13 +8,17 @@ import { TakerTraitsLib } from "@1inch/swap-vm/src/libs/TakerTraits.sol";
 
 import { AquaCollateralVault } from "../vaults/AquaCollateralVault.sol";
 import { SmileSwapVMRouter } from "../swapvm/SmileSwapVMRouter.sol";
+import { FirmEscrowFactory } from "./FirmEscrow.sol";
 
 /// @title SmileQuoteLens — best-quote routing periphery (S6)
 /// @notice Scans every vault authorization covering (strike, expiry, side)
 /// and returns the cheapest EXECUTABLE Ask — skipping sold-out or docked
 /// ranges, phantom depth the LP wallet can't honor (S1), and ranges out of
 /// per-block capacity (R1). Overlapping ranges quoting different vols (S5)
-/// compete here: the touch IS the discovered market vol.
+/// compete here: the touch IS the discovered market vol. At EQUAL price a
+/// FIRM maker (a registered FirmEscrow, S4) wins the tie — soft plain-wallet
+/// quotes must be strictly cheaper to take flow, the tradfi
+/// "NBBO + price improvement" rule with firmness as the tiebreak.
 ///
 /// Periphery by design: the vault stays under the EIP-170 size limit and the
 /// scan can be upgraded (indexing, pagination) without touching custody.
@@ -24,13 +28,16 @@ contract SmileQuoteLens {
     AquaCollateralVault public immutable vault;
     SmileSwapVMRouter public immutable router;
     IAqua public immutable aqua;
+    /// @dev address(0) disables the firm tiebreak (pure price priority).
+    FirmEscrowFactory public immutable firmFactory;
 
     uint256 private constant NO_QUOTE = type(uint256).max;
 
-    constructor(address vault_, address payable router_, address aqua_) {
+    constructor(address vault_, address payable router_, address aqua_, address firmFactory_) {
         vault = AquaCollateralVault(vault_);
         router = SmileSwapVMRouter(router_);
         aqua = IAqua(aqua_);
+        firmFactory = FirmEscrowFactory(firmFactory_);
     }
 
     /// @dev Everything about one authorization the scan needs, loaded once.
@@ -56,6 +63,7 @@ contract SmileQuoteLens {
     {
         bestAuthId = NO_QUOTE;
         bestPremium = NO_QUOTE;
+        bool bestIsFirm = false;
         uint256 n = vault.nextAuthId();
         for (uint256 i = 0; i < n; i++) {
             Candidate memory c = _load(i);
@@ -68,11 +76,21 @@ contract SmileQuoteLens {
             if (_blockCapExhausted(i, collateralNeeded)) continue;  // R1
 
             uint256 premium = _askOf(i, c, strike, amount);
-            if (premium < bestPremium) {
+            if (premium == NO_QUOTE) continue;
+            bool candIsFirm = _isFirm(c.lp);
+            if (premium < bestPremium || (premium == bestPremium && candIsFirm && !bestIsFirm)) {
                 bestPremium = premium;
                 bestAuthId = i;
+                bestIsFirm = candIsFirm;
             }
         }
+    }
+
+    /// @dev S4: makers registered with the FirmEscrowFactory hold their
+    /// collateral in an escrow with no exit other than Aqua's pull — their
+    /// displayed depth cannot be reneged, so they win price ties.
+    function _isFirm(address maker) internal view returns (bool) {
+        return address(firmFactory) != address(0) && firmFactory.isFirmEscrow(maker);
     }
 
     /// @notice Buy `amount` options at (strike, expiry, side) from whichever

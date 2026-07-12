@@ -16,6 +16,7 @@ import { MockV3Aggregator } from "../src/mocks/MockV3Aggregator.sol";
 import { PythSpotAdapter } from "../src/oracles/PythSpotAdapter.sol";
 import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
 import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
+import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -120,9 +121,17 @@ contract Deploy is Script, StdCheats {
             address(tokenFactory)
         );
 
+        // S4 (MVP scope): firm-tier escrow factory — LPs who park collateral
+        // in a FirmEscrow become makers whose displayed depth cannot be
+        // reneged; the lens prefers them at equal price.
+        FirmEscrowFactory firmFactory = new FirmEscrowFactory(address(vault), aquaAddr);
+
         // S6: best-quote routing periphery — scans all ranges, skips phantom
-        // depth, routes buys to the tightest executable vol quote.
-        SmileQuoteLens lens = new SmileQuoteLens(address(vault), payable(address(router)), aquaAddr);
+        // depth, routes buys to the tightest executable vol quote (firm wins
+        // price ties).
+        SmileQuoteLens lens = new SmileQuoteLens(
+            address(vault), payable(address(router)), aquaAddr, address(firmFactory)
+        );
 
         // deployer also acts as CRE forwarder in local testing; the Chainlink
         // feed enables PERMISSIONLESS settlement (anyone supplies the round
@@ -167,6 +176,7 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_AQUA_VAULT=%s",      address(vault));
         console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
         console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
+        console.log("NEXT_PUBLIC_FIRM_ESCROW_FACTORY=%s", address(firmFactory));
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }

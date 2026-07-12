@@ -91,6 +91,25 @@ New trust surface, stated honestly: the firm tier inherits the yield source's
 risk (Lido, Maker/Sky, Aave). Cap the accepted collateral list and keep plain
 WETH/USDC escrow as the conservative option.
 
+> **MVP scope (implemented).** The firm tier shipped early in its minimal
+> form: `FirmEscrow` (`src/periphery/FirmEscrow.sol`) — a wrapper contract
+> that *becomes* the LP's wallet from Aqua's perspective. It holds plain
+> WETH/USDC, is the `msg.sender` that authorizes and ships the range, and has
+> no code path that moves collateral out except Aqua's own `pull()`;
+> withdrawals refuse to dip below the total committed to live ranges (revoke
+> first — cancelling a displayed quote is legitimate, keeping it live while
+> unbacking it is not). L11's one-block front-run is impossible by
+> construction. `SmileQuoteLens` prefers registered firm makers at equal
+> price, so soft quotes must be strictly cheaper to win flow. Deferred to
+> full S4: yield-bearing collateral (wstETH/sDAI + settlement FX reads) and
+> firm *Bid* depth (premium income stays withdrawable, so sellbacks can still
+> bounce, exactly like the soft tier). Rationale for opening the gate before
+> the S3 data arrived: the fill-failure-rate gate has a censoring blind spot —
+> it cannot count the integrators and size takers who never route because
+> depth is indicative — and the wider 1inch ecosystem's answer to soft maker
+> liquidity (simulation + reputation, i.e. S1/S3) does not serve users who
+> need firmness as a precondition, not a probability.
+
 ---
 
 ## P2 — Adverse selection: the hardening set
@@ -234,7 +253,10 @@ before.
 > (`useFirmDepth` hook — firm-depth readout, soft badge, buy gating) and S8
 > markouts (`analytics/markouts.mjs`, verified live on Anvil). S6 routing
 > lives in the `SmileQuoteLens` periphery so the vault stays under the
-> EIP-170 size limit. Still open: Phases 3–5.
+> EIP-170 size limit. Phase 3 is MVP-SCOPED OPEN: S4 shipped early as the
+> plain-collateral `FirmEscrow` wrapper + lens firm-first tiebreak (see the
+> S4 MVP note above); yield-bearing collateral remains deferred. Still open:
+> full S4, Phases 4–5.
 
 Sequenced by (value ÷ effort), with a measurable gate before each phase.
 Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted
@@ -245,7 +267,7 @@ even if later phases never happen.
 | **0 — Measure & be honest** | S1 honest depth display · S8 markout job | Frontend + off-chain script; no contracts | — (do unconditionally) |
 | **1 — Harden** ✅ | R1 per-block caps · R2 size-convex pricing · R3 staleness spread · R4 spread floor · S2 firmness bond · S3 reliability score | One contract PR: vault + instruction + tests | Markouts confirm pick-offs exist (they will) |
 | **2 — Compete** ✅ (contracts) | S5 LP-quoted vol · S6 best-quote routing · R5 Pyth quoting oracle | Contract PR (router index + instruction arg) + frontend | Phase-1 markouts improved but spread still uncompetitive vs Deribit mid |
-| **3 — Firm up** | S4 escrowed firm tier w/ wstETH & sDAI · router firm-first preference | New vault path + settlement FX reads + tests | S3 data shows fill-failure rate matters (>~1–2% of attempts) |
+| **3 — Firm up** ✅ (MVP scope) | S4 firm tier — MVP: plain-collateral `FirmEscrow` wrapper + lens firm-first preference (shipped); full: wstETH & sDAI yield-bearing escrow | MVP: periphery-only, no vault changes; full: settlement FX reads + tests | Gate opened early: the fill-failure metric cannot see demand that never routes to indicative depth (censoring); firm depth is an integrator precondition. Yield-bearing upgrade still gated on S3 data + firm-tier uptake |
 | **4 — Sell it** | S9 covered-call one-click + auto-roll keeper · S10 1inch distribution · S11 first long-tail listing | Frontend + keeper + BD, minimal contracts | Phases 1–3 metrics: LP markouts ≥ 0 over a month — i.e. the product is safe to market |
 | **5 — Scale capital** | S12 defined-risk netting · S7 IV anchor if passive tier drifts | Significant contract design | Real volume; LP demand for spreads |
 
