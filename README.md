@@ -21,7 +21,15 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 
 More docs: [Aqua Incubator grant proposal](docs/aqua-incubator-proposal.md) ·
 [build notes & war stories](docs/build-notes.md) ·
-[verified CRE simulation transcript](docs/cre-simulation.md)
+[verified CRE simulation transcript](docs/cre-simulation.md) ·
+[known limitations](docs/limitations.md) ·
+[solutions & phased roadmap](docs/solutions.md) ·
+[reference table — every L/R/S/P, one-liner + status](docs/reference-table.html)
+
+> This README is also published as a wiki-style help page — with a sidebar
+> linking Overview (this doc), Limitations, Solutions, and the Reference
+> Table — at `/help.html` in the deployed frontend, generated from these same
+> files by `frontend/scripts/gen-help.mjs`.
 
 ---
 

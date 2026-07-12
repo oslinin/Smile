@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smile Reference: Limitations, Solutions, Recommendations, Phases</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+      a { color: #64b5f6; }
+      th { background: #2a2a2a; border-color: #404040; }
+      tr:nth-child(even) { background: #242424; }
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      .container {
+        background: #1e1e1e;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      }
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin-bottom: 20px;
+      color: #666;
+      font-size: 14px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .subtitle { color: #999; }
+    }
+
+    .filters {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    @media (prefers-color-scheme: dark) {
+      .filter-btn {
+        background: #2a2a2a;
+        border-color: #404040;
+        color: #e0e0e0;
+      }
+    }
+    .filter-btn.active {
+      background: #007bff;
+      color: white;
+      border-color: #007bff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #555;
+    }
+    @media (prefers-color-scheme: dark) {
+      th {
+        background: #2a2a2a;
+        border-color: #404040;
+        color: #bbb;
+      }
+    }
+
+    td {
+      border: 1px solid #dee2e6;
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+    @media (prefers-color-scheme: dark) {
+      td { border-color: #404040; }
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+    @media (prefers-color-scheme: dark) {
+      tr:nth-child(even) { background: #242424; }
+    }
+
+    .code {
+      font-family: monospace;
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .code {
+        background: #333;
+        color: #64b5f6;
+      }
+    }
+
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status.implemented {
+      background: #d4edda;
+      color: #155724;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.implemented {
+        background: #1e4620;
+        color: #4caf50;
+      }
+    }
+
+    .status.planned {
+      background: #e7f3ff;
+      color: #0066cc;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.planned {
+        background: #0d3a66;
+        color: #64b5f6;
+      }
+    }
+
+    .status.gated {
+      background: #fff3cd;
+      color: #856404;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.gated {
+        background: #664400;
+        color: #ffc107;
+      }
+    }
+
+    .cat {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #666;
+      letter-spacing: 0.5px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .cat { color: #999; }
+    }
+
+    .refs {
+      font-size: 11px;
+      color: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+      .refs { color: #999; }
+    }
+
+    .ref-link {
+      display: inline-block;
+      margin-right: 4px;
+      padding: 1px 4px;
+      background: #e8e8e8;
+      border-radius: 2px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ref-link {
+        background: #333;
+        color: #64b5f6;
+      }
+    }
+    .ref-link:hover {
+      background: #d0d0d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ref-link:hover { background: #444; }
+    }
+
+    .legend {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #dee2e6;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .legend { border-top-color: #404040; }
+    }
+
+    .legend-item {
+      margin-bottom: 8px;
+    }
+
+    .legend-item strong {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Smile Protocol: Complete Reference</h1>
+    <div class="subtitle">Limitations, Solutions, Recommendations, Phases — with status and cross-references</div>
+
+    <div class="filters">
+      <span style="font-weight: 600; font-size: 12px;">Filter by category:</span>
+      <button class="filter-btn active" onclick="filterTable('all')">All</button>
+      <button class="filter-btn" onclick="filterTable('L')">Limitations (L)</button>
+      <button class="filter-btn" onclick="filterTable('R')">Recommendations (R)</button>
+      <button class="filter-btn" onclick="filterTable('S')">Solutions (S)</button>
+      <button class="filter-btn" onclick="filterTable('P')">Phases (P)</button>
+    </div>
+
+    <table id="refTable">
+      <thead>
+        <tr>
+          <th style="width: 8%">Code</th>
+          <th style="width: 10%">Category</th>
+          <th style="width: 35%">Description</th>
+          <th style="width: 15%">Status</th>
+          <th style="width: 10%">Phase</th>
+          <th style="width: 22%">References</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- LIMITATIONS -->
+        <tr class="row-L">
+          <td><span class="code">L1</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Stale-quote sniping</strong> — oracle latency gap enables picked-off trades at prices that no longer reflect reality.</td>
+          <td><span class="status implemented">Partially mitigated</span></td>
+          <td>P1 · P2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R3')">R3</span><span class="ref-link" onclick="scrollTo('R5')">R5</span><span class="ref-link" onclick="scrollTo('R1')">R1</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L2</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Invisible window</strong> — sub-threshold drift inside Chainlink's deviation threshold is undetectable on-chain; defense is pricing.</td>
+          <td><span class="status implemented">Partially mitigated</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R4')">R4</span><span class="ref-link" onclick="scrollTo('S1')">S1</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L3</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Post-trade repricing</strong> — σ bumps apply after the fill, so traders execute at pre-bump price and eat no impact on the trade where it matters.</td>
+          <td><span class="status implemented">Mitigated</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R2')">R2</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L4</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Unbounded drain</strong> — one transaction can consume an entire authorization's collateral at a single stale price.</td>
+          <td><span class="status implemented">Mitigated</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R1')">R1</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L5</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Can't reject informed traders</strong> — every rejection rule is public; snipers simulate it and send only passing txs. Solution: price toxicity, not reject it.</td>
+          <td><span class="status implemented">Acknowledged</span></td>
+          <td>Design principle</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R1')">R1-R5</span><span class="ref-link" onclick="scrollTo('P1')">P1-P2</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L6</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Parameter risk</strong> — passive LPs inherit one global σ surface (α, β) set by protocol; no LP vol opinion mechanism; exposure ∂P/∂α and ∂P/∂β.</td>
+          <td><span class="status planned">Addressed in P2</span></td>
+          <td>P2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S5')">S5</span><span class="ref-link" onclick="scrollTo('S6')">S6</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L7</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Nudgeable feedback loop</strong> — σ bumps can be manufactured via paid round-trips; attack is costly but bounded nuisance, not free lunch.</td>
+          <td><span class="status implemented">Accepted tradeoff</span></td>
+          <td>Accepted</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L8</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Capital inefficiency</strong> — full collateral per option (1 WETH per call, K USDC per put) eliminates liquidation but caps ROI structurally.</td>
+          <td><span class="status planned">Addressed in P3</span></td>
+          <td>P3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S4')">S4</span><span class="ref-link" onclick="scrollTo('S12')">S12</span><span class="ref-link" onclick="scrollTo('P3')">P3</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L9</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Settlement oracle dependence</strong> — `settleWithChainlinkRound` is permissionless but value depends entirely on Chainlink feed; oracle risk distinct from latency.</td>
+          <td><span class="status implemented">Active</span></td>
+          <td>Design choice</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('P0')">P0</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L10</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>RFQ alternative costs</strong> — off-chain repricing (R6) solves L1-L5 but sacrifices passivity, composability, and trustlessness; gate behind evidence of need.</td>
+          <td><span class="status planned">Gated</span></td>
+          <td>P3+</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R6')">R6</span><span class="ref-link" onclick="scrollTo('P3')">P3</span></span></td>
+        </tr>
+        <tr class="row-L">
+          <td><span class="code">L11</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Soft liquidity / phantom depth</strong> — quoted depth sits in LP wallet and can be spent/revoked before JIT pull; soft quotes are indicative, not firm.</td>
+          <td><span class="status implemented">Mitigated</span></td>
+          <td>P0-P3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S1')">S1</span><span class="ref-link" onclick="scrollTo('S2')">S2</span><span class="ref-link" onclick="scrollTo('S3')">S3</span><span class="ref-link" onclick="scrollTo('S4')">S4</span></span></td>
+        </tr>
+
+        <tr class="row-L">
+          <td><span class="code">L12</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Per-trade gas floor</strong> — first fill in a series ~1.04M gas, but ~840k of it is the one-time OptionToken ERC-20 deploy, NOT pricing math; repeat fills ~198k (≈ a DEX swap). Mitigations: EIP-1167 clones, LP/keeper pre-deploys, cheap blockspace.</td>
+          <td><span class="status implemented">Measured</span></td>
+          <td>Open</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L10')">L10 (why not off-chain)</span></span></td>
+        </tr>
+
+        <!-- RECOMMENDATIONS -->
+        <tr class="row-R">
+          <td><span class="code">R1</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Per-block notional cap</strong> — track `(lastTradeBlock, blockNotional)` per auth; bounds loss per staleness event to one block's cap, forces multi-block sniping.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L4')">L4</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-R">
+          <td><span class="code">R2</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Size-convex pricing</strong> — apply σ bump inside premium integral proportional to trade size; large trades eat their own impact at execution, not gift pre-bump price.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L3')">L3</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-R">
+          <td><span class="code">R3</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Staleness-scaled spread</strong> — widen Ask−Bid continuously with `(now − updatedAt)` instead of cliff-rejecting at `maxStalenessSec`; prices L1 smoothly.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L1')">L1</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-R">
+          <td><span class="code">R4</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Spread floor</strong> — enforce `spread ≥ Δ × deviationThreshold × spot`; the minimum edge at which quoting inside the invisible window (L2) is positive-EV.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L2')">L2</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-R">
+          <td><span class="code">R5</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Pyth pull-oracle</strong> — taker supplies signed ~400ms price; shrinks L1 window from "heartbeat" to "sub-second drift"; quoting only (settlement stays Chainlink).</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L1')">L1</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
+        </tr>
+        <tr class="row-R">
+          <td><span class="code">R6</span></td>
+          <td><span class="cat">Recommendation</span></td>
+          <td><strong>Hybrid RFQ tier</strong> — signed-quote layer on top of on-chain fallback; LPs run fast repricing off-chain; build only if Phase 1–2 markouts show persistent toxicity.</td>
+          <td><span class="status gated">Gated</span></td>
+          <td>P3+</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L10')">L10</span><span class="ref-link" onclick="scrollTo('S8')">S8</span><span class="ref-link" onclick="scrollTo('P3')">P3</span></span></td>
+        </tr>
+
+        <!-- SOLUTIONS -->
+        <tr class="row-S">
+          <td><span class="code">S1</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Honest depth display</strong> — compute live `min(maxCollateral − used, wallet, allowance)` via staticcall; eliminate phantom depth before failed txs and adversarial lying.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P0</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('P0')">P0</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S2</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Firmness bond</strong> — LP escrows slashable bond at `authorize`; if JIT pull fails, taker claims fixed compensation for gas+adverse selection; bond returns at deauth.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S3')">S3</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S3</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Fill-reliability score</strong> — persist `(fills, failedPulls)` per LP; frontends badge by reliability; reputation complements bond (bond prices single failure, score prices pattern).</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P1</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S2')">S2</span><span class="ref-link" onclick="scrollTo('P1')">P1</span><span class="ref-link" onclick="scrollTo('P3')">its data gates P3</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S4</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Firm tier</strong> — MVP shipped: `FirmEscrow` wrapper becomes the maker wallet, collateral has no exit but Aqua's pull, lens prefers firm at equal price. Full version (yield-bearing wstETH/sDAI escrow) deferred.</td>
+          <td><span class="status implemented">MVP implemented</span></td>
+          <td>P3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('P3')">P3</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S5</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Per-range LP-quoted vol</strong> — add `sigmaMulBps` multiplier per auth; opinionated LPs quote own vol; protocol surface is default for passive LPs; enables competitive vol discovery.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L6')">L6</span><span class="ref-link" onclick="scrollTo('S6')">S6</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S6</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Best-quote routing</strong> — `bestQuote` scans all active ranges, skips phantom depth, returns best executable Ask; `buyBest` routes to it; S5+S6 = competitive vol discovery.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S5')">S5</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S7</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>External IV anchor (optional)</strong> — anchor protocol σ to external IV (e.g., Deribit ATM); fallback if S5/S6 vol discovery stays thin; adds oracle dependency, gate on evidence of drift.</td>
+          <td><span class="status planned">Planned</span></td>
+          <td>P5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S5')">S5</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S8</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Markout instrumentation</strong> — off-chain job: for every fill, re-quote at +1/+5/+30min; record deltas as P&L telescope; gate on evidence of pick-offs and toxicity.</td>
+          <td><span class="status implemented">Implemented</span></td>
+          <td>P0</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L1')">L1</span><span class="ref-link" onclick="scrollTo('R6')">R6</span><span class="ref-link" onclick="scrollTo('P0')">P0</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S9</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Covered-call / cash-secured-put one-click product</strong> — LP picks asset + yield target; app ships sensible OTM range; auto-rolls at expiry; self-custodial or yield-stacked.</td>
+          <td><span class="status planned">Planned</span></td>
+          <td>P4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S10</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>1inch ecosystem distribution</strong> — options premiums routed by SwapVM; 1inch aggregation/Fusion integrates them; demand-side flow via integrators, not standalone UI.</td>
+          <td><span class="status planned">Planned</span></td>
+          <td>P4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S11</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Long-tail listings</strong> — permissionless options on LST/LRT, L2 variants, blue-chip DeFi tokens; thin feeds need conservative params (wider spreads, lower caps, longer staleness).</td>
+          <td><span class="status planned">Planned</span></td>
+          <td>P4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S12</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td><strong>Defined-risk netting</strong> — vault-level netting for two-leg structures (e.g., call spreads); releases collateral difference as max loss; no liquidation machinery needed.</td>
+          <td><span class="status planned">Planned</span></td>
+          <td>P5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
+        </tr>
+
+        <!-- PHASES -->
+        <tr class="row-P">
+          <td><span class="code">P0</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Measure & be honest</strong> — implement S1 (honest depth display) + S8 (markout instrumentation); frontend + off-chain script; no contracts; do unconditionally.</td>
+          <td><span class="status implemented">✅ Complete</span></td>
+          <td>—</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S1')">S1</span><span class="ref-link" onclick="scrollTo('S8')">S8</span></span></td>
+        </tr>
+        <tr class="row-P">
+          <td><span class="code">P1</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Harden</strong> — implement R1-R4 (per-block, size-convex, staleness, floor) + S2-S3 (bond, reliability); one contract PR; gate: markouts confirm pick-offs exist.</td>
+          <td><span class="status implemented">✅ Complete</span></td>
+          <td>—</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R1')">R1-R4</span><span class="ref-link" onclick="scrollTo('S2')">S2-S3</span><span class="ref-link" onclick="scrollTo('S8')">S8</span></span></td>
+        </tr>
+        <tr class="row-P">
+          <td><span class="code">P2</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Compete</strong> — implement S5-S6 (LP-quoted vol, best-quote routing) + R5 (Pyth); enables vol discovery; gate: P1 markouts improved but still uncompetitive vs Deribit.</td>
+          <td><span class="status implemented">✅ Complete</span></td>
+          <td>—</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('R5')">R5</span><span class="ref-link" onclick="scrollTo('S5')">S5-S6</span></span></td>
+        </tr>
+        <tr class="row-P">
+          <td><span class="code">P3</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Firm up</strong> — gate opened early (fill-failure metric can't see demand that never routes to indicative depth); MVP shipped: plain-collateral FirmEscrow + lens firm-first tiebreak. Yield-bearing upgrade still gated on S3 data + firm-tier uptake.</td>
+          <td><span class="status implemented">✅ MVP scope</span></td>
+          <td>—</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S4')">S4</span><span class="ref-link" onclick="scrollTo('S3')">S3</span><span class="ref-link" onclick="scrollTo('L11')">L11</span></span></td>
+        </tr>
+        <tr class="row-P">
+          <td><span class="code">P4</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Sell it</strong> — implement S9-S11 (covered-call product, 1inch distribution, long-tail listings); gate: S8's markouts show LP P&L ≥ 0 over a month (product safe to market).</td>
+          <td><span class="status gated">Gated</span></td>
+          <td>P4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S9')">S9-S11</span><span class="ref-link" onclick="scrollTo('S8')">gated by S8 data</span></span></td>
+        </tr>
+        <tr class="row-P">
+          <td><span class="code">P5</span></td>
+          <td><span class="cat">Phase</span></td>
+          <td><strong>Scale capital</strong> — implement S12 (defined-risk netting) + S7 (IV anchor if passive tier drifts); gate: real volume + LP demand for spreads.</td>
+          <td><span class="status gated">Gated</span></td>
+          <td>P5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S7')">S7</span><span class="ref-link" onclick="scrollTo('S12')">S12</span><span class="ref-link" onclick="scrollTo('L8')">L8</span></span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="legend">
+      <strong>Legend</strong>
+      <div class="legend-item"><strong>Code:</strong> Unique identifier (L = Limitation, R = Recommendation, S = Solution, P = Phase)</div>
+      <div class="legend-item"><strong>Status:</strong> Implemented (done + deployed), Planned (designed, not yet coded), Gated (ready to build but waiting for a measurable gate to pass), Active (a standing design choice)</div>
+      <div class="legend-item"><strong>Phase:</strong> Which phase the item belongs to or is blocked by</div>
+      <div class="legend-item"><strong>References:</strong> Related items — click any to scroll to it</div>
+      <div class="legend-item" style="margin-top: 12px; font-size: 11px;">
+        <strong>Implementation status summary:</strong> P0–P2 fully implemented; P3 shipped in MVP scope (plain-collateral FirmEscrow + firm-first routing — yield-bearing escrow deferred). P4–P5 gated on operational data (markouts, volume, LP demand). All design documents live in <code>docs/</code>; contract changes in <code>src/</code> under vault, instruction, oracle, and periphery modules.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function filterTable(category) {
+      const table = document.getElementById('refTable');
+      const rows = table.querySelectorAll('tbody tr');
+
+      // Update button styles
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      rows.forEach(row => {
+        if (category === 'all') {
+          row.style.display = '';
+        } else {
+          if (row.classList.contains(`row-${category}`)) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    function scrollTo(code) {
+      const rows = document.querySelectorAll('tbody tr');
+      let targetRow = null;
+
+      rows.forEach(row => {
+        const codeCell = row.querySelector('.code');
+        if (codeCell && codeCell.textContent === code) {
+          targetRow = row;
+        }
+      });
+
+      if (targetRow) {
+        targetRow.style.background = '#fff59d';
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        setTimeout(() => {
+          targetRow.style.background = '';
+        }, 2000);
+      }
+    }
+  </script>
+</body>
+</html>

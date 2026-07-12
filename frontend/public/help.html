@@ -6,13 +6,53 @@
 <title>Smile — Docs</title>
 <style>
   :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     background: #030712;
     color: #e5e7eb;
     font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
+  .wiki { display: flex; min-height: 100vh; }
+  .sidebar {
+    flex: 0 0 220px;
+    background: #0b1120;
+    border-right: 1px solid #1f2937;
+    padding: 24px 12px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar h2 {
+    color: #fff;
+    font-size: 0.95rem;
+    margin: 0 12px 16px;
+    letter-spacing: 0.02em;
+  }
+  .nav-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 2px;
+  }
+  .nav-link:hover { background: #111827; color: #d1d5db; }
+  .nav-link.active { background: #1e293b; color: #fff; font-weight: 600; }
+  .content { flex: 1; min-width: 0; }
+  .page { display: none; }
+  .page.active { display: block; }
   .doc { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  .page-reference { height: 100vh; }
+  .page-reference iframe { width: 100%; height: 100%; border: none; display: block; }
   h1, h2, h3, h4 { color: #fff; font-weight: 700; line-height: 1.25; margin: 1.8em 0 0.6em; }
   h1 { font-size: 2rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.3em; }
   h2 { font-size: 1.5rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.3em; }
@@ -39,12 +79,37 @@
   img { max-width: 100%; }
   hr { border: none; border-top: 1px solid #1f2937; margin: 2em 0; }
   .mermaid { background: #0b1120; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin: 1em 0; text-align: center; }
-  .back { display: inline-block; margin-bottom: 24px; color: #9ca3af; font-size: 0.85rem; }
+
+  @media (max-width: 760px) {
+    .wiki { flex-direction: column; }
+    .sidebar {
+      position: static;
+      height: auto;
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      overflow-x: auto;
+      padding: 12px;
+    }
+    .sidebar h2 { display: none; }
+    .nav-link { width: auto; white-space: nowrap; margin-right: 4px; margin-bottom: 0; }
+    .page-reference { height: 80vh; }
+  }
 </style>
 </head>
 <body>
-  <article class="doc">
-    <h1>Smile</h1>
+  <div class="wiki">
+    <nav class="sidebar">
+      <h2>Smile Docs</h2>
+      <button class="nav-link" data-page="overview">Overview</button>
+        <button class="nav-link" data-page="limitations">Limitations</button>
+        <button class="nav-link" data-page="solutions">Solutions</button>
+        <button class="nav-link" data-page="reference">Reference Table</button>
+    </nav>
+    <div class="content">
+      <section id="page-overview" class="page" data-mermaid="true">
+      <article class="doc"><h1>Smile</h1>
 <p>TL;DR: Standard options market potentially as popular as Robinhood, decentralized as Polymarket.</p>
 <p>A non-custodial, parametric options marketplace that solves three interlocking problems in DeFi options: thin liquidity at each strike, yield-killing collateral lock-up, and the absence of emergent market makers. By combining <strong>1inch Aqua</strong>, <strong>Uniswap v4 Hooks</strong>, and <strong>Chainlink CRE</strong>, LPs can quote an entire strike range from one capital pool — while their collateral keeps earning DeFi yield until a buyer actually matches.</p>
 <hr>
@@ -63,7 +128,16 @@
 </ol>
 <p>More docs: <a href="docs/aqua-incubator-proposal.md">Aqua Incubator grant proposal</a> ·
 <a href="docs/build-notes.md">build notes &amp; war stories</a> ·
-<a href="docs/cre-simulation.md">verified CRE simulation transcript</a></p>
+<a href="docs/cre-simulation.md">verified CRE simulation transcript</a> ·
+<a href="docs/limitations.md">known limitations</a> ·
+<a href="docs/solutions.md">solutions &amp; phased roadmap</a> ·
+<a href="docs/reference-table.html">reference table — every L/R/S/P, one-liner + status</a></p>
+<blockquote>
+<p>This README is also published as a wiki-style help page — with a sidebar
+linking Overview (this doc), Limitations, Solutions, and the Reference
+Table — at <code>/help.html</code> in the deployed frontend, generated from these same
+files by <code>frontend/scripts/gen-help.mjs</code>.</p>
+</blockquote>
 <hr>
 <h2>🚀 The Thesis</h2>
 <p>While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer many strategies retail traders have been increasingly investing in: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, buying butterflies to express a range-bound view on volatility, etc. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain: Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity.</p>
@@ -78,6 +152,54 @@
 </ul>
 </li>
 </ol>
+<h3>Competitive positioning: why not Panoptic?</h3>
+<p><a href="https://panoptic.xyz">Panoptic</a> is the strongest live on-chain options design and
+deserves a direct answer. It synthesizes <strong>perpetual</strong> options out of Uniswap v3 LP
+positions and prices them off the pool&#39;s realized fee flow (&quot;streamia&quot;) — which
+elegantly deletes the pricing-oracle problem altogether. But that design does not
+target — and structurally <em>cannot</em> target — the user Smile is built for: the
+<strong>OptionStrat/thetagang-style premium seller</strong> and the <strong>Deribit-style vanilla
+trader</strong>.</p>
+<ul>
+<li><strong>No expiries.</strong> Panoptic options are perpetual — there is no &quot;March 3,500 call,&quot;
+no expire-worthless endgame where the seller keeps the credit, and no calendar or
+diagonal spreads (there is no term structure to spread across). Smile&#39;s fixed
+European expiries and per-tenor vol buckets quote all of these natively.</li>
+<li><strong>No upfront credit.</strong> A Panoptic &quot;put credit spread&quot; or &quot;iron condor&quot; draws the
+same payoff diagram but streams income only while spot sits near the short
+strikes — the premium is path-dependent and unknowable at entry. A Smile seller
+collects a known premium at fill, priced off <em>implied</em> vol, which charges for jump
+risk upfront; realized fee flow does not.</li>
+<li><strong>Liquidations exist.</strong> Panoptic runs partial collateral with margin and forced
+liquidations (plus forced exercise of far-OTM longs). Smile is fully
+collateralized by construction — an option, once written, can always pay.</li>
+</ul>
+<p>Smile makes the opposite bet: keep the instrument traders already know —
+fixed-expiry, cash-settled European vanillas with known premiums — and rebuild the
+<strong>market-making stack</strong> around it to compete with Deribit and tradfi desks on their
+own terms:</p>
+<ul>
+<li><strong>1inch Aqua</strong> removes the market maker&#39;s largest on-chain cost. Collateral stays
+in the LP&#39;s wallet, earning yield, until the moment of sale — so quoting an entire
+strike chain is nearly free, a yield double-dip no tradfi desk or locked vault
+gets.</li>
+<li><strong>SwapVM pricing + LP-quoted vol</strong> lets each LP express their own σ per range —
+quoting <em>in vol</em>, exactly how professional desks quote — and best-quote routing
+turns overlapping ranges into an order book in vol space, so the touch is the
+discovered market vol.</li>
+<li><strong>Uniswap v4 hooks</strong> reprice the surface with flow, and tradfi-grade spread
+mechanics — staleness-scaled spreads, size-convex price impact, per-block notional
+caps, a spread floor calibrated to the oracle&#39;s blind window — price adverse
+selection the way a desk does instead of pretending it away (see
+<a href="docs/limitations.md">docs/limitations.md</a> and
+<a href="docs/solutions.md">docs/solutions.md</a>).</li>
+<li><strong>Chainlink settlement</strong> is permissionless and round-verified, and LPs who want
+the full tradfi profile can delta-hedge from the same wallet that backs their
+quotes — the collateral never left it.</li>
+</ul>
+<p>In short: Panoptic reinvents the option to fit Uniswap; Smile keeps the option
+traders already trade and uses Aqua, SwapVM, Uniswap hooks, and Chainlink to rebuild
+how it&#39;s made.</p>
 <hr>
 <h2>🏗️ Architecture</h2>
 <table>
@@ -664,20 +786,831 @@ forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the 
 </ul>
 <hr>
 <p><em>Built for the 1inch + Uniswap + Chainlink Hackathon.</em></p>
+</article>
+    </section>
+    <section id="page-limitations" class="page" data-mermaid="false">
+      <article class="doc"><h1>Known Limitations, Risks, and Recommendations</h1>
+<p>This document is the honest record of Smile&#39;s design trade-offs. It captures a
+series of design discussions from development so the reasoning survives the
+sessions that produced it. It is written for three audiences:</p>
+<ul>
+<li><strong>LPs</strong> deciding whether to ship a range — Part 1 explains, in plain
+language, the risk you are actually taking.</li>
+<li><strong>Integrators and auditors</strong> — Part 2 enumerates the known limitations with
+code references.</li>
+<li><strong>Future contributors</strong> — Part 3 is the sequenced roadmap of mitigations,
+with the rationale for the ordering.</li>
+</ul>
+<p>Nothing here is a bug. Every limitation below is a <em>trade</em> the protocol made
+deliberately, usually exchanging some market-making efficiency for
+trustlessness. The point of this document is that you should know the price.</p>
+<hr>
+<h2>Part 1 — The concepts, in plain language</h2>
+<h3>What an LP on Smile actually is</h3>
+<p>When you authorize a strike range, you are not &quot;depositing into a pool.&quot; You
+are becoming a <strong>market maker</strong>: someone who posts standing prices and waits
+for other people to trade against them. The protocol quotes two prices on your
+behalf for every strike in your range:</p>
+<ul>
+<li>the <strong>Ask</strong> — what a buyer pays you for an option;</li>
+<li>the <strong>Bid</strong> — what you pay a holder who sells the option back
+(<code>close()</code>).</li>
+</ul>
+<p>The Ask is always higher than the Bid. That gap is the <strong>bid-ask spread</strong>, and
+it is your compensation for standing in the market. Every round trip (someone
+buys at the Ask, later sells at the Bid) pays you the spread.</p>
+<p>The natural question is: why does the spread need to exist at all? Why not
+quote one fair price? The answer is the single most important concept in this
+document.</p>
+<h3>Adverse selection, from zero</h3>
+<p>Start away from finance. You&#39;re selling a used car for a fixed, posted,
+non-negotiable price of $10,000. Two kinds of buyers show up:</p>
+<ol>
+<li>People who just need a car. Some think it&#39;s worth $9,500 and walk away;
+some think it&#39;s worth $10,500 and buy. Their errors are random — on
+average, you get a fair price from them.</li>
+<li>A mechanic who inspects the engine and knows something you don&#39;t. The
+mechanic <strong>only buys if the car is secretly worth more than $10,000</strong>. If
+it&#39;s worth less, they walk away.</li>
+</ol>
+<p>Notice the asymmetry: the mechanic never loses to you, and you never win
+against the mechanic. You can&#39;t tell the two kinds of buyers apart — they
+both just hand you $10,000. But the <em>composition of who chooses to trade with
+you</em> is skewed against you. The trades you actually receive are <strong>selected
+adversely</strong>. That is adverse selection: when the other side gets to decide
+whether to trade at your fixed price, the ones who say yes are
+disproportionately the ones who know your price is wrong.</p>
+<p>Now translate to Smile, with real numbers:</p>
+<ul>
+<li>ETH trades at $3,000. The on-chain Chainlink feed says $3,000, and the
+vol surface prices a 3,100-strike call at <strong>$68</strong>.</li>
+<li>News hits. On Binance, ETH jumps to $3,020 within one second. Chainlink
+only publishes a new price when the change exceeds its <strong>deviation
+threshold</strong> (0.5% for ETH/USD) or a heartbeat timer expires — so on-chain,
+ETH is still &quot;$3,000&quot; and the call still costs $68.</li>
+<li>A fast trader (a <strong>sniper</strong>) sees both prices. The call is now genuinely
+worth about $74. They buy as many as your range allows at $68.</li>
+<li>Chainlink updates. Your quote catches up. The sniper is up ~$6 per option,
+and that money came out of your collateral&#39;s expected value.</li>
+</ul>
+<p>You were <strong>picked off</strong>: filled at a <strong>stale quote</strong> — a posted price that no
+longer reflects reality. The sniper is <strong>informed flow</strong> (they traded because
+they knew something the price didn&#39;t reflect). The ordinary trader who buys a
+call to hedge or speculate is <strong>uninformed flow</strong> — not stupid, just not
+trading <em>against your error</em> specifically; their trades are roughly fair for
+you and they pay you the spread. Flow that is systematically informed is
+called <strong>toxic flow</strong>, because filling it systematically loses money.</p>
+<p>The punchline, due to Glosten and Milgrom (1985): since you cannot tell the
+mechanic from the ordinary buyer, your only defense is to charge <em>everyone</em>
+a spread wide enough that your winnings from the uninformed cover your losses
+to the informed. <strong>The spread is an insurance premium against your own
+ignorance of who you&#39;re trading with.</strong> A market with more snipers needs wider
+spreads; a market that could magically exclude snipers could quote nearly
+zero spread. Every limitation in Part 2 is a variation on this theme, and
+every recommendation in Part 3 is an attempt to shrink the insurance premium
+honest users have to pay.</p>
+<h3>The Greeks, briefly</h3>
+<p>The <strong>Greeks</strong> measure how an option position&#39;s value moves when market
+conditions move. For a Smile LP the relevant four are:</p>
+<table>
+<thead>
+<tr>
+<th>Greek</th>
+<th>Measures sensitivity to…</th>
+<th>A short-option LP has…</th>
+<th>Plain meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Delta (Δ)</strong></td>
+<td>spot price</td>
+<td>negative (short calls)</td>
+<td>You lose as ETH rises past your strikes</td>
+</tr>
+<tr>
+<td><strong>Gamma (Γ)</strong></td>
+<td><em>speed</em> of spot moves</td>
+<td>negative</td>
+<td>Big moves in either direction hurt more than proportionally</td>
+</tr>
+<tr>
+<td><strong>Vega</strong></td>
+<td>implied volatility</td>
+<td>negative</td>
+<td>You lose when the market gets more volatile</td>
+</tr>
+<tr>
+<td><strong>Theta (Θ)</strong></td>
+<td>passage of time</td>
+<td>positive</td>
+<td>You earn a little every calm day</td>
+</tr>
+</tbody></table>
+<p>Short gamma + short vega + long theta is the classic market-maker profile:
+<strong>you are paid steadily for absorbing the risk of sudden moves.</strong> Writing
+options over a whole strike range makes this precise: by a classical result
+(Carr–Madan static replication), a portfolio of options spread across all
+strikes replicates a <strong>variance swap</strong> — a bet on realized volatility itself.
+An LP whose range fills broadly is therefore, to first order, <strong>short
+volatility as an asset class</strong>: profitable in calm markets, hit hardest in
+turbulent ones. If that risk profile isn&#39;t what you want, don&#39;t ship a wide
+range.</p>
+<hr>
+<h2>Part 2 — The limitations</h2>
+<blockquote>
+<p><strong>Status update:</strong> since this document was written, the Phase 1–2
+mitigations have been implemented: L3 (post-trade-only repricing) is
+addressed by size-convex intra-trade pricing, L4 (unbounded per-block
+drain) by per-authorization block caps, L1/L2 partially by the
+staleness-scaled spread plus the optional Pyth quoting adapter, and L11
+(soft liquidity) by the firmness bond, reliability counters, and
+phantom-depth-aware <code>bestQuote</code> routing. The sections below describe the
+UNMITIGATED design so the reasoning stays legible; see
+<a href="./solutions.md">solutions.md</a> for what is now in place.</p>
+</blockquote>
+<h3>L1. Stale-quote sniping — the oracle latency gap</h3>
+<p>The premium is computed from Chainlink&#39;s last published price
+(<code>OptionPremiumInstruction.sol</code> reads <code>latestRoundData()</code>). Between real-world
+price changes and the next Chainlink update, every quote is stale, and stale
+quotes are free money for whoever notices first (Part 1). The
+<code>maxStalenessSec</code> guard (<code>OptionPremiumInstruction.sol:190-194</code>, and
+<code>AquaCollateralVault.sol:725-728</code> for the vault&#39;s put pricing) rejects quotes
+against an <em>old</em> round — but it cannot reject quotes against a <em>fresh round
+that is already wrong</em>.</p>
+<h3>L2. The invisible window — sub-threshold drift is undetectable</h3>
+<p>Chainlink ETH/USD publishes on a 0.5% deviation or a heartbeat. Inside that
+threshold the off-chain price can drift up to 0.5% with <strong>no on-chain signal
+of any kind</strong>. No contract check can detect what the chain has never been
+told; this window is invisible <em>by definition</em>, not by implementation. The
+only defense is pricing: the LP&#39;s edge per trade must exceed the expected
+adverse move within the threshold — roughly <strong>Δ × 0.5% × spot</strong> of premium per
+option. The current spread (asymmetric Ask/Bid rounding plus the smile
+markup) is not explicitly calibrated to this floor.</p>
+<h3>L3. Repricing happens after the trade, not during it</h3>
+<p>Demand feedback exists — every buy bumps the tenor bucket&#39;s σ by
+<code>GAMMA = 0.005e18</code> (0.5 vol points) and every sellback bumps it down
+(<code>OptionPricingHook.sol:90-105</code>, called from <code>AquaCollateralVault.sol:405</code> and
+<code>:558</code>) — but the bump lands <strong>after</strong> the fill. The trader always executes at
+the pre-bump price. A market maker who repriced only after each fill would be
+run over; the on-chain analog is that a sniper pays no price impact on the
+trade where it matters.</p>
+<h3>L4. One transaction can drain a whole range</h3>
+<p>There is no per-block or per-trade size limit — a single <code>buy()</code> may consume
+an authorization&#39;s entire remaining <code>maxCollateral</code> at one price. Combined
+with L1–L3, the worst case is: oracle goes stale → sniper drains the full
+range in one transaction at one wrong price → σ bump fires too late to matter.
+The loss per staleness event is bounded by <code>maxCollateral</code>, not by anything
+smaller.</p>
+<h3>L5. On-chain rules cannot reject informed traders</h3>
+<p>It is tempting to ask the contract (or the v4 hook) to &quot;reject malicious
+trades.&quot; It can&#39;t, for a structural reason: <strong>every on-chain rule is public.</strong>
+A sniper simulates your rejection logic before submitting and only sends
+transactions that pass. Rules can filter mechanically definable <em>patterns</em> —
+staleness, size, rate — but never <em>information</em>, because informedness is not
+observable on-chain. (If you could identify informed traders, Part 1 says you
+wouldn&#39;t need a spread at all.) Rejection is therefore the wrong frame;
+<strong>pricing is the right one</strong> — make toxic flow pay for its toxicity (see R1–R4).</p>
+<h3>L6. Passive LPs inherit the protocol&#39;s pricing model</h3>
+<p>The LP delegates pricing entirely to on-chain state: the σ tenor buckets, the
+smile curvature α, and the skew β. This creates a second-order exposure beyond
+the ordinary Greeks — <strong>parameter risk</strong>: ∂P/∂α ∝ vega·ln²(K/S) and
+∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). If
+governance moves α/β, or the demand-feedback loop walks a σ bucket away from
+fair, every open quote in every affected range marks against the LP with no
+action on their part. There is currently no dashboard surfacing this exposure.</p>
+<h3>L7. The demand-feedback loop is nudgeable</h3>
+<p>σ bumps are triggered by trades, and trades can be manufactured. Buying bumps
+σ up; selling back bumps it down. An attacker who wants a cheaper entry could
+sell back options to walk σ down before buying size. The attack is <em>costly</em> —
+each round trip pays the full bid-ask spread, and the protocol fee (1% on the
+Ask, none on sellbacks) taxes re-entry — and <code>GAMMA</code> is small, so moving σ
+materially takes many paid round trips. It is a bounded nuisance rather than a
+free lunch, but the loop is not manipulation-proof.</p>
+<h3>L8. Full collateralization is capital-inefficient — on purpose</h3>
+<p>Every call locks 1 WETH per unit regardless of strike
+(<code>AquaCollateralVault.sol:395</code>); every put locks the full strike value in USDC
+(<code>:398</code>). A margin system would let the same capital write 5–20× the notional.
+Smile chose full collateralization because it eliminates liquidation
+machinery, margin oracles, and insolvency risk — an option, once written, can
+<em>always</em> pay out. The cost is that LP returns on capital are structurally
+lower than a margined venue&#39;s. Aqua softens this (collateral stays in the LP&#39;s
+wallet, unrehypothecated, until the moment of sale) but does not remove it.</p>
+<h3>L9. Settlement still depends on one oracle</h3>
+<p><code>settleWithChainlinkRound</code> is permissionless and verifies that the supplied
+round actually brackets expiry — nobody can cherry-pick a favorable round —
+but the <em>value</em> settled is still whatever Chainlink published. A wrong or
+manipulated feed settles wrong, trustlessly. This is oracle risk, distinct
+from the latency risk of L1/L2, and it is shared with essentially every
+oracle-settled derivative on-chain.</p>
+<h3>L10. The off-chain alternative has its own price</h3>
+<p>The known cure for L1–L5 is moving pricing off-chain (an RFQ model: the LP
+runs a server that streams live vol, reprices in milliseconds, scores
+counterparty toxicity, and signs short-lived quotes; the chain only verifies
+signatures and settles). This works — it is how Hashflow, Paradigm, and
+professional desks operate — but it trades away exactly what Smile is for:</p>
+<ul>
+<li><strong>The passive-LP thesis dies.</strong> &quot;Ship one balance and walk away&quot; becomes
+&quot;operate a quoting server 24/7, or trust someone who does.&quot;</li>
+<li><strong>Composability breaks.</strong> Other contracts can&#39;t atomically request a signed
+quote; the on-chain surface is a lego, an RFQ endpoint is not.</li>
+<li><strong>The risk relocates rather than disappearing.</strong> A signed quote is frozen
+for its TTL (time-to-live) while the market moves; snipers attack the TTL
+window (<strong>quote fading</strong>), makers respond with shorter TTLs and <strong>last
+look</strong> (the right to reject a trade after seeing it) — each a worse version
+of the fairness problem the chain solved.</li>
+<li><strong>Toxicity scoring is discrimination.</strong> Refusing to quote addresses you
+dislike is precisely the permission the protocol promised not to require.</li>
+</ul>
+<p>See R6 for the hybrid that captures most of the benefit without giving up the
+on-chain floor.</p>
+<h3>L11. Aqua liquidity is soft — quoted depth can be phantom</h3>
+<p>The flip side of unrehypothecation (L8&#39;s virtue): because the balance backing
+a quote sits in the LP&#39;s own wallet, it can be spent, transferred, or
+de-approved at any moment. A displayed quote is an unfunded intention until
+the block it executes — the JIT <code>Aqua.pull()</code> simply reverts at fill time if
+the collateral left. At small scale this is a UX annoyance (failed
+transactions); at scale it is a market-quality problem: takers and
+integrators cannot rely on displayed depth, and an adversarial LP could
+display size they never intend to honor, learning takers&#39; intentions for
+free. Contrast: an order on Deribit&#39;s book is firm; an escrowed-vault quote
+is firm; an Aqua quote is indicative. Mitigations — honest depth display,
+slashable firmness bonds, fill-reliability scores, and a parallel firm tier
+with yield-bearing escrowed collateral — are specified in
+<a href="./solutions.md">solutions.md</a> (S1–S4).</p>
+<h3>L12. The per-trade gas floor — and where it actually comes from</h3>
+<p>Every fill pays a fixed gas overhead, which sets a minimum economical trade
+size: below it, gas dominates the premium. Measured (<code>test/GasProbe.t.sol</code>,
+reproduce with <code>forge test --match-contract GasProbeTest -vv</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Gas</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>First <code>buy()</code> at a (strike, expiry) — lazily deploys the series&#39; ERC-20</td>
+<td>~1,040,000</td>
+</tr>
+<tr>
+<td>Repeat <code>buy()</code> in an existing series — full pricing + swap + mint</td>
+<td>~198,000</td>
+</tr>
+<tr>
+<td><code>close()</code> sellback at Bid</td>
+<td>~140–240k</td>
+</tr>
+<tr>
+<td><code>redeem()</code> / <code>reclaimCollateral()</code> after settlement</td>
+<td>~46–98k</td>
+</tr>
+</tbody></table>
+<p>The instinctive reading — &quot;computing option premiums on-chain is too
+expensive&quot; — is wrong here, and measurably so. The pricing arithmetic
+(<code>lnWad</code> Padé series, one integer <code>sqrtWad</code>, the staleness spread, two
+size-impact iterations) is a rounding error inside the 198k repeat-fill
+cost, which is in the range of an ordinary Uniswap v3 swap; the design
+already avoids <code>exp</code>/<code>N(d₁)</code> entirely (README §Mathematical Specification).
+What actually dominates is <strong>series bootstrapping</strong>: ~840k of the first
+fill is the one-time deployment of that series&#39; plain-ERC-20 OptionToken —
+contract-creation bytes, not math. Moving the calculation off-chain would
+therefore save almost nothing while paying L10&#39;s full price.</p>
+<p>The real consequence: small first trades in a fresh series are
+uneconomical on expensive blockspace, and the first taker at each strike
+subsidizes everyone after. Mitigations, in order of value: deploy
+OptionTokens as EIP-1167 clones (~45k instead of ~840k, costing ~2.6k of
+delegatecall overhead on later transfers); let LPs or a keeper pre-deploy
+the series for the strikes they quote, so no taker ever pays the deploy;
+and cheaper blockspace, which shrinks the whole floor linearly — a
+deployment choice, not a property of the code.</p>
+<hr>
+<h2>Part 3 — Recommendations</h2>
+<blockquote>
+<p><strong>Note:</strong> these recommendations are expanded into a full sequenced build
+plan — with the soft-liquidity solutions, the LP-quoted-vol competitive
+pricing design, demand strategy, and phase gates — in
+<a href="./solutions.md">solutions.md</a>.</p>
+</blockquote>
+<p>Ordered by benefit-to-complexity. Phases 1–2 are contained contract changes;
+each is testable in isolation. The guiding principle, from L5: <strong>stop trying
+to reject bad flow; price it.</strong></p>
+<h3>Phase 1 — On-chain hardening (cheap, high value)</h3>
+<p><strong>R1. Per-block notional cap per authorization.</strong> Track
+<code>(lastTradeBlock, blockNotional)</code> per auth and cap fills per block at an
+LP-chosen fraction of <code>maxCollateral</code>. Converts the L4 worst case from &quot;lose
+the whole range at one stale price&quot; to &quot;lose one block&#39;s cap,&quot; and forces a
+sniper into multiple blocks — across which σ bumps and oracle updates catch
+up. Small change to <code>AquaCollateralVault.buy()</code>.</p>
+<p><strong>R2. Size-convex pricing (intra-trade impact).</strong> Apply the σ bump <em>inside</em>
+the premium calculation, proportional to trade size, so a trade of <code>n</code> units
+pays the average of a σ that rises as it fills — the options analog of an AMM
+curve, or of Kyle&#39;s lambda (price impact per unit of flow). Fixes L3: large
+informed trades eat their own impact at execution time rather than gifting
+the pre-bump price. Change to <code>SmileMath</code> + <code>OptionPremiumInstruction</code>.</p>
+<p><strong>R3. Staleness-scaled spread.</strong> Widen the Ask−Bid spread as a function of
+<code>block.timestamp − updatedAt</code>, instead of the current cliff at
+<code>maxStalenessSec</code>. A quote against a 2-second-old round is tight; against a
+50-minute-old round, wide. Prices L1 continuously.</p>
+<p><strong>R4. Spread floor calibrated to the deviation threshold.</strong> Enforce
+<code>spread ≥ Δ × deviationThreshold × spot</code> per option (with the 0.5% threshold
+as an instruction arg). This is the L2 insurance premium made explicit — the
+minimum edge at which quoting inside the invisible window is
+positive-expected-value.</p>
+<h3>Phase 2 — Shrink the staleness window itself</h3>
+<p><strong>R5. Pyth pull-oracle integration.</strong> Pyth delivers ~400ms-fresh prices <em>in
+the taker&#39;s own transaction</em> (the taker submits the signed price update
+alongside the trade; the contract verifies and prices against it). This
+closes most of the L1 latency gap and shrinks the L2 window from &quot;0.5%
+deviation&quot; to &quot;sub-second drift,&quot; while remaining fully composable and
+deterministic — no LP server, no signatures from the LP, no last look.
+Contained change to the instruction&#39;s oracle read plus a freshness check.
+<strong>Phases 1+2 together likely capture ~80% of the RFQ benefit at ~10% of its
+complexity — ship these before considering R6.</strong></p>
+<h3>Phase 3 — Hybrid RFQ, only if flow data demands it</h3>
+<p><strong>R6. Signed-quote tier on top of the on-chain floor.</strong> Two tiers, tradfi&#39;s
+&quot;NBBO + price improvement&quot; structure: tier 1 is the existing on-chain surface
+— permissionless, composable, always live, and the guaranteed fallback for
+<code>close()</code> so holders are never captive to a server. Tier 2 is a new
+<code>signedPremium</code> instruction verifying an LP&#39;s EIP-712 quote
+<code>(strike, expiry, premium, maxAmount, ttl, nonce)</code>, settling through the
+identical Aqua pull/push. Takers query both and take the better price.
+Sophisticated LPs run fast repricing and toxicity models off-chain and win
+flow with tighter quotes; passive LPs keep the tier-1 spread. Build this only
+if, after Phases 1–2, realized LP markouts (P&amp;L measured a few minutes after
+each fill) show flow is still systematically toxic.</p>
+<h3>Phase 4 — LP risk tooling</h3>
+<p><strong>R7. Range-Greeks panel in the LP dashboard.</strong> Show, per authorization:
+ex-post Greeks of actually-sold series; ex-ante expected Greeks under an
+assumed fill distribution over <code>[strikeMin, strikeMax]</code>; worst-case Greeks
+(full <code>maxCollateral</code> at the most adverse strike); and the parameter
+sensitivities ∂P/∂α, ∂P/∂β from L6. An LP should be able to see &quot;shipping
+this range ≈ short X vega, worst case Y&quot; <em>before</em> signing.</p>
+<p><strong>R8. Markout monitoring.</strong> Off-chain analytics job: for every fill, record
+the surface&#39;s own re-quote 1/5/30 minutes later. Persistent negative markouts
+are the empirical signature of adverse selection and the trigger condition
+for R6. Without this measurement, the Phase-3 decision is a guess.</p>
+<hr>
+<h2>Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Adverse selection</strong></td>
+<td>When counterparties choose whether to trade at your posted price, those who accept are disproportionately those who know the price is wrong.</td>
+</tr>
+<tr>
+<td><strong>Informed / uninformed flow</strong></td>
+<td>Trades motivated by knowledge your price doesn&#39;t reflect yet / trades motivated by hedging or opinion, fair to you on average.</td>
+</tr>
+<tr>
+<td><strong>Toxic flow</strong></td>
+<td>Order flow that is systematically informed; filling it loses money on average.</td>
+</tr>
+<tr>
+<td><strong>Picked off / sniped</strong></td>
+<td>Filled at a stale quote by a faster, informed trader.</td>
+</tr>
+<tr>
+<td><strong>Stale quote</strong></td>
+<td>A posted price that no longer reflects current information.</td>
+</tr>
+<tr>
+<td><strong>Bid-ask spread</strong></td>
+<td>Gap between the price you sell at (Ask) and buy back at (Bid); the market maker&#39;s compensation, and (Glosten–Milgrom) the insurance premium against informed flow.</td>
+</tr>
+<tr>
+<td><strong>Glosten–Milgrom (1985)</strong></td>
+<td>Model showing spreads exist <em>because</em> makers can&#39;t distinguish informed from uninformed traders.</td>
+</tr>
+<tr>
+<td><strong>Kyle&#39;s lambda</strong></td>
+<td>Price impact per unit of order flow; large trades move the price against themselves.</td>
+</tr>
+<tr>
+<td><strong>Markout</strong></td>
+<td>A fill&#39;s P&amp;L measured against the market price some minutes later; the standard empirical test for toxic flow.</td>
+</tr>
+<tr>
+<td><strong>Deviation threshold / heartbeat</strong></td>
+<td>Chainlink publishes only when price moves &gt;0.5% or a timer expires; between updates the chain is blind.</td>
+</tr>
+<tr>
+<td><strong>RFQ (request-for-quote)</strong></td>
+<td>Off-chain model where a maker signs short-lived quotes and the chain only verifies and settles.</td>
+</tr>
+<tr>
+<td><strong>TTL / quote fading / last look</strong></td>
+<td>A signed quote&#39;s validity window / attacking the maker within that window / the maker&#39;s right to reject after seeing the trade.</td>
+</tr>
+<tr>
+<td><strong>Delta, Gamma, Vega, Theta</strong></td>
+<td>Sensitivity of option value to spot, to speed of spot moves, to implied volatility, to time (see Part 1 table).</td>
+</tr>
+<tr>
+<td><strong>Vanna / volga</strong></td>
+<td>Second-order Greeks: sensitivity of vega to spot / to vol. Here: the LP&#39;s exposure to the surface parameters β and α.</td>
+</tr>
+<tr>
+<td><strong>Variance swap</strong></td>
+<td>A contract paying realized variance; replicable by holding options across all strikes (Carr–Madan), which is why a broadly-filled range LP is &quot;short volatility.&quot;</td>
+</tr>
+<tr>
+<td><strong>Static replication (Carr–Madan)</strong></td>
+<td>Result that any smooth payoff — including a variance exposure — decomposes into a strike-weighted portfolio of vanilla options.</td>
+</tr>
+<tr>
+<td><strong>JIT / unrehypothecated</strong></td>
+<td>Collateral stays in the LP&#39;s own wallet, unlent and unreused, and is pulled only at the moment an option is actually sold.</td>
+</tr>
+<tr>
+<td><strong>NBBO + price improvement</strong></td>
+<td>Tradfi structure where a public best price is the floor and competitive makers may beat it; the model for the R6 hybrid.</td>
+</tr>
+</tbody></table>
+</article>
+    </section>
+    <section id="page-solutions" class="page" data-mermaid="false">
+      <article class="doc"><h1>Solutions Plan: Making Smile Viable</h1>
+<p>Companion to <a href="./limitations.md">limitations.md</a>. That document diagnoses; this
+one prescribes. It takes the five hard problems — including the ones Aqua
+itself introduces — and lays out concrete solutions, what each costs, and the
+order to build them in, with measurable gates between phases.</p>
+<p>The framing question that prompted this document was <em>&quot;we don&#39;t have to use
+Aqua — how do we solve these problems?&quot;</em> The answer reached below is that
+dropping Aqua is the wrong dichotomy. Aqua&#39;s unrehypothecated model is the
+protocol&#39;s genuine novelty and its best LP-acquisition funnel; its weakness
+(soft, revocable liquidity) is real but priceable. The design that follows
+keeps Aqua as the <strong>soft tier</strong> of a two-tier liquidity system, adds a <strong>firm
+tier</strong> whose lockup cost is engineered to ~zero with yield-bearing collateral,
+and lets takers and routers price the difference. Markets already work this
+way: firm central-limit-order-book quotes coexist with indicative RFQ streams.</p>
+<hr>
+<h2>The five problems</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Problem</th>
+<th>Root cause</th>
+<th>Limitations ref</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td><strong>Soft liquidity / phantom depth</strong> — quoted depth can vanish before fill because the backing balance sits in the LP&#39;s wallet</td>
+<td>Aqua&#39;s JIT pull model</td>
+<td>L11</td>
+</tr>
+<tr>
+<td>P2</td>
+<td><strong>Adverse selection</strong> — stale quotes get picked off; repricing lands after the fill; one tx can drain a range</td>
+<td>Oracle latency + post-trade feedback + no caps</td>
+<td>L1–L5</td>
+</tr>
+<tr>
+<td>P3</td>
+<td><strong>Uncompetitive pricing</strong> — σ comes from a crude demand-feedback loop, not vol discovery; every LP is a price-taker of one global model</td>
+<td>No mechanism for market participants to express a vol opinion</td>
+<td>L6</td>
+</tr>
+<tr>
+<td>P4</td>
+<td><strong>Thin demand</strong> — on-chain vanilla options historically lose to Deribit and perps</td>
+<td>No structural wedge exploited yet</td>
+<td>Part 3 discussion</td>
+</tr>
+<tr>
+<td>P5</td>
+<td><strong>Capital inefficiency</strong> — full collateral caps LP return on capital</td>
+<td>Deliberate no-liquidation design</td>
+<td>L8</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>P1 — Soft liquidity: price firmness instead of assuming it</h2>
+<h3>S1. Honest depth display (frontend only — ship first)</h3>
+<p>Quoted depth for an authorization must be
+<code>min(maxCollateral − usedCollateral, wallet balance, Aqua allowance)</code>,
+computed live via <code>staticcall</code> before display, not the authorized maximum.
+Phantom depth becomes visible before it becomes a failed transaction. Zero
+contract changes; a <code>useFirmDepth</code> hook in the frontend and the same check in
+any quoting API. This doesn&#39;t <em>solve</em> softness — the balance can still move
+between quote and fill — but it eliminates the routine case and the
+adversarial &quot;display depth you never intended to honor&quot; case becomes a
+one-block race instead of a standing lie.</p>
+<h3>S2. Firmness bond (small contract change)</h3>
+<p>At <code>authorizeRange</code>, the LP escrows a small slashable bond in the vault
+(e.g. <code>max($25, 25 bps × maxCollateral)</code>, owner-tunable). If a fill fails
+because the JIT <code>Aqua.pull()</code> reverts — balance moved, allowance revoked —
+the taker&#39;s transaction claims a fixed slice of the bond as compensation for
+gas and adverse selection (they revealed their trading intention for
+nothing). Bond returns in full at deauthorization. Economics: quoting stays
+nearly free, but <em>lying</em> about depth now has a price. The bond also creates
+the on-chain event needed for S3.</p>
+<h3>S3. Fill-reliability score</h3>
+<p>The vault already knows when a pull fails (the S2 path). Persist a per-LP
+counter <code>(fills, failedPulls)</code> and expose it. Frontends sort and badge LPs by
+reliability; routers de-prioritize unreliable ones. Reputation is the cheap
+complement to the bond: the bond prices a single failure, the score prices a
+pattern.</p>
+<h3>S4. Firm tier: escrowed ranges with yield-bearing collateral</h3>
+<p>The structural answer. A parallel <code>authorizeRangeFirm</code> path where collateral
+is escrowed in the vault at ship time — firm by construction, <code>pull()</code> cannot
+fail — but denominated in <strong>yield-bearing collateral</strong> so the lockup costs
+~nothing:</p>
+<ul>
+<li>Calls: <strong>wstETH</strong> (or other LST) instead of WETH. The escrowed collateral
+keeps earning staking yield (~3%) while backing quotes.</li>
+<li>Puts: <strong>sDAI / sUSDe / aUSDC</strong> instead of USDC. The cash security earns the
+savings rate (~4–8%) while locked.</li>
+</ul>
+<p>This dissolves the historical objection to escrow (dead capital in Ribbon-era
+vaults) — the opportunity cost of locking yield-bearing collateral is
+approximately zero, because the collateral does its other job <em>while locked</em>.
+Settlement math needs an exchange-rate read (wstETH/ETH, sDAI/DAI) at payout,
+which is a contained change to <code>redeem</code>/<code>reclaimCollateral</code>.</p>
+<p>Firm quotes carry a <code>firm</code> flag; the router (S6) prefers firm liquidity at
+equal price, and soft (Aqua) quotes must be <em>better</em> to win flow — softness
+gets priced by competition rather than banned. LPs self-select: passive
+wallets use Aqua&#39;s zero-commitment tier; serious LPs escrow yield-bearing
+collateral for priority. <strong>This is the resolution of &quot;do we have to use
+Aqua&quot;: both, tiered, with the market pricing the difference.</strong></p>
+<p>New trust surface, stated honestly: the firm tier inherits the yield source&#39;s
+risk (Lido, Maker/Sky, Aave). Cap the accepted collateral list and keep plain
+WETH/USDC escrow as the conservative option.</p>
+<blockquote>
+<p><strong>MVP scope (implemented).</strong> The firm tier shipped early in its minimal
+form: <code>FirmEscrow</code> (<code>src/periphery/FirmEscrow.sol</code>) — a wrapper contract
+that <em>becomes</em> the LP&#39;s wallet from Aqua&#39;s perspective. It holds plain
+WETH/USDC, is the <code>msg.sender</code> that authorizes and ships the range, and has
+no code path that moves collateral out except Aqua&#39;s own <code>pull()</code>;
+withdrawals refuse to dip below the total committed to live ranges (revoke
+first — cancelling a displayed quote is legitimate, keeping it live while
+unbacking it is not). L11&#39;s one-block front-run is impossible by
+construction. <code>SmileQuoteLens</code> prefers registered firm makers at equal
+price, so soft quotes must be strictly cheaper to win flow. Deferred to
+full S4: yield-bearing collateral (wstETH/sDAI + settlement FX reads) and
+firm <em>Bid</em> depth (premium income stays withdrawable, so sellbacks can still
+bounce, exactly like the soft tier). Rationale for opening the gate before
+the S3 data arrived: the fill-failure-rate gate has a censoring blind spot —
+it cannot count the integrators and size takers who never route because
+depth is indicative — and the wider 1inch ecosystem&#39;s answer to soft maker
+liquidity (simulation + reputation, i.e. S1/S3) does not serve users who
+need firmness as a precondition, not a probability.</p>
+</blockquote>
+<hr>
+<h2>P2 — Adverse selection: the hardening set</h2>
+<p>Specified in <a href="./limitations.md">limitations.md Part 3</a> as R1–R5; summarized
+here because Phases below reference them:</p>
+<ul>
+<li><strong>R1</strong> Per-block notional cap per authorization — bounds loss per staleness
+event to one block&#39;s cap instead of <code>maxCollateral</code>.</li>
+<li><strong>R2</strong> Size-convex intra-trade pricing — the σ bump applies <em>inside</em> the
+premium integral, so large trades pay their own impact at execution.</li>
+<li><strong>R3</strong> Staleness-scaled spread — Ask−Bid widens continuously with oracle
+age instead of cliff-rejecting at <code>maxStalenessSec</code>.</li>
+<li><strong>R4</strong> Spread floor ≥ Δ × deviationThreshold × spot — the minimum edge at
+which quoting inside Chainlink&#39;s blind window is positive-EV.</li>
+<li><strong>R5</strong> Pyth (or Chainlink Data Streams) pull-oracle for quoting, with a
+seconds-tight freshness bound; Chainlink rounds stay for settlement.</li>
+</ul>
+<hr>
+<h2>P3 — Vol discovery: let LPs quote vol, route to the best</h2>
+<p>This is the deepest change and the one that most directly answers &quot;can the
+pricing ever be competitive.&quot;</p>
+<h3>S5. Per-range LP-quoted vol</h3>
+<p>Today every LP is a price-taker of one global surface (σ buckets + α + β set
+by the protocol). Add an LP-chosen <code>sigmaBps</code> multiplier (or absolute σ
+override) to each authorization, serialized into the strategy&#39;s instruction
+args like the existing parameters. The protocol surface becomes the <em>default</em>
+for passive LPs; opinionated LPs quote their own vol — exactly how
+professional options markets quote (in vol, not price). An LP who thinks the
+surface is rich undercuts it and wins the flow; one who thinks it&#39;s cheap
+quotes higher and only fills when they&#39;re happy to.</p>
+<h3>S6. Best-quote routing across ranges</h3>
+<p><code>buy(authId, …)</code> currently targets one explicit authorization
+(<code>AquaCollateralVault.sol:381</code>) — the frontend auto-picks the latest one.
+Add a router view <code>bestQuote(strike, expiry, isCall, amount)</code> that scans
+active authorizations covering the strike (an enumerable index per
+(asset, isCall) is needed), applies the S1 firmness check, and returns the
+best executable Ask/Bid; and <code>buyBest(...)</code> that routes to it. <strong>S5 + S6
+together create competitive vol discovery</strong>: overlapping ranges with
+different σ opinions form an order book in vol space, and the touch — the
+best bid/ask across LPs — <em>is</em> the discovered market vol. No oracle for IV
+needed; discovery emerges from the same mechanism as every other market:
+competition.</p>
+<h3>S7. Optional external IV anchor</h3>
+<p>If range competition stays thin early on, anchor the <em>default</em> surface&#39;s σ
+buckets to an external implied-vol reference (e.g. a curated feed of
+Deribit ATM IV, or an on-chain vol index) with the demand-feedback loop
+reduced to a bounded, mean-reverting deviation around the anchor. Passive
+LPs then inherit approximately-fair vol instead of a random walk. This is a
+pragmatic bridge, not the destination — S5/S6 is the trust-minimized
+endgame — and it adds an oracle dependency, so gate it on evidence that the
+default surface is drifting (persistent negative markouts on the passive
+tier).</p>
+<h3>S8. Markout instrumentation (R8 — decision infrastructure)</h3>
+<p>Off-chain job: for every fill, record the surface&#39;s own re-quote at +1/+5/+30
+minutes. Every phase gate below reads this data. Build it first; it is the
+protocol&#39;s profit-and-loss telescope and every argument about &quot;is pricing
+fair&quot; is a guess without it.</p>
+<hr>
+<h2>P4 — Demand: sell the wedge, not the option</h2>
+<h3>S9. One-click covered-call / cash-secured-put product</h3>
+<p>The LP-first product: pick an asset and a yield target → the app ships a
+sensible OTM range (e.g. 10-delta to 25-delta calls, 30 days) → auto-rolls
+at expiry, harvesting premium. Ribbon proved retail wants this UX and locked
+nine figures for it <em>with</em> custody risk; Smile&#39;s version is self-custodial
+(Aqua tier) or yield-stacked (S4 firm tier: staking yield + premium yield).
+Pure frontend + a keeper for rolls; no new contract surface beyond what
+exists.</p>
+<h3>S10. Distribution through the 1inch ecosystem</h3>
+<p>The Aqua/SwapVM integration isn&#39;t just plumbing — it&#39;s a distribution
+channel. Options premiums are quoted by a SwapVM strategy, so 1inch
+aggregation/Fusion can route into them like any other liquidity source, and
+option tokens are plain ERC-20s tradable anywhere. Pursue: listing in the
+1inch ecosystem registry, the Aqua Revenue Stream Incubator grant (proposal
+already in <code>docs/aqua-incubator-proposal.md</code>), and resolver integrations.
+Demand-side flow arrives through integrators, not a standalone venue&#39;s UI.</p>
+<h3>S11. Long-tail listings</h3>
+<p>Deribit lists three assets. Smile can permissionlessly list options on
+anything with a reliable price feed — LST/LRT tokens, majors&#39; L2 variants,
+blue-chip DeFi tokens. Long-tail is where an on-chain venue has <em>no</em>
+centralized competition, and where covered-call yield on treasury/DAO
+holdings (S9) is a genuinely unserved market. Constraint to respect: thin
+feeds are easier to manipulate, so long-tail listings need conservative
+parameters (wider spread floors, lower caps, longer staleness bounds — all
+per-authorization args that already exist or arrive in Phase 1).</p>
+<hr>
+<h2>P5 — Capital efficiency</h2>
+<h3>S4 (again). Yield-bearing collateral</h3>
+<p>Solves the largest chunk: collateral earns its native yield while escrowed,
+so &quot;full collateral&quot; stops meaning &quot;dead capital.&quot;</p>
+<h3>S12. Defined-risk netting (later)</h3>
+<p>Full collateralization is per-option today: a call spread (long K₁, short K₂)
+locks collateral for the short leg as if naked, though the structure&#39;s true
+worst case is <code>K₂ − K₁</code>. Vault-level netting for recognized two-leg
+structures held by the same LP releases the difference — substantial
+efficiency for spread writers with <strong>no liquidation machinery</strong>, because
+defined-risk structures stay fully covered at their true maximum loss. This
+is real design work (position accounting, early-exercise-free European
+payoffs make it tractable) and belongs after product-market signal, not
+before.</p>
+<hr>
+<h2>The plan</h2>
+<blockquote>
+<p><strong>Executable task-level plan for Phases 0–1</strong> (exact files, signatures,
+tests, commands, written for mechanical execution):
+<a href="./plans/2026-07-11-phase01-hardening.md">plans/2026-07-11-phase01-hardening.md</a></p>
+<p><strong>Status:</strong> the contract side of Phases 1–2 is IMPLEMENTED — R1 (per-block
+caps), R2 (size-convex pricing), R3+R4 (staleness-scaled spread with a
+configurable floor), S2 (firmness bond, deploy-opt-in via
+<code>FIRMNESS_BOND_BPS</code>), S3 (fills/failedPulls counters), S5 (per-range
+<code>sigmaMulBps</code>), S6 (<code>bestQuote</code>/<code>buyBest</code> with S1 phantom-depth skipping),
+and R5 (<code>PythSpotAdapter</code> pull-oracle for quoting, deploy-opt-in via
+<code>PYTH</code>/<code>PYTH_PRICE_ID</code>). Phase 0 is implemented too: S1 honest depth
+(<code>useFirmDepth</code> hook — firm-depth readout, soft badge, buy gating) and S8
+markouts (<code>analytics/markouts.mjs</code>, verified live on Anvil). S6 routing
+lives in the <code>SmileQuoteLens</code> periphery so the vault stays under the
+EIP-170 size limit. Phase 3 is MVP-SCOPED OPEN: S4 shipped early as the
+plain-collateral <code>FirmEscrow</code> wrapper + lens firm-first tiebreak (see the
+S4 MVP note above); yield-bearing collateral remains deferred. Still open:
+full S4, Phases 4–5.</p>
+</blockquote>
+<p>Sequenced by (value ÷ effort), with a measurable gate before each phase.
+Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted
+even if later phases never happen.</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Contents</th>
+<th>Effort</th>
+<th>Gate to proceed</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>0 — Measure &amp; be honest</strong></td>
+<td>S1 honest depth display · S8 markout job</td>
+<td>Frontend + off-chain script; no contracts</td>
+<td>— (do unconditionally)</td>
+</tr>
+<tr>
+<td><strong>1 — Harden</strong> ✅</td>
+<td>R1 per-block caps · R2 size-convex pricing · R3 staleness spread · R4 spread floor · S2 firmness bond · S3 reliability score</td>
+<td>One contract PR: vault + instruction + tests</td>
+<td>Markouts confirm pick-offs exist (they will)</td>
+</tr>
+<tr>
+<td><strong>2 — Compete</strong> ✅ (contracts)</td>
+<td>S5 LP-quoted vol · S6 best-quote routing · R5 Pyth quoting oracle</td>
+<td>Contract PR (router index + instruction arg) + frontend</td>
+<td>Phase-1 markouts improved but spread still uncompetitive vs Deribit mid</td>
+</tr>
+<tr>
+<td><strong>3 — Firm up</strong> ✅ (MVP scope)</td>
+<td>S4 firm tier — MVP: plain-collateral <code>FirmEscrow</code> wrapper + lens firm-first preference (shipped); full: wstETH &amp; sDAI yield-bearing escrow</td>
+<td>MVP: periphery-only, no vault changes; full: settlement FX reads + tests</td>
+<td>Gate opened early: the fill-failure metric cannot see demand that never routes to indicative depth (censoring); firm depth is an integrator precondition. Yield-bearing upgrade still gated on S3 data + firm-tier uptake</td>
+</tr>
+<tr>
+<td><strong>4 — Sell it</strong></td>
+<td>S9 covered-call one-click + auto-roll keeper · S10 1inch distribution · S11 first long-tail listing</td>
+<td>Frontend + keeper + BD, minimal contracts</td>
+<td>Phases 1–3 metrics: LP markouts ≥ 0 over a month — i.e. the product is safe to market</td>
+</tr>
+<tr>
+<td><strong>5 — Scale capital</strong></td>
+<td>S12 defined-risk netting · S7 IV anchor if passive tier drifts</td>
+<td>Significant contract design</td>
+<td>Real volume; LP demand for spreads</td>
+</tr>
+</tbody></table>
+<p><strong>Kill criteria, stated in advance</strong> (the discipline the graveyard lacked):
+if after Phases 1–2 the passive tier&#39;s 30-minute markouts stay persistently
+negative at every spread level takers will accept, the passive-surface model
+is wrong — pivot the protocol to S5-only (all vol LP-quoted, protocol
+provides settlement + custody rails, no house model). If firm-tier
+fill-reliability and covered-call retention are strong but taker flow never
+arrives, pivot distribution-first (S10) before adding any further mechanism.</p>
+<h3>What this plan deliberately does <em>not</em> do</h3>
+<ul>
+<li><strong>Drop Aqua.</strong> Its softness is priced (S1–S3) and competed against (S4)
+instead. The zero-commitment funnel is worth keeping.</li>
+<li><strong>Move pricing off-chain.</strong> The RFQ tier (limitations.md R6) stays gated
+behind markout evidence; Phases 1–2 are expected to make it unnecessary.</li>
+<li><strong>Add margin/liquidations.</strong> S12 achieves capital efficiency only where it
+requires no liquidation engine.</li>
+</ul>
+</article>
+    </section>
+    <section id="page-reference" class="page page-reference">
+      <iframe src="/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
+    </section>
+    </div>
+  </div>
+  <script>
+    // Plain classic script: sidebar navigation must work even if the CDN
+    // mermaid import below never resolves (offline, blocked, jsDelivr down).
+    // A failed top-level ES module import aborts the ENTIRE module, so
+    // mermaid is loaded separately, dynamically, with its own try/catch.
+    var VALID_PAGES = ["overview","limitations","solutions","reference"];
+    var mermaidDone = new Set();
+    var mermaidReady = null; // Promise<mermaid module> | null, set below
 
-  </article>
-  <script type="module">
-    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-    // Turn ```mermaid fenced blocks into mermaid-rendered containers.
-    document.querySelectorAll("code.language-mermaid").forEach((el) => {
-      const pre = el.closest("pre");
-      const div = document.createElement("div");
-      div.className = "mermaid";
-      div.textContent = el.textContent;
-      pre.replaceWith(div);
+    function pendingMermaidBlocks(section) {
+      return section.dataset.mermaid === "true" && !mermaidDone.has(section.id)
+        && section.querySelectorAll("code.language-mermaid").length > 0;
+    }
+
+    async function renderMermaidIn(section) {
+      if (!pendingMermaidBlocks(section) || !mermaidReady) return;
+      const mermaid = await mermaidReady.catch(() => null);
+      if (!mermaid) return; // CDN unavailable — diagrams stay as plain code blocks
+      const blocks = section.querySelectorAll("code.language-mermaid");
+      blocks.forEach((el) => {
+        const pre = el.closest("pre");
+        const div = document.createElement("div");
+        div.className = "mermaid";
+        div.textContent = el.textContent;
+        pre.replaceWith(div);
+      });
+      mermaidDone.add(section.id);
+      try { await mermaid.run({ nodes: section.querySelectorAll(".mermaid") }); }
+      catch (e) { console.error("mermaid render failed", e); }
+    }
+
+    function showPage(id) {
+      if (VALID_PAGES.indexOf(id) === -1) id = VALID_PAGES[0];
+      document.querySelectorAll(".page").forEach(function (el) { el.classList.remove("active"); });
+      document.querySelectorAll(".nav-link").forEach(function (el) { el.classList.remove("active"); });
+      var section = document.getElementById("page-" + id);
+      section.classList.add("active");
+      document.querySelector('.nav-link[data-page="' + id + '"]').classList.add("active");
+      renderMermaidIn(section);
+      history.replaceState(null, "", "#" + id);
+    }
+
+    document.querySelectorAll(".nav-link").forEach(function (btn) {
+      btn.addEventListener("click", function () { showPage(btn.dataset.page); });
     });
-    mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
-    try { await mermaid.run(); } catch (e) { console.error("mermaid render failed", e); }
+
+    showPage((location.hash || "#overview").slice(1));
+
+    // Best-effort mermaid load — never blocks navigation or page rendering.
+    mermaidReady = import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")
+      .then(function (mod) {
+        var mermaid = mod.default;
+        mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+        var active = document.querySelector(".page.active");
+        if (active) renderMermaidIn(active);
+        return mermaid;
+      })
+      .catch(function (e) { console.warn("mermaid unavailable — diagrams will show as code blocks", e); throw e; });
   </script>
 </body>
 </html>
