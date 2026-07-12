@@ -136,11 +136,58 @@ The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP bac
 
 Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.
 
-**V2 (out of scope) — Margin & Liquidation (Under-Collateralized)**
+**V2 (designed, deliberately deferred) — The capital-efficiency ladder**
 
-Advanced platforms like Derive allow LPs to post fractional collateral (e.g., 500 USDC to back a 3,500 ETH Call). As spot moves against the LP, the liability grows. If collateral falls below a safety threshold (e.g., 110% of the option's current market value), external liquidation bots forcibly close the position — buying back the option from the market using the LP's remaining collateral before bad debt accrues.
+The obvious V2 question is *"when do we allow uncovered calls?"* — and the answer
+starts by untangling two things that usually get conflated: **margin is what
+protects the protocol; delta hedging is what protects the maker.** No exchange
+mandates hedging — Deribit and the CME require margin and mark to market, full
+stop — but at the 5–20× leverage naked writing implies, an unhedged directional
+book has near-certain ruin, so in practice every surviving naked writer hedges.
+A margined V2 therefore *implies* a delta-hedged maker base even though the
+contracts never enforce it. The right design lever is to **recognize** hedges
+rather than require them: portfolio margin that nets a short call against long
+WETH (rediscovering today's covered call as the zero-extra-margin case), spreads
+against each other, and — the step that quietly forces a perp integration, as
+Derive's cross-margin account shows — an on-venue hedge leg the vault can
+actually see. A hedge on a CEX is invisible to the contract and can reduce
+nothing.
 
-This model unlocks capital efficiency but requires an on-chain margin engine, a liquidation keeper network, and robust price feeds at sub-second granularity. It is explicitly out of scope for V1.
+Full margin is also not one feature but a five-part machine, and the price list
+deserves to be stated in advance:
+
+1. **A mark for every open option** — margin is `collateral ≥ k × current
+   liability`, which needs a continuously updated fair value, i.e. an IV oracle.
+   Circular for a venue whose purpose is to *discover* IV; dependent if imported
+   from Deribit.
+2. **A liquidation engine + keeper network** — bots that buy back or auction
+   positions when maintenance margin breaks.
+3. **A liquid market to liquidate *into*** — the forgotten constraint.
+   Liquidating a short call means *buying that call back* at the worst moment;
+   on a thin book the engine has no counterparty. Naked margin is only safe
+   *after* the venue is liquid — it can never be what bootstraps liquidity.
+4. **An insurance fund** — crypto gaps faster than liquidations land; bad debt
+   is a *when*, not an *if*, and someone must eat it.
+5. **Sub-second-grade price feeds** for the margin marks.
+
+Because each part is expensive and the last three import exactly the risks V1
+was built to exclude, V2 is sequenced as a ladder — each rung captures capital
+efficiency *without* paying for machinery the rung below didn't need:
+
+| Rung | Mechanism | Liquidation machinery | Who it serves |
+|---|---|---|---|
+| 1 | **Yield-bearing collateral** ([S4](docs/solutions.md)) — escrowed wstETH/sDAI keeps earning while backing quotes | None | Every LP: makes full collateral *cheap* instead of smaller |
+| 2 | **Defined-risk netting** ([S12](docs/solutions.md)) — a call spread margined at its true max loss `K₂−K₁`, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
+| 3 | **Partial-collateral puts** — a put's worst case is bounded (strike → 0), so "80% collateral survives any 80% crash" is a coherent product | Light — bounded bad debt | Yield-focused put writers |
+| 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine | All of it | Professional delta-hedging desks |
+
+Rungs 1–3 preserve the property that is Smile's one absolute differentiator
+against Derive, Panoptic, and Deribit alike: **an option, once written, can
+always pay.** Rung 4 breaks it — so rung 4 stays gated behind evidence that
+rungs 1–3 left real demand unmet, and its natural constituency (professional
+makers who hedge in milliseconds) may be better served by the signed-quote RFQ
+tier ([limitations.md R6](docs/limitations.md)), where pros manage their own
+leverage off-chain and the trustless vault never underwrites it.
 
 ---
 
