@@ -256,6 +256,39 @@ slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 [solutions.md](./solutions.md) (S1–S4).
 
+### L12. The per-trade gas floor — and where it actually comes from
+
+Every fill pays a fixed gas overhead, which sets a minimum economical trade
+size: below it, gas dominates the premium. Measured (`test/GasProbe.t.sol`,
+reproduce with `forge test --match-contract GasProbeTest -vv`):
+
+| Operation | Gas |
+|---|---|
+| First `buy()` at a (strike, expiry) — lazily deploys the series' ERC-20 | ~1,040,000 |
+| Repeat `buy()` in an existing series — full pricing + swap + mint | ~198,000 |
+| `close()` sellback at Bid | ~140–240k |
+| `redeem()` / `reclaimCollateral()` after settlement | ~46–98k |
+
+The instinctive reading — "computing option premiums on-chain is too
+expensive" — is wrong here, and measurably so. The pricing arithmetic
+(`lnWad` Padé series, one integer `sqrtWad`, the staleness spread, two
+size-impact iterations) is a rounding error inside the 198k repeat-fill
+cost, which is in the range of an ordinary Uniswap v3 swap; the design
+already avoids `exp`/`N(d₁)` entirely (README §Mathematical Specification).
+What actually dominates is **series bootstrapping**: ~840k of the first
+fill is the one-time deployment of that series' plain-ERC-20 OptionToken —
+contract-creation bytes, not math. Moving the calculation off-chain would
+therefore save almost nothing while paying L10's full price.
+
+The real consequence: small first trades in a fresh series are
+uneconomical on expensive blockspace, and the first taker at each strike
+subsidizes everyone after. Mitigations, in order of value: deploy
+OptionTokens as EIP-1167 clones (~45k instead of ~840k, costing ~2.6k of
+delegatecall overhead on later transfers); let LPs or a keeper pre-deploy
+the series for the strikes they quote, so no taker ever pays the deploy;
+and cheaper blockspace, which shrinks the whole floor linearly — a
+deployment choice, not a property of the code.
+
 ---
 
 ## Part 3 — Recommendations
