@@ -41,6 +41,38 @@ export function protocolPremium(
   return intrinsic + timeValue;
 }
 
+// ── Delta-targeted strike selection (S9 one-click income) ────────────────────
+
+/**
+ * Strike whose Black-Scholes |delta| equals `targetAbsDelta`, under the same
+ * smile-adjusted σ the on-chain instruction quotes. Calls: delta falls as K
+ * rises; puts: |delta| falls as K falls — both monotone, so bisection is safe.
+ * Thetagang presets are expressed in delta ("sell the 15Δ call") because
+ * delta ≈ P(expiring ITM): the knob users actually reason with.
+ */
+export function strikeForDelta(
+  spot: number,
+  targetAbsDelta: number,
+  isCall: boolean,
+  tYears: number
+): number {
+  const type = isCall ? "call" : "put";
+  const absDelta = (k: number) =>
+    Math.abs(getDelta(spot, k, Math.max(tYears, 1e-4), smileSigma(spot, k), RISK_FREE_RATE, type));
+  // |delta| decreases as the strike moves OTM for both sides.
+  let nearMoney = spot;
+  let farOtm = isCall ? spot * 3 : spot * 0.2;
+  for (let i = 0; i < 60; i++) {
+    const mid = (nearMoney + farOtm) / 2;
+    if (absDelta(mid) > targetAbsDelta) nearMoney = mid;
+    else farOtm = mid;
+  }
+  return (nearMoney + farOtm) / 2;
+}
+
+/** Round a strike to the protocol's UI convention ($50 increments). */
+export const roundStrike = (k: number) => Math.max(50, Math.round(k / 50) * 50);
+
 // ── Leg & strategy model ─────────────────────────────────────────────────────
 
 export interface BuilderLeg {

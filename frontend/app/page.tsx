@@ -20,6 +20,7 @@ const VAULT_ABI_MINI = [
 ] as const;
 import { LPDashboard } from "@/components/LPDashboard";
 import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
+import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
@@ -96,7 +97,7 @@ export default function Home() {
   const [activeAuth, setActiveAuth] = useState<ActiveAuth | null>(null);
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
-  const [activeTab, setActiveTab] = useState<"lp-auth" | "chain" | "lp-position" | "proof">("lp-auth");
+  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "lp-position" | "proof">("income");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -152,6 +153,7 @@ export default function Home() {
   }, [walletOpen]);
 
   const TABS = [
+    { id: "income",       label: "One-Click Income" },
     { id: "lp-auth",      label: "LP — Authorize Strike Range" },
     { id: "chain",        label: "Option Chain + Payoff Builder" },
     { id: "lp-position",  label: "LP Position" },
@@ -323,6 +325,12 @@ export default function Home() {
         </div>
 
         {/* Tab panels */}
+        {activeTab === "income" && (
+          <section>
+            <IncomeOneClick spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />
+          </section>
+        )}
+
         {activeTab === "lp-auth" && (
           <section>
             <AuthorizeRange spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />

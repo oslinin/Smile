@@ -483,8 +483,8 @@
         <tr class="row-S">
           <td><span class="code">S9</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Covered-call / cash-secured-put one-click product</strong> — LP picks asset + yield target; app ships sensible OTM range; auto-rolls at expiry; self-custodial or yield-stacked.</td>
-          <td><span class="status planned">Planned</span></td>
+          <td><strong>Covered-call / cash-secured-put one-click product</strong> — One-Click Income tab: delta-band presets → strike range + est. APR → auto-chained authorize+ship; LP-run self-custodial auto-roll keeper (settle → reclaim → revoke → re-ship at today's spot).</td>
+          <td><span class="status implemented">MVP implemented</span></td>
           <td>P4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
         </tr>
@@ -507,8 +507,8 @@
         <tr class="row-S">
           <td><span class="code">S12</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Defined-risk netting</strong> — vault-level netting for two-leg structures (e.g., call spreads); releases collateral difference as max loss; no liquidation machinery needed.</td>
-          <td><span class="status planned">Planned</span></td>
+          <td><strong>Defined-risk netting</strong> — spreads collateralized at true max loss (credit spreads ~16× tighter, condors max-not-sum, debit spreads zero); designed as a sibling SpreadVault AquaApp (main vault untouched); implementation gated on spread demand.</td>
+          <td><span class="status planned">Designed</span></td>
           <td>P5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
         </tr>

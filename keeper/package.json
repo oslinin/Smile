@@ -1,0 +1,13 @@
+{
+  "name": "smile-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "S9 auto-roll keeper: LP-run, self-custodial covered-call / cash-secured-put roller",
+  "scripts": {
+    "roll": "node roll.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.52.2"
+  }
+}

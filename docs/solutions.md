@@ -193,6 +193,19 @@ nine figures for it *with* custody risk; Smile's version is self-custodial
 Pure frontend + a keeper for rolls; no new contract surface beyond what
 exists.
 
+> **Implemented (MVP).** The One-Click Income tab
+> (`frontend/components/IncomeOneClick.tsx`) turns a side + risk preset
+> (10–20Δ / 20–30Δ / 30–40Δ, delta ≈ P(ITM) — the knob thetagang actually
+> reasons with) into a strike range via the same smile-adjusted
+> Black-Scholes the chain quotes, shows estimated premium APR, and runs
+> approve → authorizeRange → Aqua.ship as one auto-chained flow. Auto-roll
+> is `keeper/roll.mjs` — deliberately LP-RUN and self-custodial (rolling
+> needs the LP's signature; nobody else can touch the position): at expiry
+> it settles each series permissionlessly, reclaims the remainder, revokes,
+> and re-ships a fresh range at the same delta band against TODAY's spot.
+> Verified live on Anvil: open → fill → expiry → settle → reclaim → roll to
+> the new spot, one command.
+
 ### S10. Distribution through the 1inch ecosystem
 
 The Aqua/SwapVM integration isn't just plumbing — it's a distribution
@@ -235,6 +248,16 @@ is real design work (position accounting, early-exercise-free European
 payoffs make it tractable) and belongs after product-market signal, not
 before.
 
+> **Designed** — full specification in
+> [plans/2026-07-12-s12-defined-risk-netting.md](./plans/2026-07-12-s12-defined-risk-netting.md):
+> exact collateral requirements per structure (call credit spread
+> `(K₂−K₁)/K₂` WETH ≈ 16× tighter; condors need max-not-sum of the two
+> sides since one terminal price can't breach both), the dominance result
+> that makes debit spreads need ZERO extra collateral, and the recommended
+> architecture (a sibling `SpreadVault` AquaApp — the main vault has no
+> EIP-170 room and is never touched). Implementation stays gated on spread
+> demand evidence.
+
 ---
 
 ## The plan
@@ -255,8 +278,11 @@ before.
 > lives in the `SmileQuoteLens` periphery so the vault stays under the
 > EIP-170 size limit. Phase 3 is MVP-SCOPED OPEN: S4 shipped early as the
 > plain-collateral `FirmEscrow` wrapper + lens firm-first tiebreak (see the
-> S4 MVP note above); yield-bearing collateral remains deferred. Still open:
-> full S4, Phases 4–5.
+> S4 MVP note above); yield-bearing collateral remains deferred. Phase 4 has
+> its first piece: S9 one-click income + self-custodial auto-roll keeper
+> (see the S9 note). S12 is fully designed (sibling SpreadVault, dominance
+> netting) but implementation stays gated. Still open: full S4, S10–S11,
+> S12 implementation, S7.
 
 Sequenced by (value ÷ effort), with a measurable gate before each phase.
 Phases 0–1 are days-to-weeks of contained work; nothing in them is wasted
