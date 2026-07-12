@@ -38,6 +38,56 @@ Smile attempts to overcome these limitations to on-chain standard opions trading
    - Vol surface repricing post-trade via Uniswap v4 Hooks across strikes and expiries
    - Options payoff settlement and redemption via Chainlink CRE
 
+### Competitive positioning: why not Panoptic?
+
+[Panoptic](https://panoptic.xyz) is the strongest live on-chain options design and
+deserves a direct answer. It synthesizes **perpetual** options out of Uniswap v3 LP
+positions and prices them off the pool's realized fee flow ("streamia") — which
+elegantly deletes the pricing-oracle problem altogether. But that design does not
+target — and structurally *cannot* target — the user Smile is built for: the
+**OptionStrat/thetagang-style premium seller** and the **Deribit-style vanilla
+trader**.
+
+- **No expiries.** Panoptic options are perpetual — there is no "March 3,500 call,"
+  no expire-worthless endgame where the seller keeps the credit, and no calendar or
+  diagonal spreads (there is no term structure to spread across). Smile's fixed
+  European expiries and per-tenor vol buckets quote all of these natively.
+- **No upfront credit.** A Panoptic "put credit spread" or "iron condor" draws the
+  same payoff diagram but streams income only while spot sits near the short
+  strikes — the premium is path-dependent and unknowable at entry. A Smile seller
+  collects a known premium at fill, priced off *implied* vol, which charges for jump
+  risk upfront; realized fee flow does not.
+- **Liquidations exist.** Panoptic runs partial collateral with margin and forced
+  liquidations (plus forced exercise of far-OTM longs). Smile is fully
+  collateralized by construction — an option, once written, can always pay.
+
+Smile makes the opposite bet: keep the instrument traders already know —
+fixed-expiry, cash-settled European vanillas with known premiums — and rebuild the
+**market-making stack** around it to compete with Deribit and tradfi desks on their
+own terms:
+
+- **1inch Aqua** removes the market maker's largest on-chain cost. Collateral stays
+  in the LP's wallet, earning yield, until the moment of sale — so quoting an entire
+  strike chain is nearly free, a yield double-dip no tradfi desk or locked vault
+  gets.
+- **SwapVM pricing + LP-quoted vol** lets each LP express their own σ per range —
+  quoting *in vol*, exactly how professional desks quote — and best-quote routing
+  turns overlapping ranges into an order book in vol space, so the touch is the
+  discovered market vol.
+- **Uniswap v4 hooks** reprice the surface with flow, and tradfi-grade spread
+  mechanics — staleness-scaled spreads, size-convex price impact, per-block notional
+  caps, a spread floor calibrated to the oracle's blind window — price adverse
+  selection the way a desk does instead of pretending it away (see
+  [docs/limitations.md](docs/limitations.md) and
+  [docs/solutions.md](docs/solutions.md)).
+- **Chainlink settlement** is permissionless and round-verified, and LPs who want
+  the full tradfi profile can delta-hedge from the same wallet that backs their
+  quotes — the collateral never left it.
+
+In short: Panoptic reinvents the option to fit Uniswap; Smile keeps the option
+traders already trade and uses Aqua, SwapVM, Uniswap hooks, and Chainlink to rebuild
+how it's made.
+
 ---
 
 ## 🏗️ Architecture

@@ -8,6 +8,7 @@ import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
+import { useFirmDepth } from "@/hooks/useFirmDepth";
 
 const PRICING_ENGINE_ABI = [
   {
@@ -223,6 +224,16 @@ function LPSummaryBar({ auth }: { auth: ActiveAuth }) {
   const decimals = isCall ? 1e18 : 1e6;
   const symbol = isCall ? "WETH" : "USDC";
 
+  // S1 honest depth: what the LP wallet can actually deliver right now —
+  // Aqua liquidity is unrehypothecated, so authorized size is only an
+  // intention until the JIT pull clears against the wallet.
+  const { firmDepth, soft } = useFirmDepth({
+    lp: auth.lp,
+    collateralToken: auth.collateralToken,
+    maxCollateral,
+    usedCollateral,
+  });
+
   const usedNum = usedCollateral !== undefined ? Number(usedCollateral) / decimals : null;
   const maxNum = maxCollateral !== undefined ? Number(maxCollateral) / decimals : null;
   const pct = usedNum !== null && maxNum !== null && maxNum > 0 ? usedNum / maxNum : 0;
@@ -266,6 +277,25 @@ function LPSummaryBar({ auth }: { auth: ActiveAuth }) {
       <span className={daysLeft <= 3 ? "text-red-400" : "text-gray-400"}>
         {daysLeft}d left
       </span>
+      {firmDepth !== null && (
+        <>
+          <span className="text-gray-600">·</span>
+          <span className="text-gray-400">
+            firm depth{" "}
+            <span className="text-white font-mono">
+              {(Number(firmDepth) / decimals).toFixed(2)} {symbol}
+            </span>
+          </span>
+          {soft && (
+            <span
+              className="text-yellow-500 font-semibold"
+              title="The LP wallet currently backs less than the authorized size — fills beyond the firm depth would fail (soft liquidity)."
+            >
+              ⚠ soft
+            </span>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -480,6 +510,28 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const amountWAD = BigInt(Math.round(Number(amount) * 1e18));
 
+  // S1 honest depth: cap the buyable size at what the LP wallet can actually
+  // deliver, so takers never submit a fill destined for a failed JIT pull.
+  const { data: authRow } = useReadContract({
+    address: CONTRACTS.aquaVault as `0x${string}`,
+    abi: VAULT_ABI,
+    functionName: "authorizations",
+    args: [auth.authId],
+    query: { enabled: !!CONTRACTS.aquaVault, refetchInterval: 10_000 },
+  });
+  const { firmDepth } = useFirmDepth({
+    lp: auth.lp,
+    collateralToken: auth.collateralToken,
+    maxCollateral: authRow?.[4],
+    usedCollateral: authRow?.[5],
+  });
+  // Collateral a fill of this size pulls: calls lock `amount` WETH (18 dec);
+  // puts lock strike × amount USDC (6 dec).
+  const collateralNeeded = auth.isCall
+    ? amountWAD
+    : BigInt(Math.round(Number(amount) * strike * 1e6));
+  const exceedsFirmDepth = firmDepth !== null && collateralNeeded > firmDepth;
+
   // Total USDC premium: askWAD is $/contract in WAD (18 dec); USDC is 6 dec
   const totalUsdcPremium = askWAD
     ? (askWAD * amountWAD) / BigInt(1e12) / BigInt(1e18)
@@ -640,17 +692,25 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
                 </button>
               )}
 
-              {/* Step 3: Buy */}
+              {/* Step 3: Buy — gated on firm depth (S1: never submit a fill
+                  the LP wallet can't honor) */}
               {swapSuccess && approveSuccess && (
                 <button
                   onClick={handleBuy}
-                  disabled={isWorking || buySuccess}
+                  disabled={isWorking || buySuccess || exceedsFirmDepth}
                   className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
                 >
                   {buyPending ? "Confirm…" : buyConfirming ? "Confirming…" : buySuccess ? "✓ Filled" : `3. Buy ${amount} ${auth.isCall ? "Call" : "Put"}`}
                 </button>
               )}
             </div>
+          )}
+
+          {exceedsFirmDepth && !buySuccess && (
+            <span className="text-xs text-yellow-500">
+              Size exceeds the LP&apos;s firm depth — the wallet behind this quote
+              currently backs less than the authorized range, so this fill would fail.
+            </span>
           )}
 
           {anyError && (

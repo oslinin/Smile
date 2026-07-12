@@ -8,6 +8,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 
 import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
+import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
 import { AquaOptionSettlement } from "../src/vaults/AquaOptionSettlement.sol";
 import { SmileSwapVMRouter } from "../src/swapvm/SmileSwapVMRouter.sol";
 import { OptionPricingEngine } from "../src/swapvm/OptionPricingEngine.sol";
@@ -51,7 +52,7 @@ contract AquaCollateralVaultTest is Test {
         router = new SmileSwapVMRouter(address(aqua), address(weth), owner);
         engine = new OptionPricingEngine();
         oracle = new MockV3Aggregator(8, 3000e8);
-        vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner);
+        vault  = new AquaCollateralVault(address(aqua), payable(address(router)), address(oracle), owner, address(new OptionTokenFactory()));
         settlement = new AquaOptionSettlement(owner, owner, address(oracle));
         settlement.setRegistrar(address(vault));
         vault.setSettlement(address(settlement));

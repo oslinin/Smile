@@ -13,6 +13,10 @@ import { OptionPricingHook } from "../src/hooks/OptionPricingHook.sol";
 import { AquaCollateralVault } from "../src/vaults/AquaCollateralVault.sol";
 import { AquaOptionSettlement } from "../src/vaults/AquaOptionSettlement.sol";
 import { MockV3Aggregator } from "../src/mocks/MockV3Aggregator.sol";
+import { PythSpotAdapter } from "../src/oracles/PythSpotAdapter.sol";
+import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
+import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
+import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -96,17 +100,43 @@ contract Deploy is Script, StdCheats {
         // poolManager is unused on Anvil (no live Uniswap v4); pass address(1) as placeholder
         OptionPricingHook hook = new OptionPricingHook(address(engine), address(1), initialSigma);
 
+        // R5: optional Pyth pull-oracle for QUOTING — takers post a signed
+        // Hermes update in their own tx and price against a ~400ms-fresh
+        // spot. Settlement stays on the Chainlink feed below (round history
+        // is what makes permissionless expiry bracketing verifiable).
+        address chainlinkFeed = oracleAddr;
+        address pythAddr = vm.envOr("PYTH", address(0));
+        if (pythAddr != address(0)) {
+            bytes32 pythPriceId = vm.envBytes32("PYTH_PRICE_ID");
+            oracleAddr = address(new PythSpotAdapter(pythAddr, pythPriceId, 8));
+        }
+
+        OptionTokenFactory tokenFactory = new OptionTokenFactory();
+
         AquaCollateralVault vault = new AquaCollateralVault(
             aquaAddr,
             payable(address(router)),
             oracleAddr,
-            deployer
+            deployer,
+            address(tokenFactory)
+        );
+
+        // S4 (MVP scope): firm-tier escrow factory — LPs who park collateral
+        // in a FirmEscrow become makers whose displayed depth cannot be
+        // reneged; the lens prefers them at equal price.
+        FirmEscrowFactory firmFactory = new FirmEscrowFactory(address(vault), aquaAddr);
+
+        // S6: best-quote routing periphery — scans all ranges, skips phantom
+        // depth, routes buys to the tightest executable vol quote (firm wins
+        // price ties).
+        SmileQuoteLens lens = new SmileQuoteLens(
+            address(vault), payable(address(router)), aquaAddr, address(firmFactory)
         );
 
         // deployer also acts as CRE forwarder in local testing; the Chainlink
         // feed enables PERMISSIONLESS settlement (anyone supplies the round
         // covering expiry)
-        AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer, oracleAddr);
+        AquaOptionSettlement settlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
 
         // ── Wire hook ↔ vault ↔ settlement (before any range is authorized,
         //    so strategies snapshot the hook as their live σ source) ────────
@@ -121,6 +151,18 @@ contract Deploy is Script, StdCheats {
         address dao = vm.envOr("FEE_RECIPIENT", deployer);
         vault.setProtocolFee(0.01e9, dao);
 
+        // ── Adverse-selection hardening defaults (docs/solutions.md R1–R4):
+        //    0.5% base half-spread (Chainlink deviation-threshold floor),
+        //    +0.25%/hour of oracle age, and 0.1 vol-points of intra-trade
+        //    impact per whole option bought. Snapshotted into new ranges. ──
+        vault.setPricingDefaults(50, 25, 0.001e18);
+        // ── S2: firmness bond — bps of maxCollateral staked at authorize
+        //    time, slashed to compensate buyers if a JIT pull is dishonored.
+        //    Default 0 (opt-in): LPs must ERC-20 approve the VAULT for the
+        //    bond before authorizeRange once this is non-zero. ──────────────
+        uint16 bondBps = uint16(vm.envOr("FIRMNESS_BOND_BPS", uint256(0)));
+        if (bondBps > 0) vault.setFirmnessBondBps(bondBps);
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
@@ -133,6 +175,8 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_PRICING_HOOK=%s",    address(hook));
         console.log("NEXT_PUBLIC_AQUA_VAULT=%s",      address(vault));
         console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
+        console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
+        console.log("NEXT_PUBLIC_FIRM_ESCROW_FACTORY=%s", address(firmFactory));
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }

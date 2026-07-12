@@ -1,0 +1,12 @@
+{
+  "name": "smile-analytics",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain markout instrumentation for Smile LP fills (docs/solutions.md S8)",
+  "scripts": {
+    "markouts": "node markouts.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  }
+}

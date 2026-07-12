@@ -1,0 +1,4 @@
+node_modules/
+*.csv
+markout-state.json
+package-lock.json

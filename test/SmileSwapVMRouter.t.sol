@@ -80,7 +80,11 @@ contract SmileSwapVMRouterTest is Test {
             uint40(expiry),
             uint64(ALPHA),
             int64(0),
-            uint16(MAX_STALENESS)
+            uint16(MAX_STALENESS),
+            uint16(0),  // baseSpreadBps — zero keeps legacy pricing
+            uint16(0),  // stalenessSpreadBpsPerHour
+            uint64(0),  // impactPerUnit
+            uint16(0)   // sigmaMulBps (0 = protocol surface)
         );
         bytes memory program = abi.encodePacked(
             uint8(20), uint8(8), salt,                                   // Controls._salt

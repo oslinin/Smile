@@ -36,6 +36,9 @@ contract DemoTrade is Script {
         // capacity); USDC allowance funds Bid pulls on holder sellbacks.
         weth.approve(address(aqua), type(uint256).max);
         usdc.approve(address(aqua), type(uint256).max);
+        // S2: the vault takes the firmness bond (0.25% of maxCollateral) at
+        // authorize time — approve it for the collateral token too.
+        weth.approve(address(vault), type(uint256).max);
         uint256 authId = vault.authorizeRange(
             2500e18, 3500e18, expiry, maxCollateral, address(weth), address(usdc), true
         );
