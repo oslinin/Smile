@@ -27,6 +27,61 @@ export function smileSigma(spot: number, strike: number): number {
   return SIGMA_GLOBAL * multiplier;
 }
 
+// ── Trader-native surface quotes (ATM vol / risk reversal / butterfly) ───────
+//
+// The α/β smile above is exactly the "level / skew / curvature" decomposition
+// every options desk uses, so we can re-express it in the three numbers vol
+// traders actually quote — no new model, just the standard dictionary:
+//
+//   ATM vol        — the market's price for movement itself, regardless of
+//                    direction. σ·√t of it is the "expected move" by expiry:
+//                    the size of drift the premium is charging for.
+//   Risk reversal  — 25Δ call vol minus 25Δ put vol: which DIRECTION costs
+//     (RR)           more. Negative = downside insurance is pricier (crash
+//                    fear); positive = upside chasing is pricier.
+//   Butterfly      — average 25Δ wing vol minus ATM vol: how much EXTRA a
+//     (BF)           big move costs vs a small one. The market's fat-tails
+//                    charge; zero would mean it believes in perfect bell
+//                    curves.
+//
+// "25Δ" (25-delta) just names the reference strikes: the OTM call and OTM put
+// that each have ~25% probability of finishing in the money — near-universal
+// convention for where to measure the wings.
+//
+// Values are computed by evaluating the actual smile at the actual 25Δ
+// strikes (not a Taylor approximation), so they are exactly what the on-chain
+// instruction charges at those strikes.
+
+export interface SurfaceQuotes {
+  /** ATM implied vol (annualized, e.g. 0.8 = 80%). */
+  atmVol: number;
+  /** Expected move by expiry as a fraction of spot: atmVol·√t. */
+  expectedMovePct: number;
+  /** 25Δ risk reversal: σ(25Δ call) − σ(25Δ put). Sign = which side costs more. */
+  rr25: number;
+  /** 25Δ butterfly: mean 25Δ wing vol − ATM vol. The fat-tails premium. */
+  bf25: number;
+  /** The reference strikes the wings were measured at. */
+  k25call: number;
+  k25put: number;
+}
+
+export function surfaceQuotes(spot: number, tYears: number): SurfaceQuotes {
+  const atmVol = smileSigma(spot, spot);
+  const k25call = strikeForDelta(spot, 0.25, true, tYears);
+  const k25put = strikeForDelta(spot, 0.25, false, tYears);
+  const volC = smileSigma(spot, k25call);
+  const volP = smileSigma(spot, k25put);
+  return {
+    atmVol,
+    expectedMovePct: atmVol * Math.sqrt(Math.max(tYears, 0)),
+    rr25: volC - volP,
+    bf25: (volC + volP) / 2 - atmVol,
+    k25call,
+    k25put,
+  };
+}
+
 /** Per-unit premium in USD — mirrors SmileMath.premium (intrinsic + damped time value). */
 export function protocolPremium(
   spot: number,

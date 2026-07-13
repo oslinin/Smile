@@ -182,7 +182,10 @@ wouldn't need a spread at all.) Rejection is therefore the wrong frame;
 The LP delegates pricing entirely to on-chain state: the σ tenor buckets, the
 smile curvature α, and the skew β. This creates a second-order exposure beyond
 the ordinary Greeks — **parameter risk**: ∂P/∂α ∝ vega·ln²(K/S) and
-∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). If
+∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). In
+trader-native terms these are the familiar desk exposures — sensitivity to
+the **25Δ butterfly** (α) and the **25Δ risk reversal** (β) — not bespoke
+protocol Greeks (see the README's "Reading the surface like a trader"). If
 governance moves α/β, or the demand-feedback loop walks a σ bucket away from
 fair, every open quote in every affected range marks against the LP with no
 action on their part. There is currently no dashboard surfacing this exposure.
@@ -388,7 +391,11 @@ for R6. Without this measurement, the Phase-3 decision is a guess.
 | **RFQ (request-for-quote)** | Off-chain model where a maker signs short-lived quotes and the chain only verifies and settles. |
 | **TTL / quote fading / last look** | A signed quote's validity window / attacking the maker within that window / the maker's right to reject after seeing the trade. |
 | **Delta, Gamma, Vega, Theta** | Sensitivity of option value to spot, to speed of spot moves, to implied volatility, to time (see Part 1 table). |
-| **Vanna / volga** | Second-order Greeks: sensitivity of vega to spot / to vol. Here: the LP's exposure to the surface parameters β and α. |
+| **Vanna / volga** | Second-order Greeks: sensitivity of vega to spot / to vol. Here: the LP's exposure to the surface parameters β and α — in trader terms, to the risk reversal and the butterfly. |
+| **ATM vol / expected move** | The at-the-money implied volatility: the market's price for movement itself, direction-blind. ATM vol × √(time to expiry) ≈ the **expected move** — how far the market thinks spot could drift by expiry, which is what an option premium is fundamentally charging for. |
+| **Risk reversal (25Δ RR)** | The vol of an out-of-the-money call minus a matching out-of-the-money put: which *direction* costs more. Negative = crash insurance is pricier (the usual state). Maps one-for-one to the smile's β (skew) parameter. |
+| **Butterfly (25Δ BF)** | Average wing vol minus ATM vol: how much *extra* a big move costs versus a small one — the market's fat-tails charge over a perfect bell curve. Maps one-for-one to the smile's α (curvature) parameter. |
+| **25-delta (25Δ) strikes** | The OTM call and put that each have ~25% probability of finishing in the money — the industry's standard reference points for measuring the wings of the smile (hence "25Δ RR", "25Δ BF"). |
 | **Variance swap** | A contract paying realized variance; replicable by holding options across all strikes (Carr–Madan), which is why a broadly-filled range LP is "short volatility." |
 | **Static replication (Carr–Madan)** | Result that any smooth payoff — including a variance exposure — decomposes into a strike-weighted portfolio of vanilla options. |
 | **JIT / unrehypothecated** | Collateral stays in the LP's own wallet, unlent and unreused, and is pulled only at the moment an option is actually sold. |

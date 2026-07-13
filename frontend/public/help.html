@@ -468,6 +468,37 @@ leverage off-chain and the trustless vault never underwrites it.</p>
 <li>$\beta$: signed <strong>skew</strong> tilt (default 0; negative = downside/put skew, matching empirical crypto markets).</li>
 <li>The multiplier is floored at 0.1 so deep wings can never collapse σ to zero.</li>
 </ul>
+<p><strong>Reading the surface like a trader.</strong> The (σ, α, β) triple is exactly the <em>level / skew / curvature</em> decomposition options desks have always used, so it translates one-for-one into the three numbers vol traders quote each other — no new model, no new Greeks, just the standard dictionary:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Trader&#39;s name</th>
+<th>Plain English</th>
+<th>Approximate conversion*</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>$\sigma_{tenor}$</td>
+<td><strong>ATM vol</strong></td>
+<td>The price of movement itself, regardless of direction. Multiply by $\sqrt{T}$ for the <strong>expected move</strong> by expiry — the drift the premium is charging for.</td>
+<td>identical</td>
+</tr>
+<tr>
+<td>$\beta$ (skew)</td>
+<td><strong>25Δ risk reversal (RR)</strong></td>
+<td>Which <em>direction</em> costs more. Negative = crash insurance is pricier than upside (typical for equities/crypto).</td>
+<td>$RR \approx 2,\sigma_{tenor},\beta,k_{25}$</td>
+</tr>
+<tr>
+<td>$\alpha$ (curvature)</td>
+<td><strong>25Δ butterfly (BF)</strong></td>
+<td>How much <em>extra</em> a big move costs vs a small one — the market&#39;s fat-tails charge over a perfect bell curve.</td>
+<td>$BF \approx \sigma_{tenor},\alpha,k_{25}^2$</td>
+</tr>
+</tbody></table>
+<p>*where $k_{25} = \lvert\ln(K_{25\Delta}/S)\rvert$, the log-moneyness of the &quot;25-delta&quot; reference strikes — the OTM call and put with ~25% probability of finishing in the money, the near-universal convention for measuring the wings. The frontend computes RR/BF exactly (evaluating the smile at the true 25Δ strikes — <code>surfaceQuotes</code> in <code>frontend/lib/options.ts</code>) and shows them in the One-Click Income panel with plain-language captions.</p>
+<p>Two things this framing buys: <strong>(1) takers</strong> get a sanity check in familiar units — an expected-move band instead of an abstract α; <strong>(2) LPs</strong> see their <a href="docs/limitations.md">L6</a> surface-parameter risk in the same terms a Deribit market-maker manages daily — vega against the ATM level, RR-sensitivity against the skew, fly against the curvature — rather than as bespoke protocol exposures. (Client-facing greeks are untouched: takers always see plain Black-Scholes delta/gamma/theta/vega evaluated <em>at</em> the smile σ, whatever parameterization produces it.)</p>
 <h3>2. Premium Calculation</h3>
 <p>$$P = \underbrace{\max(\pm(S - K),, 0)}<em>{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma</em>{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}$$</p>
 <ul>
@@ -1171,7 +1202,10 @@ wouldn&#39;t need a spread at all.) Rejection is therefore the wrong frame;
 <p>The LP delegates pricing entirely to on-chain state: the σ tenor buckets, the
 smile curvature α, and the skew β. This creates a second-order exposure beyond
 the ordinary Greeks — <strong>parameter risk</strong>: ∂P/∂α ∝ vega·ln²(K/S) and
-∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). If
+∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). In
+trader-native terms these are the familiar desk exposures — sensitivity to
+the <strong>25Δ butterfly</strong> (α) and the <strong>25Δ risk reversal</strong> (β) — not bespoke
+protocol Greeks (see the README&#39;s &quot;Reading the surface like a trader&quot;). If
 governance moves α/β, or the demand-feedback loop walks a σ bucket away from
 fair, every open quote in every affected range marks against the LP with no
 action on their part. There is currently no dashboard surfacing this exposure.</p>
@@ -1409,7 +1443,23 @@ for R6. Without this measurement, the Phase-3 decision is a guess.</p>
 </tr>
 <tr>
 <td><strong>Vanna / volga</strong></td>
-<td>Second-order Greeks: sensitivity of vega to spot / to vol. Here: the LP&#39;s exposure to the surface parameters β and α.</td>
+<td>Second-order Greeks: sensitivity of vega to spot / to vol. Here: the LP&#39;s exposure to the surface parameters β and α — in trader terms, to the risk reversal and the butterfly.</td>
+</tr>
+<tr>
+<td><strong>ATM vol / expected move</strong></td>
+<td>The at-the-money implied volatility: the market&#39;s price for movement itself, direction-blind. ATM vol × √(time to expiry) ≈ the <strong>expected move</strong> — how far the market thinks spot could drift by expiry, which is what an option premium is fundamentally charging for.</td>
+</tr>
+<tr>
+<td><strong>Risk reversal (25Δ RR)</strong></td>
+<td>The vol of an out-of-the-money call minus a matching out-of-the-money put: which <em>direction</em> costs more. Negative = crash insurance is pricier (the usual state). Maps one-for-one to the smile&#39;s β (skew) parameter.</td>
+</tr>
+<tr>
+<td><strong>Butterfly (25Δ BF)</strong></td>
+<td>Average wing vol minus ATM vol: how much <em>extra</em> a big move costs versus a small one — the market&#39;s fat-tails charge over a perfect bell curve. Maps one-for-one to the smile&#39;s α (curvature) parameter.</td>
+</tr>
+<tr>
+<td><strong>25-delta (25Δ) strikes</strong></td>
+<td>The OTM call and put that each have ~25% probability of finishing in the money — the industry&#39;s standard reference points for measuring the wings of the smile (hence &quot;25Δ RR&quot;, &quot;25Δ BF&quot;).</td>
 </tr>
 <tr>
 <td><strong>Variance swap</strong></td>

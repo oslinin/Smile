@@ -4,7 +4,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadCont
 import { useState, useEffect, useRef, useMemo } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import { USDC_SEPOLIA, WETH_SEPOLIA, type ActiveAuth } from "@/components/AuthorizeRange";
-import { strikeForDelta, roundStrike, protocolPremium } from "@/lib/options";
+import { strikeForDelta, roundStrike, protocolPremium, surfaceQuotes } from "@/lib/options";
 
 // S9 (docs/solutions.md): the thetagang front door. Pick a side and a risk
 // preset; the app translates delta targets into a strike range, shows the
@@ -108,6 +108,11 @@ export function IncomeOneClick({ spot, onAuthorized }: IncomeOneClickProps) {
 
   const midStrike = (strikeMin + strikeMax) / 2;
   const premiumPerUnit = protocolPremium(spot, midStrike, isCall, tYears);
+
+  // The surface behind the quote, in the three numbers vol desks use —
+  // rendered below in plain English so non-traders can sanity-check the price.
+  const surface = useMemo(() => surfaceQuotes(spot, tYears), [spot, tYears]);
+  const expectedMoveUsd = surface.expectedMovePct * spot;
 
   // Units the collateral backs: calls lock 1 WETH per unit; puts lock K USDC.
   const sizeNum = Number(size) || 0;
@@ -386,6 +391,65 @@ export function IncomeOneClick({ spot, onAuthorized }: IncomeOneClickProps) {
         is set at match time. Your collateral keeps earning its own yield until matched —
         premium APR stacks on top.
       </p>
+
+      {/* The surface behind the quote, in plain English. Same three numbers a
+          vol desk quotes (ATM / risk reversal / butterfly), each explained. */}
+      <details className="rounded-lg border border-gray-800 bg-gray-800/30 group">
+        <summary className="cursor-pointer px-3 py-2 text-[10px] uppercase tracking-wide text-gray-500 hover:text-gray-300 select-none">
+          Why this price? Today&apos;s volatility, in plain English
+        </summary>
+        <div className="px-3 pb-3 space-y-2.5">
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-gray-300">Expected move by expiry</span>
+              <span className="text-xs font-mono text-white">
+                ±{(surface.expectedMovePct * 100).toFixed(1)}% (~${Math.round(expectedMoveUsd).toLocaleString()})
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              How far the market thinks ETH could drift before your option expires — that&apos;s
+              what the premium is charging for. Traders call the underlying number{" "}
+              <span className="text-gray-400">ATM volatility</span> (
+              {(surface.atmVol * 100).toFixed(0)}%/yr here). Your strikes sit at the edge of
+              or outside this band — you win when the move stays smaller than priced.
+            </p>
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-gray-300">Which direction costs more</span>
+              <span className="text-xs font-mono text-white">
+                {surface.rr25 >= 0 ? "+" : "−"}{Math.abs(surface.rr25 * 100).toFixed(1)} vol pts
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Positive = insurance against a rally costs more; negative = crash protection
+              costs more. Traders call this the{" "}
+              <span className="text-gray-400">risk reversal</span>: the vol of an upside
+              option minus a matching downside one.
+            </p>
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-gray-300">Extra charge for big moves</span>
+              <span className="text-xs font-mono text-white">
+                +{(surface.bf25 * 100).toFixed(1)} vol pts
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Far-away strikes are priced richer than a perfect bell curve would say —
+              the market pays up for rare, violent moves, and as the seller you collect
+              that markup. Traders call it the{" "}
+              <span className="text-gray-400">butterfly</span>.
+            </p>
+          </div>
+          <p className="text-[10px] text-gray-600 border-t border-gray-800 pt-2">
+            Measured at the &ldquo;25-delta&rdquo; strikes — the call and put with roughly a
+            1-in-4 chance of finishing in the money (${Math.round(surface.k25put).toLocaleString()}{" "}
+            / ${Math.round(surface.k25call).toLocaleString()} today) — the industry&apos;s
+            standard yardsticks for the wings of the smile.
+          </p>
+        </div>
+      </details>
 
       {error && (
         <div className="text-xs text-red-400">{error.message.split("\n")[0]}</div>

@@ -241,6 +241,18 @@ $$\sigma_{strike}(T) = \sigma_{tenor}(T) \cdot \max\!\big(0.1,\; 1 + \alpha \cdo
 - $\beta$: signed **skew** tilt (default 0; negative = downside/put skew, matching empirical crypto markets).
 - The multiplier is floored at 0.1 so deep wings can never collapse σ to zero.
 
+**Reading the surface like a trader.** The (σ, α, β) triple is exactly the *level / skew / curvature* decomposition options desks have always used, so it translates one-for-one into the three numbers vol traders quote each other — no new model, no new Greeks, just the standard dictionary:
+
+| Parameter | Trader's name | Plain English | Approximate conversion* |
+|---|---|---|---|
+| $\sigma_{tenor}$ | **ATM vol** | The price of movement itself, regardless of direction. Multiply by $\sqrt{T}$ for the **expected move** by expiry — the drift the premium is charging for. | identical |
+| $\beta$ (skew) | **25Δ risk reversal (RR)** | Which *direction* costs more. Negative = crash insurance is pricier than upside (typical for equities/crypto). | $RR \approx 2\,\sigma_{tenor}\,\beta\,k_{25}$ |
+| $\alpha$ (curvature) | **25Δ butterfly (BF)** | How much *extra* a big move costs vs a small one — the market's fat-tails charge over a perfect bell curve. | $BF \approx \sigma_{tenor}\,\alpha\,k_{25}^2$ |
+
+*where $k_{25} = \lvert\ln(K_{25\Delta}/S)\rvert$, the log-moneyness of the "25-delta" reference strikes — the OTM call and put with ~25% probability of finishing in the money, the near-universal convention for measuring the wings. The frontend computes RR/BF exactly (evaluating the smile at the true 25Δ strikes — `surfaceQuotes` in `frontend/lib/options.ts`) and shows them in the One-Click Income panel with plain-language captions.
+
+Two things this framing buys: **(1) takers** get a sanity check in familiar units — an expected-move band instead of an abstract α; **(2) LPs** see their [L6](docs/limitations.md) surface-parameter risk in the same terms a Deribit market-maker manages daily — vega against the ATM level, RR-sensitivity against the skew, fly against the curvature — rather than as bespoke protocol exposures. (Client-facing greeks are untouched: takers always see plain Black-Scholes delta/gamma/theta/vega evaluated *at* the smile σ, whatever parameterization produces it.)
+
 ### 2. Premium Calculation
 
 $$P = \underbrace{\max(\pm(S - K),\, 0)}_{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}$$
