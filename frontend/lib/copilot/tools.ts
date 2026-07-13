@@ -20,7 +20,8 @@ import {
   surfaceQuotes,
 } from "@/lib/options";
 import { STRATEGIES, type Outlook } from "@/lib/strategyCatalog";
-import { scenarioGrid } from "./analytics";
+import { positionsToLegs, scenarioGrid } from "./analytics";
+import { getPublicClient, readOnchainQuote, readWalletPositions } from "./chain";
 import { getSection, SECTION_IDS } from "./knowledge";
 import type { CopilotContext } from "./systemPrompt";
 
@@ -151,6 +152,77 @@ export function buildTools(ctx: CopilotContext) {
       }),
       execute: async ({ legs, spotShiftsPct, volShiftsPts, daysForward }) =>
         scenarioGrid(legs as BuilderLeg[], ctx.spot, { spotShiftsPct, volShiftsPts, daysForward }),
+    }),
+
+    get_onchain_quote: tool({
+      description:
+        "Query the DEPLOYED pricing engine contract for a live call quote (pricingEngine.quote — the exact math the SwapVM instruction runs on-chain, calls only) and cross-check it against the frontend model. Use to demonstrate that copilot pricing matches the chain, or when asked what the contract would actually charge.",
+      inputSchema: z.object({
+        strike: z.number().positive(),
+        expiryDays: z.number().int().positive().max(365),
+        isBuy: z.boolean().describe("true = ask (buyer pays), false = bid"),
+      }),
+      execute: async ({ strike, expiryDays, isBuy }) => {
+        const client = getPublicClient(ctx.chainId);
+        const onchain = await readOnchainQuote(client, {
+          spot: ctx.spot,
+          strike,
+          expiryDays,
+          isBuy,
+        });
+        const model = protocolPremium(ctx.spot, strike, true, expiryDays / 365);
+        return {
+          onchainPremiumUsd: round2(onchain),
+          frontendModelPremiumUsd: round2(model),
+          diffPct: model > 0 ? round2(((onchain - model) / model) * 100) : null,
+          note: "On-chain quote() prices calls; difference comes from the contract's ln/sqrt fixed-point approximations and bid/ask rounding.",
+        };
+      },
+    }),
+
+    get_positions: tool({
+      description:
+        "Read the connected wallet's on-chain state: ETH/WETH/USDC balances, LP range authorizations it wrote (with utilization), and long option positions (OptionToken balances). Requires a connected wallet.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        if (!ctx.address) {
+          return { error: "No wallet connected — ask the user to connect their wallet first." };
+        }
+        const client = getPublicClient(ctx.chainId);
+        return await readWalletPositions(client, ctx.address);
+      },
+    }),
+
+    portfolio_risk: tool({
+      description:
+        "Aggregate risk for the connected wallet's long option positions: net Greeks, cost basis vs current value, max loss, breakevens, plus a spot/vol stress grid. Use for 'analyze my positions', hedging advice, and portfolio management questions. Requires a connected wallet.",
+      inputSchema: z.object({
+        includeScenarios: z.boolean().optional().describe("Also run the stress grid (default true)"),
+      }),
+      execute: async ({ includeScenarios }) => {
+        if (!ctx.address) {
+          return { error: "No wallet connected — ask the user to connect their wallet first." };
+        }
+        const client = getPublicClient(ctx.chainId);
+        const positions = await readWalletPositions(client, ctx.address);
+        if (positions.longOptions.length === 0) {
+          return {
+            balances: positions.balances,
+            lpAuths: positions.lpAuths,
+            note: "No long option positions found. LP authorizations (short-side exposure) are listed above if any.",
+          };
+        }
+        const legs = positionsToLegs(positions.longOptions);
+        const priced = priceLegs(legs, ctx.spot);
+        return {
+          balances: positions.balances,
+          lpAuths: positions.lpAuths,
+          longOptions: positions.longOptions,
+          aggregate: priced,
+          scenarios:
+            includeScenarios === false ? undefined : scenarioGrid(legs, ctx.spot),
+        };
+      },
     }),
 
     // ── Client-side UI tools (no execute — rendered by the chat panel) ────────

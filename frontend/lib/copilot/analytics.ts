@@ -11,6 +11,8 @@ import {
   smileSigma,
 } from "@/lib/options";
 
+import type { LongOptionPosition } from "./chain";
+
 const dte = (leg: BuilderLeg) => leg.expiryDays ?? DEFAULT_DTE;
 const sign = (leg: BuilderLeg) => (leg.direction === "buy" ? 1 : -1);
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -26,6 +28,17 @@ export function smileCurve(
     const strike = Math.round(lo + ((hi - lo) * i) / (points - 1));
     return { strike, iv: round2(smileSigma(spot, strike) * 100) / 100 };
   });
+}
+
+/** Wallet long-option positions as builder legs, so portfolio risk reuses strategyStats/pnlSeries. */
+export function positionsToLegs(positions: LongOptionPosition[]): BuilderLeg[] {
+  return positions.map((p) => ({
+    direction: "buy" as const,
+    isCall: p.isCall,
+    strike: p.strike,
+    amount: p.amount,
+    expiryDays: Math.max(1, Math.round(p.expiresInDays)),
+  }));
 }
 
 /** Leg value at spot `x` with the smile shifted by `volShift` (abs vol pts as fraction). */
