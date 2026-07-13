@@ -4,25 +4,34 @@
   "private": true,
   "scripts": {
     "gen-help": "node scripts/gen-help.mjs",
-    "predev": "node scripts/gen-help.mjs",
+    "gen-knowledge": "node scripts/gen-knowledge.mjs",
+    "predev": "node scripts/gen-help.mjs && node scripts/gen-knowledge.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/gen-help.mjs",
+    "prebuild": "node scripts/gen-help.mjs && node scripts/gen-knowledge.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.12",
+    "@ai-sdk/google": "^4.0.12",
+    "@ai-sdk/openai": "^4.0.11",
+    "@ai-sdk/react": "^4.0.23",
     "@tanstack/react-query": "^5.101.0",
     "@wagmi/connectors": "^8.0.15",
     "@walletconnect/ethereum-provider": "^2.23.9",
+    "ai": "^7.0.22",
     "black-scholes": "^1.1.0",
     "greeks": "^1.0.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "viem": "^2.52.2",
-    "wagmi": "^3.6.16"
+    "wagmi": "^3.6.16",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
