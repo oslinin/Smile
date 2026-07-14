@@ -10,6 +10,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import type { BuilderLeg } from "@/lib/options";
 import { ChatMessage } from "./ChatMessage";
+import { CopilotSettings, loadByok, type ByokSettings } from "./CopilotSettings";
 import type { QuizAnswer } from "./QuizCard";
 
 const STARTERS = [
@@ -30,21 +31,45 @@ export interface CopilotPanelProps {
 export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotPanelProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [byok, setByok] = useState<ByokSettings | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Latest context via ref: the transport is created once, but its body()
-  // callback runs per request (an event, not render) and must see the current
-  // spot/chain/wallet.
+  useEffect(() => {
+    // Hydration-safe localStorage read: the server render has no key, the
+    // client syncs after mount (same pattern as page.tsx's `setMounted`).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setByok(loadByok());
+  }, []);
+
+  // Latest context via refs: the transport is created once, but its body()
+  // and headers() callbacks run per request (an event, not render) and must
+  // see the current spot/chain/wallet and BYOK key.
   const ctxRef = useRef({ spot, chainId, address });
+  const byokRef = useRef<ByokSettings | null>(null);
   useEffect(() => {
     ctxRef.current = { spot, chainId, address };
   }, [spot, chainId, address]);
+  useEffect(() => {
+    byokRef.current = byok;
+  }, [byok]);
 
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
-    // eslint-disable-next-line react-hooks/refs -- body() runs at request time (fetch), not during render
+    // eslint-disable-next-line react-hooks/refs -- body()/headers() run at request time (fetch), not during render
     transport: new DefaultChatTransport({
       api: "/api/copilot/", // trailing slash: next.config has trailingSlash:true
       body: () => ({ context: ctxRef.current }),
+      // BYOK: the user's own key rides each request; the server uses it for
+      // this request only and never stores it.
+      headers: () => {
+        const b = byokRef.current;
+        if (!b?.apiKey) return {};
+        return {
+          "x-copilot-provider": b.provider,
+          "x-copilot-api-key": b.apiKey,
+          ...(b.model ? { "x-copilot-model": b.model } : {}),
+        };
+      },
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     async onToolCall({ toolCall }) {
@@ -123,6 +148,22 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] text-gray-600 font-mono">${spot.toLocaleString()}</span>
+              {byok && (
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-green-900/40 text-green-400 border border-green-900"
+                  title={`Using your own ${byok.provider} key`}
+                >
+                  own key
+                </span>
+              )}
+              <button
+                onClick={() => setSettingsOpen((o) => !o)}
+                className={`transition-colors ${settingsOpen ? "text-white" : "text-gray-500 hover:text-white"}`}
+                aria-label="Copilot settings"
+                title="Use your own API key"
+              >
+                ⚙
+              </button>
               <button
                 onClick={() => setOpen(false)}
                 className="text-gray-500 hover:text-white transition-colors"
@@ -133,13 +174,18 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
             </div>
           </div>
 
+          {settingsOpen && (
+            <CopilotSettings value={byok} onChange={setByok} onClose={() => setSettingsOpen(false)} />
+          )}
+
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
             {messages.length === 0 && (
               <div className="space-y-3 pt-4">
                 <p className="text-xs text-gray-500">
                   Ask about the smile model, protocol economics, trade-offs, competitors — or get trade
-                  ideas, risk analysis, and portfolio advice. I can also teach options concepts and quiz
-                  you. Proposals load into the Payoff Builder; you always review and sign yourself.
+                  ideas, rolls and adjustments, risk analysis, and portfolio advice. I can also teach
+                  options concepts and quiz you. Proposals load into the Payoff Builder; you always
+                  review and sign yourself. Bring your own API key via the ⚙ icon.
                 </p>
                 <div className="space-y-1.5">
                   {STARTERS.map((s) => (

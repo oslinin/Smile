@@ -20,7 +20,7 @@ import {
   surfaceQuotes,
 } from "@/lib/options";
 import { STRATEGIES, type Outlook } from "@/lib/strategyCatalog";
-import { positionsToLegs, scenarioGrid } from "./analytics";
+import { positionsToLegs, scenarioGrid, subtractLegs } from "./analytics";
 import { getPublicClient, readOnchainQuote, readWalletPositions } from "./chain";
 import { getSection, SECTION_IDS } from "./knowledge";
 import type { CopilotContext } from "./systemPrompt";
@@ -152,6 +152,52 @@ export function buildTools(ctx: CopilotContext) {
       }),
       execute: async ({ legs, spotShiftsPct, volShiftsPts, daysForward }) =>
         scenarioGrid(legs as BuilderLeg[], ctx.spot, { spotShiftsPct, volShiftsPts, daysForward }),
+    }),
+
+    analyze_adjustment: tool({
+      description:
+        "Compute the economics of ROLLING or MODIFYING an existing position: cash flow of closing legs at current marks, cost of new legs, net credit/debit, and before/after risk (Greeks, max P/L, breakevens, PoP). Use for every roll (out/up/down), leg into a spread, close the tested side, or partial close — never estimate roll numbers without this tool. Before/after payoff charts render automatically.",
+      inputSchema: z.object({
+        currentLegs: legsSchema.describe("The FULL current position (kept + to-be-closed legs)"),
+        closeLegs: z
+          .array(legSchema)
+          .max(6)
+          .describe("Legs being closed — must be a subset of currentLegs (direction = as held)"),
+        openLegs: z
+          .array(legSchema)
+          .max(6)
+          .describe("New legs being opened (empty for a pure close)"),
+      }),
+      execute: async ({ currentLegs, closeLegs, openLegs }) => {
+        let afterLegs: BuilderLeg[];
+        try {
+          afterLegs = [...subtractLegs(currentLegs as BuilderLeg[], closeLegs as BuilderLeg[]), ...(openLegs as BuilderLeg[])];
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+        // Closing a long leg sells it back (+cash); closing a short buys it back (−cash).
+        const closeCashFlow = (closeLegs as BuilderLeg[]).reduce((sum, l) => {
+          const mark = protocolPremium(ctx.spot, l.strike, l.isCall, (l.expiryDays ?? DEFAULT_DTE) / 365);
+          return sum + (l.direction === "buy" ? 1 : -1) * l.amount * mark;
+        }, 0);
+        const after = afterLegs.length > 0 ? priceLegs(afterLegs, ctx.spot) : null;
+        const openCost = after && (openLegs as BuilderLeg[]).length > 0
+          ? (openLegs as BuilderLeg[]).reduce((sum, l) => {
+              const mark = protocolPremium(ctx.spot, l.strike, l.isCall, (l.expiryDays ?? DEFAULT_DTE) / 365);
+              return sum + (l.direction === "buy" ? 1 : -1) * l.amount * mark;
+            }, 0)
+          : 0;
+        const netCashFlow = round2(closeCashFlow - openCost);
+        return {
+          closeCashFlow: round2(closeCashFlow),
+          openCost: round2(openCost),
+          netCashFlow,
+          netDirection: netCashFlow >= 0 ? "credit (you receive)" : "debit (you pay)",
+          before: priceLegs(currentLegs as BuilderLeg[], ctx.spot),
+          after,
+          afterLegs,
+        };
+      },
     }),
 
     get_onchain_quote: tool({

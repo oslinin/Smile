@@ -36,6 +36,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-suggest_strategies": "screening strategies",
   "tool-scenario_analysis": "running scenarios",
   "tool-get_onchain_quote": "querying on-chain quote",
+  "tool-analyze_adjustment": "analyzing adjustment",
   "tool-get_positions": "reading wallet positions",
   "tool-portfolio_risk": "aggregating portfolio risk",
 };
@@ -215,6 +216,34 @@ export function ChatMessage({
                   output={part.output as Record<string, unknown>}
                   spot={spot}
                 />
+              );
+            }
+
+            if (part.type === "tool-analyze_adjustment" && part.state === "output-available") {
+              const input = part.input as { currentLegs?: BuilderLeg[] } | undefined;
+              const output = part.output as
+                | { afterLegs?: BuilderLeg[]; netCashFlow?: number; error?: string }
+                | undefined;
+              if (!input?.currentLegs?.length || output?.error) return null;
+              return (
+                <div key={part.toolCallId} className="space-y-1 my-1">
+                  <div className="text-[9px] uppercase tracking-wide text-gray-600">before</div>
+                  <ChatPayoffChart legs={input.currentLegs} spot={spot} />
+                  <div className="text-[9px] uppercase tracking-wide text-gray-600">
+                    after{" "}
+                    {typeof output?.netCashFlow === "number" && (
+                      <span className={output.netCashFlow >= 0 ? "text-green-400" : "text-red-400"}>
+                        · net {output.netCashFlow >= 0 ? "credit" : "debit"} $
+                        {Math.abs(output.netCashFlow).toFixed(0)}
+                      </span>
+                    )}
+                  </div>
+                  {output?.afterLegs?.length ? (
+                    <ChatPayoffChart legs={output.afterLegs} spot={spot} />
+                  ) : (
+                    <div className="text-[10px] text-gray-600">position fully closed</div>
+                  )}
+                </div>
               );
             }
 

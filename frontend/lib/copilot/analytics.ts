@@ -41,6 +41,32 @@ export function positionsToLegs(positions: LongOptionPosition[]): BuilderLeg[] {
   }));
 }
 
+/**
+ * Position minus closed legs (for roll/adjustment analysis): matches by
+ * direction/type/strike/expiry and reduces amounts; a full match removes the
+ * leg. Closing more than is held throws — the tool surfaces that to the model.
+ */
+export function subtractLegs(current: BuilderLeg[], close: BuilderLeg[]): BuilderLeg[] {
+  const remaining = current.map((l) => ({ ...l }));
+  for (const c of close) {
+    const match = remaining.find(
+      (l) =>
+        l.direction === c.direction &&
+        l.isCall === c.isCall &&
+        l.strike === c.strike &&
+        dte(l) === dte(c) &&
+        l.amount > 0
+    );
+    if (!match || match.amount < c.amount - 1e-9) {
+      throw new Error(
+        `closeLegs entry (${c.direction} ${c.amount}x ${c.isCall ? "call" : "put"} K=${c.strike} ${dte(c)}d) does not match currentLegs — close legs must be a subset of the current position`
+      );
+    }
+    match.amount = Math.round((match.amount - c.amount) * 1e6) / 1e6;
+  }
+  return remaining.filter((l) => l.amount > 1e-9);
+}
+
 /** Leg value at spot `x` with the smile shifted by `volShift` (abs vol pts as fraction). */
 function legValueShifted(
   leg: BuilderLeg,

@@ -16,7 +16,12 @@ import {
   toUIMessageStream,
   type UIMessage,
 } from "ai";
-import { getModel, isCopilotConfigured } from "@/lib/copilot/provider";
+import {
+  getModel,
+  isCopilotConfigured,
+  parseProvider,
+  type ProviderOverride,
+} from "@/lib/copilot/provider";
 import { buildSystemPrompt, type CopilotContext } from "@/lib/copilot/systemPrompt";
 import { buildTools } from "@/lib/copilot/tools";
 
@@ -28,12 +33,23 @@ interface CopilotRequestBody {
   context?: Partial<CopilotContext>;
 }
 
+/** BYOK: the user's own key, sent per-request from their browser via headers.
+ *  Used only to construct this request's model client — never stored, logged,
+ *  or echoed. */
+function parseOverride(req: Request): ProviderOverride | null {
+  const apiKey = req.headers.get("x-copilot-api-key");
+  const provider = parseProvider(req.headers.get("x-copilot-provider"));
+  if (!apiKey || !provider) return null;
+  return { provider, apiKey, model: req.headers.get("x-copilot-model") || undefined };
+}
+
 export async function POST(req: Request) {
-  if (!isCopilotConfigured()) {
+  const override = parseOverride(req);
+  if (!isCopilotConfigured(override)) {
     return Response.json(
       {
         error:
-          "Copilot is not configured. Set COPILOT_PROVIDER and the matching API key (e.g. ANTHROPIC_API_KEY) in frontend/.env.local, then restart the dev server.",
+          "Copilot is not configured. Either set COPILOT_PROVIDER and the matching API key (e.g. ANTHROPIC_API_KEY) in frontend/.env.local and restart, or add your own API key in the copilot's settings (gear icon).",
       },
       { status: 503 }
     );
@@ -48,7 +64,7 @@ export async function POST(req: Request) {
   };
 
   const result = streamText({
-    model: getModel(),
+    model: getModel(override),
     system: buildSystemPrompt(ctx),
     // ignoreIncompleteToolCalls: a quiz card the user never answered must not
     // poison the next turn with a dangling tool call.
