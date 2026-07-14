@@ -99,10 +99,11 @@ fi
 # ── 4. Parse addresses and write .env.local ───────────────────────────────────
 echo "Writing $ENV_FILE …"
 
-# Preserve WC project ID, Uniswap API key, and fork URL if they exist
+# Preserve WC project ID, Uniswap API key, fork URL, and copilot vars if they exist
 WC_KEY=$(grep NEXT_PUBLIC_WC_PROJECT_ID "$ENV_FILE" 2>/dev/null || true)
 UNI_KEY=$(grep NEXT_PUBLIC_UNISWAP_API_KEY "$ENV_FILE" 2>/dev/null || true)
 FORK_KEY=$(grep "^FORK_URL=" "$ENV_FILE" 2>/dev/null || true)
+AI_KEYS=$(grep -E "^(COPILOT_|ANTHROPIC_|OPENAI_|GOOGLE_|NEXT_PUBLIC_COPILOT)" "$ENV_FILE" 2>/dev/null || true)
 
 # Extract addresses from forge output
 parse() { echo "$DEPLOY_OUT" | grep "$1=" | tail -1 | cut -d= -f2 | tr -d '[:space:]'; }
@@ -125,6 +126,7 @@ NEXT_PUBLIC_SETTLEMENT=$(parse NEXT_PUBLIC_SETTLEMENT)
 ${FORK_KEY}
 ${WC_KEY}
 ${UNI_KEY}
+${AI_KEYS}
 EOF
 
 echo ""

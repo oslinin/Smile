@@ -23,6 +23,7 @@ import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
+import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
 import { useState, useEffect } from "react";
 
@@ -97,6 +98,7 @@ export default function Home() {
   const [activeAuth, setActiveAuth] = useState<ActiveAuth | null>(null);
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
+  const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
   const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "lp-position" | "proof">("income");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
@@ -355,7 +357,7 @@ export default function Home() {
               <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
                 Strategy Payoff Builder
               </h2>
-              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} />
+              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} />
             </section>
           </div>
         )}
@@ -372,6 +374,16 @@ export default function Home() {
           </section>
         )}
       </div>
+
+      <CopilotPanel
+        spot={spotPrice ?? 3420}
+        chainId={chainId}
+        address={address}
+        onProposeLegs={(legs) => {
+          setProposal((p) => ({ legs, key: (p?.key ?? 0) + 1 }));
+          setActiveTab("chain");
+        }}
+      />
     </main>
   );
 }

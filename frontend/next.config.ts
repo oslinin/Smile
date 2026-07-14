@@ -7,7 +7,11 @@ import type { NextConfig } from "next";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  // Static export only for the GitHub Pages deployment (which sets
+  // NEXT_PUBLIC_BASE_PATH). A regular server build is required locally so the
+  // copilot's POST route handler (/api/copilot) can exist — static export
+  // supports GET-only route handlers.
+  output: basePath ? "export" : undefined,
   basePath,
   trailingSlash: true,
   images: { unoptimized: true },

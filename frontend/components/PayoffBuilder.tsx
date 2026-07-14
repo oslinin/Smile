@@ -155,14 +155,24 @@ function StatsStrip({ legs, spot }: { legs: Leg[]; spot: number }) {
 interface PayoffBuilderProps {
   spot: number;
   confirmedLegs?: Omit<Leg, "id">[];
+  /** Copilot proposal: replaces all legs (unlike append-only confirmedLegs). `key` bumps per proposal. */
+  proposal?: { legs: Omit<Leg, "id">[]; key: number } | null;
 }
 
-export function PayoffBuilder({ spot, confirmedLegs = [] }: PayoffBuilderProps) {
+export function PayoffBuilder({ spot, confirmedLegs = [], proposal }: PayoffBuilderProps) {
   const [legs, setLegs] = useState<Leg[]>([]);
   const [outlook, setOutlook] = useState<Outlook>("bullish");
   const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   const nextId = useRef(1);
   const syncedCount = useRef(0);
+
+  // Load a copilot proposal: "load this strategy" means replace, not append.
+  useEffect(() => {
+    if (!proposal) return;
+    setLegs(proposal.legs.map((l) => ({ ...l, id: nextId.current++ })));
+    setActiveStrategy(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal?.key]);
 
   // Append newly confirmed on-chain legs as they arrive
   useEffect(() => {
