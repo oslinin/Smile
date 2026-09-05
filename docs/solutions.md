@@ -212,8 +212,7 @@ The Aqua/SwapVM integration isn't just plumbing — it's a distribution
 channel. Options premiums are quoted by a SwapVM strategy, so 1inch
 aggregation/Fusion can route into them like any other liquidity source, and
 option tokens are plain ERC-20s tradable anywhere. Pursue: listing in the
-1inch ecosystem registry, the Aqua Revenue Stream Incubator grant (proposal
-already in `docs/aqua-incubator-proposal.md`), and resolver integrations.
+1inch ecosystem registry, the Aqua Revenue Stream Incubator grant, and resolver integrations.
 Demand-side flow arrives through integrators, not a standalone venue's UI.
 
 ### S11. Long-tail listings

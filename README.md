@@ -19,8 +19,7 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 9. [Project Structure](#%EF%B8%8F-project-structure)
 10. [Technical Stack](#technical-stack)
 
-More docs: [Aqua Incubator grant proposal](docs/aqua-incubator-proposal.md) ·
-[build notes & war stories](docs/build-notes.md) ·
+More docs: [build notes & war stories](docs/build-notes.md) ·
 [verified CRE simulation transcript](docs/cre-simulation.md) ·
 [known limitations](docs/limitations.md) ·
 [solutions & phased roadmap](docs/solutions.md) ·
