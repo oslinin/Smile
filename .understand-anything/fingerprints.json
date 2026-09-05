@@ -1,0 +1,1756 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "8f1291fe1c521c3aad3695154140ce46fa7b9e75",
+  "generatedAt": "2026-07-11T05:47:03.920Z",
+  "files": {
+    ".env.example": {
+      "filePath": ".env.example",
+      "contentHash": "e28e83f36cb3314f40cdfcf77c86b5a4d7fe546d1ba59bda5cfe41fba15d7daa",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    ".github/workflows/pages.yml": {
+      "filePath": ".github/workflows/pages.yml",
+      "contentHash": "67e6f8710bfb9abde8d967c15f13b5fd3baf1018dfd775e486f9d678e6ec14cf",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 61,
+      "hasStructuralAnalysis": true
+    },
+    "complete-graph.mjs": {
+      "filePath": "complete-graph.mjs",
+      "contentHash": "63f72e4d0e7135141237188feb0ecd461fa36401d412baffec45f68809037dbc",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "/home/ubuntu/.understand-anything-plugin/packages/core/dist/index.js",
+          "specifiers": [
+            "detectLayers",
+            "generateHeuristicTour",
+            "validateGraph",
+            "autoFixGraph"
+          ]
+        },
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync",
+            "writeFileSync"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 61,
+      "hasStructuralAnalysis": true
+    },
+    "convert-batches.mjs": {
+      "filePath": "convert-batches.mjs",
+      "contentHash": "8ae1bcdb55f79ba60ee5fcec156cce202a91014ba822260c68e79d4e54e01076",
+      "functions": [
+        {
+          "name": "convertBatch",
+          "params": [
+            "batchIndex"
+          ],
+          "exported": false,
+          "lineCount": 330
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync",
+            "writeFileSync",
+            "existsSync"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "join"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 349,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json": {
+      "filePath": "cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+      "contentHash": "a8164b8e8284558ff4ae5c5b43c6e3ca49d8f7c52b2c03ce834b2169d0bcc12c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts": {
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "contentHash": "60b5a3ab1a8b4e8c868c7c639849deceeb335eaaf485c578707ba931d4b9262b",
+      "functions": [
+        {
+          "name": "newAquaOptionSettlementMock",
+          "params": [
+            "address",
+            "evmMock"
+          ],
+          "returnType": "AquaOptionSettlementMock",
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "viem",
+          "specifiers": [
+            "Address"
+          ]
+        },
+        {
+          "source": "@chainlink/cre-sdk/test",
+          "specifiers": [
+            "addContractMock",
+            "ContractMock",
+            "EvmMock"
+          ]
+        },
+        {
+          "source": "./AquaOptionSettlement",
+          "specifiers": [
+            "AquaOptionSettlementABI"
+          ]
+        }
+      ],
+      "exports": [
+        "newAquaOptionSettlementMock"
+      ],
+      "totalLines": 17,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts": {
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "contentHash": "979130d5dcf9175eb9203b893b5096ac9d844a5d8e4cf95434126bfa35e67a97",
+      "functions": [
+        {
+          "name": "encodeTopicValue",
+          "params": [
+            "t"
+          ],
+          "returnType": "string[]",
+          "exported": false,
+          "lineCount": 5
+        }
+      ],
+      "classes": [
+        {
+          "name": "AquaOptionSettlement",
+          "methods": [
+            "constructor",
+            "creForwarder",
+            "owner",
+            "series",
+            "writeReportFromReclaimCollateral",
+            "writeReportFromRedeem",
+            "writeReportFromRegisterSeries",
+            "writeReportFromSettleSeries",
+            "writeReportFromTransferOwnership",
+            "writeReport",
+            "logTriggerCollateralReturned",
+            "decodeCollateralReturned",
+            "logTriggerHolderPaid",
+            "decodeHolderPaid",
+            "logTriggerOwnershipTransferred",
+            "decodeOwnershipTransferred",
+            "logTriggerSeriesRegistered",
+            "decodeSeriesRegistered",
+            "logTriggerSeriesSettled",
+            "decodeSeriesSettled"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 568
+        }
+      ],
+      "imports": [
+        {
+          "source": "viem",
+          "specifiers": [
+            "decodeEventLog",
+            "decodeFunctionResult",
+            "encodeEventTopics",
+            "encodeFunctionData",
+            "zeroAddress"
+          ]
+        },
+        {
+          "source": "viem",
+          "specifiers": [
+            "Address",
+            "Hex"
+          ]
+        },
+        {
+          "source": "@chainlink/cre-sdk",
+          "specifiers": [
+            "bytesToHex",
+            "encodeCallMsg",
+            "EVMClient",
+            "hexToBase64",
+            "LAST_FINALIZED_BLOCK_NUMBER",
+            "prepareReportRequest",
+            "EVMLog",
+            "Runtime"
+          ]
+        }
+      ],
+      "exports": [
+        "AquaOptionSettlementABI",
+        "AquaOptionSettlement"
+      ],
+      "totalLines": 691,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/contracts/evm/ts/generated/index.ts": {
+      "filePath": "cre-workflow/contracts/evm/ts/generated/index.ts",
+      "contentHash": "629dca7ab7236aae552144f57805adef57013ae76f42215a350e18c08ef4bdd4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 4,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/contracts/package.json": {
+      "filePath": "cre-workflow/contracts/package.json",
+      "contentHash": "9ba415544f66f7b2452557d003ce3dc1a2ec5b2fb4f3c0188b363a9e2a362c19",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/package.json": {
+      "filePath": "cre-workflow/package.json",
+      "contentHash": "4f6edddc28cc534e70f444b7fd8a87ea70b1363c628acdad94021d5c4712055c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 14,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/project.yaml": {
+      "filePath": "cre-workflow/project.yaml",
+      "contentHash": "0670e518b7693203045e7fd8adc4288154ae906a09c703e6df9959dc7260f920",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/config.json": {
+      "filePath": "cre-workflow/settlement/config.json",
+      "contentHash": "09b81d8b718c888f7c668324102c18f369f49391a15adee7cbc76e576aea9331",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/main.ts": {
+      "filePath": "cre-workflow/settlement/main.ts",
+      "contentHash": "b650228baa90590d5d9ac41f88784f22da57eb6ac588682c36f1f247d9acff5e",
+      "functions": [
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "@chainlink/cre-sdk",
+          "specifiers": [
+            "Runner"
+          ]
+        },
+        {
+          "source": "./workflow",
+          "specifiers": [
+            "configSchema",
+            "initWorkflow"
+          ]
+        }
+      ],
+      "exports": [
+        "main"
+      ],
+      "totalLines": 10,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/package.json": {
+      "filePath": "cre-workflow/settlement/package.json",
+      "contentHash": "39e02d5f1206edbecd8088268618e75ef9f50be1851b65d7bcf54c59330da5cc",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 19,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/tsconfig.json": {
+      "filePath": "cre-workflow/settlement/tsconfig.json",
+      "contentHash": "0607a7ef9e3c2e52c9d8820f56df4e47df5131681e63d4d843f37bd681831aef",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/workflow.ts": {
+      "filePath": "cre-workflow/settlement/workflow.ts",
+      "contentHash": "8630e3b2b8af41c43ad57d29ebd8a2ec071a88b30f925c16f67719e3533cde5f",
+      "functions": [
+        {
+          "name": "settle",
+          "params": [
+            "runtime"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 59
+        },
+        {
+          "name": "onCronTrigger",
+          "params": [
+            "runtime",
+            "_payload"
+          ],
+          "returnType": "string",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "initWorkflow",
+          "params": [
+            "config"
+          ],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "@chainlink/cre-sdk",
+          "specifiers": [
+            "bytesToHex",
+            "cre",
+            "CronPayload",
+            "encodeCallMsg",
+            "getNetwork",
+            "LAST_FINALIZED_BLOCK_NUMBER",
+            "Runtime",
+            "TxStatus"
+          ]
+        },
+        {
+          "source": "viem",
+          "specifiers": [
+            "Address",
+            "decodeFunctionResult",
+            "encodeFunctionData",
+            "Hex",
+            "zeroAddress"
+          ]
+        },
+        {
+          "source": "zod",
+          "specifiers": [
+            "z"
+          ]
+        },
+        {
+          "source": "../contracts/evm/ts/generated/AquaOptionSettlement",
+          "specifiers": [
+            "AquaOptionSettlement"
+          ]
+        }
+      ],
+      "exports": [
+        "configSchema",
+        "onCronTrigger",
+        "initWorkflow"
+      ],
+      "totalLines": 151,
+      "hasStructuralAnalysis": true
+    },
+    "cre-workflow/settlement/workflow.yaml": {
+      "filePath": "cre-workflow/settlement/workflow.yaml",
+      "contentHash": "9390d460e5503092e6c5e52450b06eb4c1a87fa4d11dd20929c2bf51a1107ecf",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 22,
+      "hasStructuralAnalysis": true
+    },
+    "foundry.toml": {
+      "filePath": "foundry.toml",
+      "contentHash": "07c8c808253c5a7745e8c9c6f37a46991cf0dd23227c29f5c3e2abca83358024",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 10,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/AGENTS.md": {
+      "filePath": "frontend/AGENTS.md",
+      "contentHash": "e3447d84251880fb34cfae09131cb4c57471529bbfe60976a3245793cf621627",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 6,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/app/globals.css": {
+      "filePath": "frontend/app/globals.css",
+      "contentHash": "769edf77bd0d101a2d26e6c5656defba8cd885ff37d92279fa293a2756fe5651",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 27,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/app/layout.tsx": {
+      "filePath": "frontend/app/layout.tsx",
+      "contentHash": "8c417da41f892c1acf68d8bc1c1622a2bc4c289fb3e770af897b514a47477fd1",
+      "functions": [
+        {
+          "name": "RootLayout",
+          "params": [
+            "{\n  children,\n}"
+          ],
+          "exported": true,
+          "lineCount": 16
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "next",
+          "specifiers": [
+            "Metadata"
+          ]
+        },
+        {
+          "source": "next/font/google",
+          "specifiers": [
+            "Geist",
+            "Geist_Mono"
+          ]
+        },
+        {
+          "source": "./providers",
+          "specifiers": [
+            "Providers"
+          ]
+        },
+        {
+          "source": "./globals.css",
+          "specifiers": []
+        }
+      ],
+      "exports": [
+        "metadata",
+        "RootLayout"
+      ],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/app/page.tsx": {
+      "filePath": "frontend/app/page.tsx",
+      "contentHash": "2e9d973c7371f6dce28410b504e5c8122cf01354764f6a93017415bb037cbf5e",
+      "functions": [
+        {
+          "name": "getEth",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "switchToNetwork",
+          "params": [
+            "chainId"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "Home",
+          "params": [],
+          "exported": true,
+          "lineCount": 311
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useAccount",
+            "useConnect",
+            "useDisconnect",
+            "useChainId",
+            "useChains",
+            "useBalance",
+            "useReadContract",
+            "useSwitchChain"
+          ]
+        },
+        {
+          "source": "@/components/OptionMatrix",
+          "specifiers": [
+            "OptionMatrix"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "CONTRACTS"
+          ]
+        },
+        {
+          "source": "@/components/LPDashboard",
+          "specifiers": [
+            "LPDashboard"
+          ]
+        },
+        {
+          "source": "@/components/AuthorizeRange",
+          "specifiers": [
+            "AuthorizeRange",
+            "ActiveAuth"
+          ]
+        },
+        {
+          "source": "@/components/TxProof",
+          "specifiers": [
+            "TxProof"
+          ]
+        },
+        {
+          "source": "@/components/PayoffBuilder",
+          "specifiers": [
+            "PayoffBuilder",
+            "Leg"
+          ]
+        },
+        {
+          "source": "@/hooks/useUniswapSpot",
+          "specifiers": [
+            "useUniswapSpot"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useEffect"
+          ]
+        }
+      ],
+      "exports": [
+        "Home"
+      ],
+      "totalLines": 370,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/app/providers.tsx": {
+      "filePath": "frontend/app/providers.tsx",
+      "contentHash": "80bff7b9b3e506ed65b72d92b3efc091b67a15c229f29be976dd6f390399dfd4",
+      "functions": [
+        {
+          "name": "Providers",
+          "params": [
+            "{ children }"
+          ],
+          "exported": true,
+          "lineCount": 8
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "@tanstack/react-query",
+          "specifiers": [
+            "QueryClient",
+            "QueryClientProvider"
+          ]
+        },
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "WagmiProvider"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "config"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState"
+          ]
+        }
+      ],
+      "exports": [
+        "Providers"
+      ],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/CLAUDE.md": {
+      "filePath": "frontend/CLAUDE.md",
+      "contentHash": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/AuthorizeRange.tsx": {
+      "filePath": "frontend/components/AuthorizeRange.tsx",
+      "contentHash": "0654980304d85a95a3c33118c11f18e137e91517e740da9b829b2a07a09aea23",
+      "functions": [
+        {
+          "name": "AuthorizeRange",
+          "params": [
+            "{ spot, onAuthorized }"
+          ],
+          "exported": true,
+          "lineCount": 392
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useWriteContract",
+            "useWaitForTransactionReceipt",
+            "useAccount",
+            "useReadContract"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useEffect",
+            "useRef"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "CONTRACTS",
+            "AQUA_ABI",
+            "SHIP_PARAMS_ABI"
+          ]
+        }
+      ],
+      "exports": [
+        "USDC_SEPOLIA",
+        "WETH_SEPOLIA",
+        "AuthorizeRange"
+      ],
+      "totalLines": 481,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/LPDashboard.tsx": {
+      "filePath": "frontend/components/LPDashboard.tsx",
+      "contentHash": "42b575a6ce2c10b51e803558806b5fc338b25bb9d50ece5729641a8382006405",
+      "functions": [
+        {
+          "name": "LPDashboard",
+          "params": [
+            "{ activeAuth }"
+          ],
+          "exported": true,
+          "lineCount": 155
+        },
+        {
+          "name": "Stat",
+          "params": [
+            "{ label, value, sub, highlight }"
+          ],
+          "exported": false,
+          "lineCount": 11
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useAccount",
+            "useReadContract",
+            "useBalance"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useEffect"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "CONTRACTS"
+          ]
+        },
+        {
+          "source": "@/components/AuthorizeRange",
+          "specifiers": [
+            "ActiveAuth"
+          ]
+        }
+      ],
+      "exports": [
+        "LPDashboard"
+      ],
+      "totalLines": 199,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/OptionMatrix.tsx": {
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "contentHash": "f2a7ca1294994031bd2c7b3211296209c710460b04a32c125ff6f6be862425ef",
+      "functions": [
+        {
+          "name": "authRangeStrikes",
+          "params": [
+            "min",
+            "max"
+          ],
+          "returnType": "number[]",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "smileVol",
+          "params": [
+            "spot",
+            "strike"
+          ],
+          "returnType": "number",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "normalCDF",
+          "params": [
+            "x"
+          ],
+          "returnType": "number",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "callDelta",
+          "params": [
+            "spot",
+            "strike",
+            "sigma",
+            "T"
+          ],
+          "returnType": "number",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "blackScholesCall",
+          "params": [
+            "spot",
+            "strike",
+            "sigma",
+            "T"
+          ],
+          "returnType": "number",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "blackScholesPut",
+          "params": [
+            "spot",
+            "strike",
+            "sigma",
+            "T"
+          ],
+          "returnType": "number",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "priceWAD",
+          "params": [
+            "spot",
+            "strike",
+            "expiry",
+            "isCall",
+            "isBuy"
+          ],
+          "returnType": "bigint",
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "optionPriceWAD",
+          "params": [
+            "spot",
+            "strike",
+            "expiry",
+            "isBuy"
+          ],
+          "returnType": "bigint",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "formatWAD",
+          "params": [
+            "val"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "LPSummaryBar",
+          "params": [
+            "{ auth }"
+          ],
+          "exported": false,
+          "lineCount": 61
+        },
+        {
+          "name": "SellPanel",
+          "params": [
+            "{ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose, onSellConfirmed, colSpan = 6 }"
+          ],
+          "exported": false,
+          "lineCount": 174
+        },
+        {
+          "name": "BuyPanel",
+          "params": [
+            "{ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirmed, colSpan = 6 }"
+          ],
+          "exported": false,
+          "lineCount": 190
+        },
+        {
+          "name": "ClosePanel",
+          "params": [
+            "{ optionToken, lp, balance, onClose, colSpan = 6 }"
+          ],
+          "exported": false,
+          "lineCount": 45
+        },
+        {
+          "name": "StrikeRow",
+          "params": [
+            "{ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }"
+          ],
+          "exported": false,
+          "lineCount": 144
+        },
+        {
+          "name": "OptionMatrix",
+          "params": [
+            "{ spot, activeAuth, onSwapTx, onBuyConfirmed, onSellConfirmed }"
+          ],
+          "exported": true,
+          "lineCount": 100
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useReadContract",
+            "useWriteContract",
+            "useWaitForTransactionReceipt",
+            "useSendTransaction",
+            "useAccount",
+            "useChainId"
+          ]
+        },
+        {
+          "source": "@/lib/explorer",
+          "specifiers": [
+            "explorerTxUrl"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useEffect",
+            "useState",
+            "useCallback",
+            "useRef"
+          ]
+        },
+        {
+          "source": "@/components/PayoffBuilder",
+          "specifiers": [
+            "Leg"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "CONTRACTS",
+            "AQUA_ABI",
+            "SHIP_PARAMS_ABI"
+          ]
+        },
+        {
+          "source": "@/components/AuthorizeRange",
+          "specifiers": [
+            "ActiveAuth"
+          ]
+        },
+        {
+          "source": "@/components/AuthorizeRange",
+          "specifiers": [
+            "USDC_SEPOLIA",
+            "WETH_SEPOLIA"
+          ]
+        },
+        {
+          "source": "@/hooks/useUniswapTrade",
+          "specifiers": [
+            "fetchUniswapSwapQuote",
+            "UniswapSwapQuote"
+          ]
+        }
+      ],
+      "exports": [
+        "OptionMatrix"
+      ],
+      "totalLines": 995,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/PayoffBuilder.tsx": {
+      "filePath": "frontend/components/PayoffBuilder.tsx",
+      "contentHash": "780e2c00f6009ab83ec032b157afb6119865197b74eda6a48786f7d3b7f0bf95",
+      "functions": [
+        {
+          "name": "PayoffChart",
+          "params": [
+            "{ legs, spot }"
+          ],
+          "exported": false,
+          "lineCount": 82
+        },
+        {
+          "name": "fmtUsd",
+          "params": [
+            "v"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "StatsStrip",
+          "params": [
+            "{ legs, spot }"
+          ],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "PayoffBuilder",
+          "params": [
+            "{ spot, confirmedLegs = [] }"
+          ],
+          "exported": true,
+          "lineCount": 177
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useMemo",
+            "useRef",
+            "useEffect"
+          ]
+        },
+        {
+          "source": "recharts",
+          "specifiers": [
+            "ComposedChart",
+            "Area",
+            "Line",
+            "XAxis",
+            "YAxis",
+            "ReferenceLine",
+            "Tooltip",
+            "ResponsiveContainer"
+          ]
+        },
+        {
+          "source": "@/lib/options",
+          "specifiers": [
+            "BuilderLeg",
+            "DEFAULT_DTE",
+            "protocolPremium",
+            "pnlSeries",
+            "findBreakevens",
+            "strategyStats"
+          ]
+        },
+        {
+          "source": "@/lib/strategyCatalog",
+          "specifiers": [
+            "STRATEGIES",
+            "OUTLOOKS",
+            "Outlook"
+          ]
+        }
+      ],
+      "exports": [
+        "PayoffBuilder"
+      ],
+      "totalLines": 337,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/RegisterSeries.tsx": {
+      "filePath": "frontend/components/RegisterSeries.tsx",
+      "contentHash": "a697da4f2de9dd5c10eebe78f59ed1bcf91b10c70f0e7b159916bf70774f781f",
+      "functions": [
+        {
+          "name": "RegisterSeries",
+          "params": [
+            "{ spot, onRegistered }"
+          ],
+          "exported": true,
+          "lineCount": 182
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useWriteContract",
+            "useWaitForTransactionReceipt",
+            "useAccount"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useEffect",
+            "useRef"
+          ]
+        },
+        {
+          "source": "viem",
+          "specifiers": [
+            "keccak256",
+            "encodePacked"
+          ]
+        }
+      ],
+      "exports": [
+        "USDC_SEPOLIA",
+        "WETH_SEPOLIA",
+        "RegisterSeries"
+      ],
+      "totalLines": 233,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/TradeButton.tsx": {
+      "filePath": "frontend/components/TradeButton.tsx",
+      "contentHash": "1c50abdf985da12becc2075843cb833f04bc5fa597128698b9e61b986c20d621",
+      "functions": [
+        {
+          "name": "TradeButton",
+          "params": [
+            "{\n  optionToken,\n  lp,\n  collateralToken,\n  collateralAmount,\n  amount,\n  label,\n  onSuccess,\n}"
+          ],
+          "exported": true,
+          "lineCount": 53
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useWriteContract",
+            "useWaitForTransactionReceipt",
+            "useAccount"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState"
+          ]
+        },
+        {
+          "source": "@/config/wagmi",
+          "specifiers": [
+            "CONTRACTS"
+          ]
+        }
+      ],
+      "exports": [
+        "TradeButton"
+      ],
+      "totalLines": 87,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/components/TxProof.tsx": {
+      "filePath": "frontend/components/TxProof.tsx",
+      "contentHash": "2bdae4dca88229f60483b05f08c77e2b7bada5f7ee1f6d52060a75ba5ca1648f",
+      "functions": [
+        {
+          "name": "TxProof",
+          "params": [
+            "{ recentSwapTx }"
+          ],
+          "exported": true,
+          "lineCount": 56
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "useChainId"
+          ]
+        },
+        {
+          "source": "@/lib/explorer",
+          "specifiers": [
+            "explorerTxUrl"
+          ]
+        }
+      ],
+      "exports": [
+        "TxProof"
+      ],
+      "totalLines": 92,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/config/wagmi.ts": {
+      "filePath": "frontend/config/wagmi.ts",
+      "contentHash": "9c8dc3b067c3f6861bd5c5a511b2f295d23c1d827197766a8fd1a6e6907ecca5",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "wagmi",
+          "specifiers": [
+            "createConfig",
+            "http"
+          ]
+        },
+        {
+          "source": "wagmi/chains",
+          "specifiers": [
+            "mainnet",
+            "sepolia",
+            "hardhat"
+          ]
+        },
+        {
+          "source": "viem",
+          "specifiers": [
+            "defineChain"
+          ]
+        },
+        {
+          "source": "wagmi/connectors",
+          "specifiers": [
+            "walletConnect",
+            "injected"
+          ]
+        }
+      ],
+      "exports": [
+        "config",
+        "CONTRACTS",
+        "AQUA_ABI",
+        "SHIP_PARAMS_ABI",
+        "TARGET_CHAIN_ID"
+      ],
+      "totalLines": 90,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/eslint.config.mjs": {
+      "filePath": "frontend/eslint.config.mjs",
+      "contentHash": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "eslint/config",
+          "specifiers": [
+            "defineConfig",
+            "globalIgnores"
+          ]
+        },
+        {
+          "source": "eslint-config-next/core-web-vitals",
+          "specifiers": [
+            "nextVitals"
+          ]
+        },
+        {
+          "source": "eslint-config-next/typescript",
+          "specifiers": [
+            "nextTs"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 19,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/hooks/useUniswapSpot.ts": {
+      "filePath": "frontend/hooks/useUniswapSpot.ts",
+      "contentHash": "7618376fe707eb220571d8ecd899c26d9fe75f6b3a880c3272c802c7b0e72215",
+      "functions": [
+        {
+          "name": "fetchUniswap",
+          "params": [
+            "apiKey"
+          ],
+          "returnType": "Promise<number>",
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "fetchChainlink",
+          "params": [],
+          "returnType": "Promise<number>",
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "useUniswapSpot",
+          "params": [],
+          "returnType": "SpotState",
+          "exported": true,
+          "lineCount": 34
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "useState",
+            "useEffect"
+          ]
+        },
+        {
+          "source": "viem",
+          "specifiers": [
+            "createPublicClient",
+            "http"
+          ]
+        },
+        {
+          "source": "viem/chains",
+          "specifiers": [
+            "sepolia",
+            "hardhat"
+          ]
+        }
+      ],
+      "exports": [
+        "useUniswapSpot"
+      ],
+      "totalLines": 117,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/hooks/useUniswapTrade.ts": {
+      "filePath": "frontend/hooks/useUniswapTrade.ts",
+      "contentHash": "4bb4fdcb7aab491bda2a8f6b1c90e2efc7489d9d890dd5b07e39d7825832cc91",
+      "functions": [
+        {
+          "name": "fetchUniswapSwapQuote",
+          "params": [
+            "usdcAmountOut",
+            "swapper",
+            "usdcToken",
+            "apiKey"
+          ],
+          "returnType": "Promise<UniswapSwapQuote>",
+          "exported": true,
+          "lineCount": 69
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "fetchUniswapSwapQuote"
+      ],
+      "totalLines": 87,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/next.config.ts": {
+      "filePath": "frontend/next.config.ts",
+      "contentHash": "f9e45d8b61db11a100b9d8f7f712bd2fc2e20008c3e8d93670026453d7489c1e",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "next",
+          "specifiers": [
+            "NextConfig"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 17,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/package.json": {
+      "filePath": "frontend/package.json",
+      "contentHash": "aa5f17a86c46ddc2f25a6854921b92ca014a073a03fd5f1fe02c349529db908b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 39,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/postcss.config.mjs": {
+      "filePath": "frontend/postcss.config.mjs",
+      "contentHash": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/public/help.html": {
+      "filePath": "frontend/public/help.html",
+      "contentHash": "d66961997f7d2284dc8493f94b5b1d8231cf0386271dc494180800532f191459",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 684,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/README.md": {
+      "filePath": "frontend/README.md",
+      "contentHash": "60b55ff7df79af72590f9524208e46642bc32bdc175cdad41349681c0e2f958f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 37,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/scripts/gen-help.mjs": {
+      "filePath": "frontend/scripts/gen-help.mjs",
+      "contentHash": "e4dec82e4b8ab720550460d82cf0bbccb77e1654c90d888d0a26d406504f5af6",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync",
+            "writeFileSync",
+            "mkdirSync"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "dirname",
+            "join"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        },
+        {
+          "source": "marked",
+          "specifiers": [
+            "marked"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 88,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/tsconfig.json": {
+      "filePath": "frontend/tsconfig.json",
+      "contentHash": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 35,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/types/finance.d.ts": {
+      "filePath": "frontend/types/finance.d.ts",
+      "contentHash": "2fb6c2d129f17736e76a5e129d3ddf049c67893a7d10788a82d22c138f74ac7e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    "local.sh": {
+      "filePath": "local.sh",
+      "contentHash": "bc91caa5f6842af1d3671cd33f967fe4ba0b0b761f3791f0ca58dcfb9dde3b57",
+      "functions": [
+        {
+          "name": "stop_existing",
+          "params": [],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "parse",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 164,
+      "hasStructuralAnalysis": true
+    },
+    "package.json": {
+      "filePath": "package.json",
+      "contentHash": "c6ccea724643d7c80110bd638aafc5d7a7027bdaf8daeba575fbfd93a7cacfc1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "PLAN.md": {
+      "filePath": "PLAN.md",
+      "contentHash": "781ea450a3ab45c337e356d15193cf20aef29aa238eea5cc51d1be4c991acb99",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 172,
+      "hasStructuralAnalysis": true
+    },
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "d7ed91d5737cfbefcab7234f1d933cfbc0a686609961e6d603ab2ecb9e8f0b2f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 623,
+      "hasStructuralAnalysis": true
+    },
+    "remappings.txt": {
+      "filePath": "remappings.txt",
+      "contentHash": "797541f085d4481c29e5202c13b91a702ae8abd984d8a1d0669fd68d1b38fc22",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": false
+    },
+    "run-phases.mjs": {
+      "filePath": "run-phases.mjs",
+      "contentHash": "78016da4b09071c4c52a9b3f6aad3a2feefa1a358da7e60c47fb5b080c936c6b",
+      "functions": [
+        {
+          "name": "runPhase2",
+          "params": [],
+          "exported": false,
+          "lineCount": 48
+        },
+        {
+          "name": "runPhase3",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "runPhase4",
+          "params": [],
+          "exported": false,
+          "lineCount": 33
+        },
+        {
+          "name": "runPhase5",
+          "params": [],
+          "exported": false,
+          "lineCount": 32
+        },
+        {
+          "name": "runPhase6",
+          "params": [],
+          "exported": false,
+          "lineCount": 53
+        },
+        {
+          "name": "runPhase7",
+          "params": [
+            "fullGraph"
+          ],
+          "exported": false,
+          "lineCount": 62
+        },
+        {
+          "name": "getGitCommitHash",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "detectHeuristicLayers",
+          "params": [
+            "fileNodes",
+            "importEdges",
+            "allEdges"
+          ],
+          "exported": false,
+          "lineCount": 57
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": false,
+          "lineCount": 14
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync",
+            "writeFileSync",
+            "existsSync",
+            "mkdirSync",
+            "readdirSync"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "join",
+            "resolve",
+            "dirname"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath",
+            "pathToFileURL"
+          ]
+        },
+        {
+          "source": "node:module",
+          "specifiers": [
+            "createRequire"
+          ]
+        },
+        {
+          "source": "node:child_process",
+          "specifiers": [
+            "spawnSync"
+          ]
+        },
+        {
+          "source": "graphology",
+          "specifiers": [
+            "Graph"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 398,
+      "hasStructuralAnalysis": true
+    },
+    "script/DemoTrade.s.sol": {
+      "filePath": "script/DemoTrade.s.sol",
+      "contentHash": "b885255b3a5c3d12d41d0d9b776a4a30be5e832dc42e2eb7ca85f46f8d76b40e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 74,
+      "hasStructuralAnalysis": false
+    },
+    "script/Deploy.s.sol": {
+      "filePath": "script/Deploy.s.sol",
+      "contentHash": "0b357010bb207c30a9348b4a75606c68a3da4398685d6aacfda2c767f44a2a14",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 139,
+      "hasStructuralAnalysis": false
+    },
+    "skills-lock.json": {
+      "filePath": "skills-lock.json",
+      "contentHash": "5252e34b7fbb2478424136b77763093a57f0e3a6b5c0a361b92ac2ad1ca5dbde",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 228,
+      "hasStructuralAnalysis": true
+    },
+    "src/hooks/OptionPricingHook.sol": {
+      "filePath": "src/hooks/OptionPricingHook.sol",
+      "contentHash": "9bdcf6f403725969ac77b90df2c84b9cf89285abbc27607a355008d438fff527",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 196,
+      "hasStructuralAnalysis": false
+    },
+    "src/mocks/MockV3Aggregator.sol": {
+      "filePath": "src/mocks/MockV3Aggregator.sol",
+      "contentHash": "773bb1e67b5990829a223f0df76874c17b7dc5d3f98142f7ea0a20e20a7150ad",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 51,
+      "hasStructuralAnalysis": false
+    },
+    "src/OptionToken.sol": {
+      "filePath": "src/OptionToken.sol",
+      "contentHash": "d49a7aa305e20de7fe9fa07dbf1a3d383242548060e6dbd50b5d75c4c50fb0d5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": false
+    },
+    "src/swapvm/OptionPremiumInstruction.sol": {
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "contentHash": "9dc3e0091b46e154d4ed97a1a51a6a93cd01fc46c358af878bed64042e7f28d4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 200,
+      "hasStructuralAnalysis": false
+    },
+    "src/swapvm/OptionPricingEngine.sol": {
+      "filePath": "src/swapvm/OptionPricingEngine.sol",
+      "contentHash": "1261d75701f6e39c5af279df032fb7173b475da8570fae0718f72ff2f5e85c6a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 62,
+      "hasStructuralAnalysis": false
+    },
+    "src/swapvm/SmileMath.sol": {
+      "filePath": "src/swapvm/SmileMath.sol",
+      "contentHash": "edbf7b89919f349b2854edeac7baee463c6c20e8b008a37061a87d145e917fd4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 124,
+      "hasStructuralAnalysis": false
+    },
+    "src/swapvm/SmileSwapVMRouter.sol": {
+      "filePath": "src/swapvm/SmileSwapVMRouter.sol",
+      "contentHash": "96598c055e6fe666a99e73e26eb05dc2b25acfffc5ef4d362a380acb7c59d44b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": false
+    },
+    "src/vaults/AquaCollateralVault.sol": {
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "contentHash": "5773cc201639a4ad05b77c31938bcd493cfe6530fa8275ad77b49f5e3b8c5e8b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 744,
+      "hasStructuralAnalysis": false
+    },
+    "src/vaults/AquaOptionSettlement.sol": {
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "contentHash": "0a5ec27d431997e0a591807960481755bffa672801cb0cc67741568f76a246a9",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 122,
+      "hasStructuralAnalysis": false
+    }
+  }
+}

@@ -272,6 +272,27 @@ $$\sigma_{tenor,\,t+1} = \sigma_{tenor,\,t} + \gamma \cdot \text{sign}(\text{tra
 - Uniswap v4 `afterSwap` (no tenor info) shifts the whole surface.
 - $\gamma = 0.5\%$ per trade. This creates a price-impact-like mechanism: heavy buying steepens the surface and raises premiums, attracting arbitrageurs who sell back to earn the spread.
 
+> **Design note — why pricing is on-chain, and why $\sigma_{tenor}$ is a step function.**
+> `OptionPricingHook.sigmaFor` is read **atomically inside the same swap** that buys or
+> sells the option, so the price a trader gets is exactly whatever the bucket lookup
+> returns at that block — no off-chain quote to go stale or be front-run. This isn't
+> architecturally required: `AquaOptionSettlement` already sources its *expiry* price
+> off-chain via the Chainlink CRE forwarder (§5), so an RFQ-style premium quote (a
+> signed off-chain price, verified on-chain much like a CRE report) is possible in
+> principle. The tradeoff:
+> - **On-chain step lookup (current):** fully permissionless and atomic, no quoting
+>   service to keep live — but $\sigma_{tenor}(T)$ is discontinuous at the 7d/30d/90d
+>   bucket edges (visible as terraces on the Vol Surface tab), and each trade can only
+>   afford to move the one bucket it landed in.
+> - **Off-chain quoted pricing:** could interpolate $\sigma_{tenor}(T)$ smoothly across
+>   tenors, but reintroduces a liveness/trust dependency on the quoter, and blending a
+>   trade's demand feedback across neighboring buckets (instead of bumping one bucket)
+>   opens a manipulation surface — trading right at a bucket edge could nudge a bucket
+>   nothing actually traded in.
+>
+> V1 keeps pricing on-chain and discrete; smooth interpolation is left for a future
+> RFQ-style quoting layer.
+
 ### 4. Black-Scholes Delta (Frontend)
 
 Delta ($\Delta$) is computed client-side for the matrix display. Not used in on-chain pricing.
@@ -518,8 +539,14 @@ sequenceDiagram
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
+```
+
+Or, from the repo root (no `cd` needed — pnpm targets the workspace by name):
+
+```bash
+pnpm --filter frontend dev
 ```
 
 Open http://localhost:3000. The UI includes the option-chain matrix, the LP
@@ -530,6 +557,15 @@ a T+0 value curve, breakevens, probability of profit, and net greeks. Entry
 premiums are quoted with the same smile the on-chain instruction charges, so
 what you see is what `vault.buy()` costs.
 
+The **Vol Surface · Python** tab renders the live 3-D volatility surface
+$\sigma_{strike}(K,T)$ with **matplotlib** (a Flask service in
+[`volsurface/`](volsurface/)). Every confirmed buy/sell POSTs to the renderer,
+which bumps the traded tenor bucket by $\pm\gamma$ — the same feedback loop the
+on-chain [`OptionPricingHook.bumpSigma`](src/hooks/OptionPricingHook.sol) applies
+— so the surface visibly re-rates as order flow arrives. Start it standalone with
+`./volsurface/run.sh` (it also comes up automatically with `./local.sh`); the tab
+shows a hint instead of a broken image when the service is offline.
+
 ### 3. Smart Contract Development (Foundry)
 
 ```bash
@@ -539,7 +575,17 @@ forge test    # run the 82-test suite
 
 ### 4. Deploy to Anvil (Local)
 
-The quickest path: `./local.sh` starts Anvil, deploys all contracts, writes `frontend/.env.local`, and launches the dev server in one step.
+The quickest path: `./local.sh` starts Anvil, deploys all contracts, writes `frontend/.env.local`, launches the vol-surface renderer, and starts the dev server in one step.
+
+When you're done, stop everything it started:
+
+```bash
+fuser -k 8545/tcp 3000/tcp 8000/tcp
+```
+
+(This is the same port-based cleanup `local.sh` runs on every invocation, so it's safe even if a previous run didn't finish cleanly — unlike `kill $(cat /tmp/*-options.pid)`, it won't error out on a missing PID file.)
+
+Re-running `./local.sh` also stops any previous instances automatically before starting fresh.
 
 To deploy manually (e.g., to iterate on the script):
 
@@ -754,9 +800,11 @@ signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.m
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
 ├── frontend/                 # Next.js app
-│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard
+│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface
 │   ├── lib/                  # options engine + 20-strategy catalog
 │   └── config/               # Wagmi + contract addresses + official Aqua ABI
+├── volsurface/               # Python (Flask + matplotlib) 3-D vol-surface renderer
+│                             #   — evolves with each trade via the σ feedback loop
 ├── cre-workflow/             # Chainlink CRE workflow (TypeScript → WASM)
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 ├── docs/                     # grant proposal, build notes, CRE transcript

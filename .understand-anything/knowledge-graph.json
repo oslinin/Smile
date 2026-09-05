@@ -1,0 +1,4462 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "smile-contracts",
+    "languages": [
+      "config",
+      "css",
+      "html",
+      "javascript",
+      "json",
+      "markdown",
+      "shell",
+      "sol",
+      "toml",
+      "txt",
+      "typescript",
+      "yaml"
+    ],
+    "frameworks": [
+      "GitHub Actions",
+      "Next.js",
+      "React",
+      "Tailwind CSS"
+    ],
+    "description": "Smile is a non-custodial, parametric options marketplace that combines 1inch Aqua, Uniswap v4 Hooks, and Chainlink CRE so LPs can quote an entire strike range from one capital pool while their collateral keeps earning DeFi yield. This repository is a monorepo containing the Foundry-based Solidity contracts, a Next.js/TypeScript frontend, and a Chainlink CRE settlement workflow.",
+    "analyzedAt": "2026-07-11T05:40:00Z",
+    "gitCommitHash": "8f1291fe1c521c3aad3695154140ce46fa7b9e75"
+  },
+  "nodes": [
+    {
+      "id": "file:frontend/app/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "frontend/app/page.tsx",
+      "summary": "Next.js app-router root page that wires wallet connection (wagmi), network switching, and a live ETH/USD spot price, then renders the four main tabs \u2014 LP strike-range authorization, option chain trading with payoff builder, LP position dashboard, and on-chain proof.",
+      "tags": [
+        "entry-point",
+        "wallet-integration",
+        "react",
+        "dashboard",
+        "tabs"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:frontend/app/page.tsx:switchToNetwork",
+      "type": "function",
+      "name": "switchToNetwork",
+      "filePath": "frontend/app/page.tsx",
+      "lineRange": [
+        33,
+        52
+      ],
+      "summary": "Requests a wallet network switch via EIP-3326 (wallet_switchEthereumChain), auto-adding the local Anvil chain (31337) via EIP-3085 if the wallet doesn't recognize it yet.",
+      "tags": [
+        "wallet",
+        "network-switching",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/app/page.tsx:Home",
+      "type": "function",
+      "name": "Home",
+      "filePath": "frontend/app/page.tsx",
+      "lineRange": [
+        59,
+        369
+      ],
+      "summary": "Default-exported root page component: manages wallet connect/disconnect UI, the network-switch dropdown, live ETH/USD spot price display, tracks the active LP authorization and confirmed trade legs, and renders tabbed panels for AuthorizeRange, OptionMatrix, PayoffBuilder, LPDashboard, and TxProof.",
+      "tags": [
+        "entry-point",
+        "component",
+        "orchestrator",
+        "wallet-integration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:frontend/components/OptionMatrix.tsx",
+      "type": "file",
+      "name": "OptionMatrix.tsx",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "summary": "Client-side option chain UI implementing a Black-Scholes volatility-smile pricing model, rendering a strike/expiry matrix with per-strike buy, sell, and close panels wired to the Aqua vault contract and the Uniswap swap flow.",
+      "tags": [
+        "component",
+        "pricing-engine",
+        "options-trading",
+        "react",
+        "financial-model"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Reimplements the protocol's Black-Scholes + volatility-smile pricing model client-side (normalCDF, blackScholesCall/Put, smileVol) so the UI can preview quotes before submitting on-chain transactions \u2014 matching the project's 'Smile' namesake volatility curve."
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:authRangeStrikes",
+      "type": "function",
+      "name": "authRangeStrikes",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        140,
+        145
+      ],
+      "summary": "Generates 7 strike prices spaced across an LP's authorized [min,max] range, rounded to the nearest 50 and deduplicated.",
+      "tags": [
+        "utility",
+        "options-trading"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:smileVol",
+      "type": "function",
+      "name": "smileVol",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        150,
+        153
+      ],
+      "summary": "Approximates implied volatility as a function of moneyness (spot/strike), producing the volatility 'smile' curve used to price each strike.",
+      "tags": [
+        "pricing-engine",
+        "volatility",
+        "financial-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:normalCDF",
+      "type": "function",
+      "name": "normalCDF",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        156,
+        163
+      ],
+      "summary": "Numerical approximation of the standard normal cumulative distribution function, used by the delta and Black-Scholes pricing formulas.",
+      "tags": [
+        "math-utility",
+        "pricing-engine"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:callDelta",
+      "type": "function",
+      "name": "callDelta",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        165,
+        169
+      ],
+      "summary": "Computes the Black-Scholes delta of a call option for sizing/hedging display in the strike row.",
+      "tags": [
+        "pricing-engine",
+        "greeks"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:blackScholesCall",
+      "type": "function",
+      "name": "blackScholesCall",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        171,
+        178
+      ],
+      "summary": "Computes a Black-Scholes call option price given spot, strike, volatility, and time to expiry.",
+      "tags": [
+        "pricing-engine",
+        "options-pricing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:blackScholesPut",
+      "type": "function",
+      "name": "blackScholesPut",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        180,
+        187
+      ],
+      "summary": "Computes a Black-Scholes put option price given spot, strike, volatility, and time to expiry.",
+      "tags": [
+        "pricing-engine",
+        "options-pricing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:priceWAD",
+      "type": "function",
+      "name": "priceWAD",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        189,
+        197
+      ],
+      "summary": "Wraps the Black-Scholes call/put pricing functions and converts the result to an 18-decimal WAD fixed-point premium matching the on-chain contracts' units.",
+      "tags": [
+        "pricing-engine",
+        "wad-conversion"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:optionPriceWAD",
+      "type": "function",
+      "name": "optionPriceWAD",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        200,
+        202
+      ],
+      "summary": "Thin convenience wrapper around priceWAD that prices a buy or sell quote for a given strike/expiry.",
+      "tags": [
+        "pricing-engine",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:formatWAD",
+      "type": "function",
+      "name": "formatWAD",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        204,
+        207
+      ],
+      "summary": "Formats an 18-decimal WAD bigint value as a human-readable decimal string for display.",
+      "tags": [
+        "formatting",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:LPSummaryBar",
+      "type": "function",
+      "name": "LPSummaryBar",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        211,
+        271
+      ],
+      "summary": "Reads the LP's active authorization from the vault contract and renders a summary bar showing strike range, expiry countdown, and collateral utilization.",
+      "tags": [
+        "component",
+        "lp-dashboard",
+        "contract-read"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:SellPanel",
+      "type": "function",
+      "name": "SellPanel",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        286,
+        459
+      ],
+      "summary": "Inline panel for LPs to write (sell) an option at a given strike: builds authorize/ship parameters, submits the on-chain authorizeRange + ship transaction sequence via wagmi write hooks, and reports confirmation to the parent.",
+      "tags": [
+        "component",
+        "options-trading",
+        "write-contract"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:BuyPanel",
+      "type": "function",
+      "name": "BuyPanel",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        474,
+        663
+      ],
+      "summary": "Inline panel for buyers to purchase an option: fetches a live Uniswap swap quote to source the premium in USDC, handles the ETH-to-USDC swap and ERC20 approval, then calls the vault's buy() function and confirms the trade.",
+      "tags": [
+        "component",
+        "options-trading",
+        "uniswap-integration",
+        "write-contract"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:ClosePanel",
+      "type": "function",
+      "name": "ClosePanel",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        675,
+        719
+      ],
+      "summary": "Inline panel allowing an option holder to close their position by calling the vault's close() function and displaying the resulting payout.",
+      "tags": [
+        "component",
+        "options-trading",
+        "write-contract"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:StrikeRow",
+      "type": "function",
+      "name": "StrikeRow",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        733,
+        876
+      ],
+      "summary": "Renders one row of the option matrix for a given strike/expiry: computes live delta and bid/ask premiums via smileVol/callDelta/priceWAD, and toggles the appropriate Buy/Sell/Close panel on click.",
+      "tags": [
+        "component",
+        "options-trading",
+        "pricing-engine"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/OptionMatrix.tsx:OptionMatrix",
+      "type": "function",
+      "name": "OptionMatrix",
+      "filePath": "frontend/components/OptionMatrix.tsx",
+      "lineRange": [
+        895,
+        994
+      ],
+      "summary": "Top-level exported component rendering the full option chain matrix: strike offsets and expiry presets around the live spot, the LP summary bar, and the interactive strike rows.",
+      "tags": [
+        "component",
+        "options-trading",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/components/PayoffBuilder.tsx",
+      "type": "file",
+      "name": "PayoffBuilder.tsx",
+      "filePath": "frontend/components/PayoffBuilder.tsx",
+      "summary": "Interactive strategy payoff visualizer: lets users build multi-leg option strategies from scratch or a preset catalog (straddle, spread, etc.), computes P&L curves, breakevens, probability of profit, and aggregate Greeks, and renders them as a chart.",
+      "tags": [
+        "component",
+        "payoff-chart",
+        "options-trading",
+        "react",
+        "strategy-builder"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses a declarative strategy catalog (STRATEGIES/OUTLOOKS) that generates leg sets via a build(spot) factory, letting the UI filter presets by market outlook."
+    },
+    {
+      "id": "function:frontend/components/PayoffBuilder.tsx:PayoffChart",
+      "type": "function",
+      "name": "PayoffChart",
+      "filePath": "frontend/components/PayoffBuilder.tsx",
+      "lineRange": [
+        33,
+        114
+      ],
+      "summary": "Renders the P&L payoff curve for the current set of legs using Recharts (ComposedChart), overlaying breakeven reference lines and a marker for the current spot price.",
+      "tags": [
+        "component",
+        "chart",
+        "payoff-visualization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/PayoffBuilder.tsx:StatsStrip",
+      "type": "function",
+      "name": "StatsStrip",
+      "filePath": "frontend/components/PayoffBuilder.tsx",
+      "lineRange": [
+        124,
+        151
+      ],
+      "summary": "Displays summary stats for the current strategy \u2014 net cost/credit, max profit/loss, probability of profit, and aggregate Greeks (delta/gamma/theta/vega).",
+      "tags": [
+        "component",
+        "stats",
+        "greeks"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/PayoffBuilder.tsx:PayoffBuilder",
+      "type": "function",
+      "name": "PayoffBuilder",
+      "filePath": "frontend/components/PayoffBuilder.tsx",
+      "lineRange": [
+        160,
+        336
+      ],
+      "summary": "Exported UI for constructing option strategies: a strategy catalog picker filterable by market outlook, per-leg controls (buy/sell, call/put, strike, quantity, expiry), live premium quotes via protocolPremium, and syncing confirmed trade legs coming from the option chain.",
+      "tags": [
+        "component",
+        "strategy-builder",
+        "options-trading",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/components/TxProof.tsx",
+      "type": "file",
+      "name": "TxProof.tsx",
+      "filePath": "frontend/components/TxProof.tsx",
+      "summary": "Displays an on-chain proof panel: contract deployment addresses/transaction links plus the most recent Uniswap swap transaction, all linked to the appropriate block explorer for the connected chain.",
+      "tags": [
+        "component",
+        "on-chain-proof",
+        "react",
+        "explorer-links"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/TxProof.tsx:TxProof",
+      "type": "function",
+      "name": "TxProof",
+      "filePath": "frontend/components/TxProof.tsx",
+      "lineRange": [
+        36,
+        91
+      ],
+      "summary": "Exported component rendering deployment addresses and the recent swap tx hash as clickable block-explorer links, using explorerTxUrl to resolve the correct chain's explorer.",
+      "tags": [
+        "component",
+        "explorer-links",
+        "on-chain-proof",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/hooks/useUniswapSpot.ts",
+      "type": "file",
+      "name": "useUniswapSpot.ts",
+      "filePath": "frontend/hooks/useUniswapSpot.ts",
+      "summary": "React hook providing a live ETH/USD spot price with three-tier fallback: the Uniswap Trading API as primary source, a Chainlink price feed as secondary, and a static price as last resort, refreshed on an interval.",
+      "tags": [
+        "hook",
+        "price-feed",
+        "chainlink",
+        "uniswap-integration",
+        "react"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Implements a cascading fallback pattern (Uniswap API \u2192 Chainlink \u2192 static) so the UI always has a usable spot price even under API/RPC failure."
+    },
+    {
+      "id": "function:frontend/hooks/useUniswapSpot.ts:fetchUniswap",
+      "type": "function",
+      "name": "fetchUniswap",
+      "filePath": "frontend/hooks/useUniswapSpot.ts",
+      "lineRange": [
+        39,
+        63
+      ],
+      "summary": "Fetches an indicative ETH-to-USDC quote from the Uniswap Trading API and derives the ETH/USD spot price from the quoted amounts.",
+      "tags": [
+        "price-feed",
+        "uniswap-integration",
+        "api-call"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/hooks/useUniswapSpot.ts:fetchChainlink",
+      "type": "function",
+      "name": "fetchChainlink",
+      "filePath": "frontend/hooks/useUniswapSpot.ts",
+      "lineRange": [
+        65,
+        81
+      ],
+      "summary": "Reads the Chainlink ETH/USD price feed's latestRoundData via a viem public client and converts the 8-decimal answer to a spot price.",
+      "tags": [
+        "price-feed",
+        "chainlink",
+        "contract-read"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/hooks/useUniswapSpot.ts:useUniswapSpot",
+      "type": "function",
+      "name": "useUniswapSpot",
+      "filePath": "frontend/hooks/useUniswapSpot.ts",
+      "lineRange": [
+        83,
+        116
+      ],
+      "summary": "Exported hook that fetches the spot price using fetchUniswap as primary and fetchChainlink as fallback, refetching on an interval and falling back to a static price if both sources fail.",
+      "tags": [
+        "hook",
+        "price-feed",
+        "fallback-strategy",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/hooks/useUniswapTrade.ts",
+      "type": "file",
+      "name": "useUniswapTrade.ts",
+      "filePath": "frontend/hooks/useUniswapTrade.ts",
+      "summary": "Client for the Uniswap Trading API: requests an EXACT_OUTPUT swap quote for a target USDC amount (to source option premium) and fetches the Universal Router calldata needed to execute the swap.",
+      "tags": [
+        "uniswap-integration",
+        "api-client",
+        "swap-quote",
+        "typescript"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/hooks/useUniswapTrade.ts:fetchUniswapSwapQuote",
+      "type": "function",
+      "name": "fetchUniswapSwapQuote",
+      "filePath": "frontend/hooks/useUniswapTrade.ts",
+      "lineRange": [
+        18,
+        86
+      ],
+      "summary": "Requests an EXACT_OUTPUT quote from the Uniswap Trading API for a target USDC amount, then calls the /v1/swap endpoint to obtain Universal Router calldata and the ETH input amount needed to execute the swap.",
+      "tags": [
+        "uniswap-integration",
+        "api-client",
+        "swap-quote",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "type": "file",
+      "name": "AquaOptionSettlement.ts",
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "summary": "Code-generated TypeScript client binding for the AquaOptionSettlement Solidity contract, used by Chainlink CRE workflows to read on-chain state, submit DON-signed reports, and decode/trigger on contract event logs.",
+      "tags": [
+        "generated-code",
+        "contract-binding",
+        "cre-sdk",
+        "evm-client"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Auto-generated (marked 'DO NOT EDIT') from the contract ABI; pairs read methods with EVMClient.callContract and state-changing calls with DON-signed report writes via runtime.report/client.writeReport, following the Chainlink CRE report-then-forward pattern."
+    },
+    {
+      "id": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "type": "file",
+      "name": "AquaOptionSettlement_mock.ts",
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "summary": "Code-generated mock factory for the AquaOptionSettlement contract client, used to simulate contract calls in CRE workflow tests/simulations.",
+      "tags": [
+        "generated-code",
+        "test-mock",
+        "contract-binding"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cre-workflow/settlement/main.ts",
+      "type": "file",
+      "name": "main.ts",
+      "filePath": "cre-workflow/settlement/main.ts",
+      "summary": "Entry point for the Chainlink CRE settlement workflow binary \u2014 creates the CRE runner with the workflow's config schema and starts it.",
+      "tags": [
+        "entry-point",
+        "cre-workflow",
+        "bootstrap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cre-workflow/settlement/workflow.ts",
+      "type": "file",
+      "name": "workflow.ts",
+      "filePath": "cre-workflow/settlement/workflow.ts",
+      "summary": "Defines the CRE cron-triggered settlement workflow: on schedule, reads the Chainlink ETH/USD feed at the last finalized block, scales it to WAD precision, and submits a DON-signed settleSeries report to the on-chain AquaOptionSettlement contract, flipping an option series from open to settled.",
+      "tags": [
+        "cre-workflow",
+        "cron-trigger",
+        "oracle-settlement",
+        "chainlink"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Reads the price feed at LAST_FINALIZED_BLOCK_NUMBER so every DON node observes an identical value, making consensus over the read deterministic without per-node aggregation."
+    },
+    {
+      "id": "class:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts:AquaOptionSettlement",
+      "type": "class",
+      "name": "AquaOptionSettlement",
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "lineRange": [
+        122,
+        689
+      ],
+      "summary": "Generated CRE contract client wrapping the on-chain AquaOptionSettlement contract \u2014 exposes read methods (owner, series, creForwarder), DON-signed report writers for state-changing calls (settleSeries, redeem, registerSeries, reclaimCollateral, transferOwnership), and per-event log-trigger/decoder helper pairs for CollateralReturned, HolderPaid, OwnershipTransferred, SeriesRegistered, and SeriesSettled.",
+      "tags": [
+        "generated-code",
+        "contract-binding",
+        "cre-sdk",
+        "evm-client"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts:newAquaOptionSettlementMock",
+      "type": "function",
+      "name": "newAquaOptionSettlementMock",
+      "filePath": "cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "lineRange": [
+        13,
+        15
+      ],
+      "summary": "Generated factory that creates a mocked AquaOptionSettlement contract instance bound to the settlement ABI, for use in CRE workflow simulation and tests.",
+      "tags": [
+        "generated-code",
+        "test-mock",
+        "contract-binding"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:cre-workflow/settlement/main.ts:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cre-workflow/settlement/main.ts",
+      "lineRange": [
+        4,
+        7
+      ],
+      "summary": "Bootstraps and runs the Chainlink CRE settlement workflow runner, wiring in the workflow's config schema and its initWorkflow initialization function.",
+      "tags": [
+        "entry-point",
+        "cre-workflow",
+        "bootstrap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:cre-workflow/settlement/workflow.ts:settle",
+      "type": "function",
+      "name": "settle",
+      "filePath": "cre-workflow/settlement/workflow.ts",
+      "lineRange": [
+        78,
+        136
+      ],
+      "summary": "Core settlement routine: resolves the target EVM chain, reads the Chainlink ETH/USD aggregator at the last finalized block, converts the 8-decimal answer to 18-decimal WAD, and submits a DON-signed settleSeries report to the AquaOptionSettlement contract.",
+      "tags": [
+        "oracle",
+        "chainlink-feed",
+        "settlement",
+        "business-logic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:cre-workflow/settlement/workflow.ts:onCronTrigger",
+      "type": "function",
+      "name": "onCronTrigger",
+      "filePath": "cre-workflow/settlement/workflow.ts",
+      "lineRange": [
+        140,
+        143
+      ],
+      "summary": "Cron trigger handler invoked by the CRE runtime on schedule; logs the invocation and delegates to settle() to perform the on-chain settlement.",
+      "tags": [
+        "cron-trigger",
+        "event-handler",
+        "cre-workflow"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:cre-workflow/settlement/workflow.ts:initWorkflow",
+      "type": "function",
+      "name": "initWorkflow",
+      "filePath": "cre-workflow/settlement/workflow.ts",
+      "lineRange": [
+        147,
+        150
+      ],
+      "summary": "Workflow definition function required by the CRE runner \u2014 registers a CronCapability trigger on the configured schedule and binds onCronTrigger as its handler.",
+      "tags": [
+        "cre-workflow",
+        "initialization",
+        "cron-trigger"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/components/AuthorizeRange.tsx",
+      "type": "file",
+      "name": "AuthorizeRange.tsx",
+      "filePath": "frontend/components/AuthorizeRange.tsx",
+      "summary": "Client-side React component implementing the LP's three-step flow on the official 1inch Aqua protocol (ERC-20 approve \u2192 vault authorizeRange \u2192 Aqua.ship) so a liquidity provider can register a strike range and just-in-time collateral commitment without ever moving funds out of their wallet until a buyer match.",
+      "tags": [
+        "component",
+        "web3-transaction",
+        "lp-flow",
+        "react",
+        "state-machine"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses a step-based state machine (idle/approving/approved/authorizing/authorized/shipping/done) driven by chained useEffect hooks that watch wagmi transaction receipts, plus refs to avoid re-triggering side effects on repeated renders."
+    },
+    {
+      "id": "function:frontend/components/AuthorizeRange.tsx:AuthorizeRange",
+      "type": "function",
+      "name": "AuthorizeRange",
+      "filePath": "frontend/components/AuthorizeRange.tsx",
+      "lineRange": [
+        89,
+        480
+      ],
+      "summary": "Top-level component that renders the strike-range/collateral form and orchestrates approve, authorizeRange, and Aqua.ship contract calls via wagmi's useWriteContract/useWaitForTransactionReceipt, surfacing an ActiveAuth object to the parent once shipping completes.",
+      "tags": [
+        "component",
+        "web3-transaction",
+        "state-machine",
+        "form"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:frontend/components/LPDashboard.tsx",
+      "type": "file",
+      "name": "LPDashboard.tsx",
+      "filePath": "frontend/components/LPDashboard.tsx",
+      "summary": "Client component that displays an LP's wallet balance and their active authorization's strike range, expiry, and locked-vs-available collateral by polling the vault's authorizations() view alongside state passed down from AuthorizeRange.",
+      "tags": [
+        "component",
+        "dashboard",
+        "web3",
+        "react"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/LPDashboard.tsx:LPDashboard",
+      "type": "function",
+      "name": "LPDashboard",
+      "filePath": "frontend/components/LPDashboard.tsx",
+      "lineRange": [
+        32,
+        186
+      ],
+      "summary": "Reads the connected wallet's ETH balance and the on-chain authorizations() struct for the active authorization, then renders wallet, locked-collateral, strike-range, expiry, and utilization stat cards.",
+      "tags": [
+        "component",
+        "dashboard",
+        "web3",
+        "react"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/LPDashboard.tsx:Stat",
+      "type": "function",
+      "name": "Stat",
+      "filePath": "frontend/components/LPDashboard.tsx",
+      "lineRange": [
+        188,
+        198
+      ],
+      "summary": "Small presentational helper rendering a single labeled stat card with optional highlight styling, reused across the LP dashboard's metric grids.",
+      "tags": [
+        "presentational",
+        "ui-helper",
+        "component"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/components/TradeButton.tsx",
+      "type": "file",
+      "name": "TradeButton.tsx",
+      "filePath": "frontend/components/TradeButton.tsx",
+      "summary": "Client component that lets a buyer fill an option quote by calling the vault's pull() function through wagmi's useWriteContract, tracking pending/confirming/success transaction states in its button label.",
+      "tags": [
+        "component",
+        "web3-transaction",
+        "trading",
+        "react"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/components/TradeButton.tsx:TradeButton",
+      "type": "function",
+      "name": "TradeButton",
+      "filePath": "frontend/components/TradeButton.tsx",
+      "lineRange": [
+        34,
+        86
+      ],
+      "summary": "Submits a Vault.pull() transaction with the option token, LP address, collateral token/amount, and trade amount, disabling itself while pending and invoking an onSuccess callback with the tx hash once confirmed.",
+      "tags": [
+        "web3-transaction",
+        "trading",
+        "component"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/config/wagmi.ts",
+      "type": "file",
+      "name": "wagmi.ts",
+      "filePath": "frontend/config/wagmi.ts",
+      "summary": "Central wagmi/viem configuration defining supported chains (mainnet, sepolia, hardhat, and a custom localhost:1337 chain), wallet connectors, deployed contract addresses sourced from environment variables, and the minimal ABIs for the official 1inch Aqua registry and the vault's ship-params helper.",
+      "tags": [
+        "configuration",
+        "web3",
+        "wagmi",
+        "contracts"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Defines a custom viem chain (id 1337) purely to work around MetaMask's hardcoded 'Localhost 8545' network so local dev doesn't throw ChainNotConfiguredError; TARGET_CHAIN_ID defaults to the local hardhat chain unless NEXT_PUBLIC_CHAIN_ID overrides it for Sepolia."
+    },
+    {
+      "id": "pipeline:.github/workflows/pages.yml",
+      "type": "pipeline",
+      "name": "pages.yml",
+      "filePath": ".github/workflows/pages.yml",
+      "summary": "GitHub Actions workflow that builds the Next.js frontend as a static export and deploys it to GitHub Pages, triggered on pushes to main (or the MVP feature branch) that touch frontend/** or via manual dispatch.",
+      "tags": [
+        "ci-cd",
+        "deployment",
+        "github-pages",
+        "frontend",
+        "static-export"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses GitHub's official OIDC-based Pages deploy flow (id-token: write permission, upload-pages-artifact + deploy-pages actions) rather than pushing to a gh-pages branch."
+    },
+    {
+      "id": "step:.github/workflows/pages.yml:build",
+      "type": "resource",
+      "name": "build",
+      "filePath": ".github/workflows/pages.yml",
+      "lineRange": [
+        19,
+        50
+      ],
+      "summary": "Checks out the repo, sets up Node 22 with npm caching, installs frontend dependencies (npm ci --legacy-peer-deps), builds the Next.js static export with contract/env vars (WalletConnect project ID, pricing engine, Aqua vault, settlement addresses) injected, adds a .nojekyll marker, and uploads the build output as a Pages artifact.",
+      "tags": [
+        "build",
+        "frontend",
+        "static-export",
+        "ci-cd",
+        "environment-variables"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:.github/workflows/pages.yml:deploy",
+      "type": "resource",
+      "name": "deploy",
+      "filePath": ".github/workflows/pages.yml",
+      "lineRange": [
+        52,
+        61
+      ],
+      "summary": "Runs after the build job completes and deploys the uploaded Pages artifact to the github-pages environment using actions/deploy-pages, publishing the resulting site URL.",
+      "tags": [
+        "deployment",
+        "github-pages",
+        "ci-cd"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": ".env.example",
+      "summary": "Environment variable template covering the deployer private key, RPC endpoints, the Chainlink CRE forwarder address, WETH address, WalletConnect/Uniswap API keys, and the deployed contract addresses consumed by the frontend.",
+      "tags": [
+        "configuration",
+        "environment-variables",
+        "secrets-template",
+        "deployment"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:PLAN.md",
+      "type": "document",
+      "name": "PLAN.md",
+      "filePath": "PLAN.md",
+      "summary": "Build plan laying out the 15-commit roadmap for the Smile options marketplace across five phases (token foundation, Aqua/SwapVM vault layer, Uniswap v4 hooks, Chainlink CRE settlement, and the Next.js frontend), including prize-track alignment and MVP feasibility simplifications.",
+      "tags": [
+        "documentation",
+        "roadmap",
+        "planning",
+        "hackathon"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Primary project documentation describing Smile's architecture (SwapVM pricing, Aqua liquidity, Uniswap v4 hook market, Chainlink CRE settlement), mathematical specification of the volatility surface and premium formulas, flow diagrams, deployed Sepolia addresses, run instructions, glossary, and project structure.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "architecture",
+        "overview"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:foundry.toml",
+      "type": "config",
+      "name": "foundry.toml",
+      "filePath": "foundry.toml",
+      "summary": "Foundry build configuration for the Solidity contracts: source/output/lib directories, solc 0.8.30, Cancun EVM target (for transient storage), and an optimizer with via-IR enabled.",
+      "tags": [
+        "configuration",
+        "build-system",
+        "solidity",
+        "foundry"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:local.sh",
+      "type": "file",
+      "name": "local.sh",
+      "filePath": "local.sh",
+      "summary": "One-command local dev orchestration script: starts (or restarts) an Anvil chain, optionally forking mainnet, deploys the contracts via Foundry, funds fork accounts with WETH/USDC, writes the deployed addresses into frontend/.env.local, and launches the Next.js dev server.",
+      "tags": [
+        "script",
+        "dev-tooling",
+        "deployment",
+        "automation",
+        "anvil"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Bash script using `set -euo pipefail`, PID-file based process management, forge/cast CLI orchestration, and heredoc generation of an env file."
+    },
+    {
+      "id": "function:local.sh:stop_existing",
+      "type": "function",
+      "name": "stop_existing",
+      "filePath": "local.sh",
+      "lineRange": [
+        18,
+        32
+      ],
+      "summary": "Stops any previously running Anvil and Next.js dev-server processes tracked via PID files, then force-kills anything still bound to ports 8545 or 3000 as a fallback.",
+      "tags": [
+        "utility",
+        "process-management",
+        "cleanup"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "package.json",
+      "summary": "Root npm manifest declaring the Solidity library dependencies (1inch solidity-utils, OpenZeppelin contracts, Uniswap v4-core, graphology) that Foundry remappings resolve into node_modules for contract compilation.",
+      "tags": [
+        "configuration",
+        "dependencies",
+        "solidity",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:remappings.txt",
+      "type": "document",
+      "name": "remappings.txt",
+      "filePath": "remappings.txt",
+      "summary": "Foundry import-remapping table mapping Solidity package import paths (Uniswap v4-core, OpenZeppelin, 1inch solidity-utils, Aqua, SwapVM, forge-std) to their node_modules/lib locations on disk.",
+      "tags": [
+        "configuration",
+        "build-system",
+        "solidity",
+        "foundry"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:skills-lock.json",
+      "type": "config",
+      "name": "skills-lock.json",
+      "filePath": "skills-lock.json",
+      "summary": "Lockfile pinning the versions/hashes of Claude Code agent skills (e.g. brainstorming, configurator, deployer, dispatching-parallel-agents) fetched from external GitHub sources, used to reproduce the exact skill set installed for this project.",
+      "tags": [
+        "configuration",
+        "tooling",
+        "lockfile",
+        "ai-tooling"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:cre-workflow/settlement/config.json",
+      "type": "config",
+      "name": "config.json",
+      "filePath": "cre-workflow/settlement/config.json",
+      "summary": "Runtime configuration for the Chainlink CRE option settlement workflow: cron schedule, target option series ID, and the Sepolia testnet EVM addresses (settlement contract, price feed) plus gas limit used when submitting settlement transactions.",
+      "tags": [
+        "configuration",
+        "chainlink-cre",
+        "settlement",
+        "testnet"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:cre-workflow/settlement/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "cre-workflow/settlement/package.json",
+      "summary": "Node package manifest for the smile-option-settlement CRE workflow, declaring the Chainlink CRE SDK, viem, and zod as runtime dependencies and TypeScript as a dev dependency with a typecheck script.",
+      "tags": [
+        "configuration",
+        "nodejs",
+        "dependencies",
+        "chainlink-cre"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:cre-workflow/settlement/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "cre-workflow/settlement/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the settlement workflow, targeting ESNext with bundler module resolution and strict mode, compiling main.ts and workflow.ts into ./dist.",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:cre-workflow/settlement/workflow.yaml",
+      "type": "config",
+      "name": "workflow.yaml",
+      "filePath": "cre-workflow/settlement/workflow.yaml",
+      "summary": "Chainlink CRE deployment settings for the smile-option-settlement workflow, defining staging and production targets that point to the compiled main.ts workflow entry point and config.json artifact.",
+      "tags": [
+        "configuration",
+        "chainlink-cre",
+        "deployment",
+        "workflow"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses CRE's staging-settings/production-settings convention to override project-level defaults per deployment target."
+    },
+    {
+      "id": "document:frontend/AGENTS.md",
+      "type": "document",
+      "name": "AGENTS.md",
+      "filePath": "frontend/AGENTS.md",
+      "summary": "Agent-facing instructions warning that this project's Next.js version has breaking changes versus training-data assumptions, directing AI coding agents to consult the bundled docs in node_modules/next/dist/docs/ before writing code.",
+      "tags": [
+        "agent-instructions",
+        "documentation",
+        "next-js",
+        "ai-guidance"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:frontend/CLAUDE.md",
+      "type": "document",
+      "name": "CLAUDE.md",
+      "filePath": "frontend/CLAUDE.md",
+      "summary": "One-line include directive (`@AGENTS.md`) that pulls the AGENTS.md agent rules into Claude Code's context for sessions working in the frontend directory.",
+      "tags": [
+        "agent-instructions",
+        "documentation",
+        "include-directive"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:frontend/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "frontend/README.md",
+      "summary": "Standard create-next-app README with getting-started instructions for running the dev server, editing app/page.tsx, and links to Next.js docs and Vercel deployment guidance.",
+      "tags": [
+        "documentation",
+        "getting-started",
+        "next-js",
+        "entry-point"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:frontend/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "frontend/package.json",
+      "summary": "NPM manifest for the Smile frontend, a Next.js 16 / React 19 app pulling in wagmi, viem, and WalletConnect for wallet connectivity, TanStack Query for data fetching, Recharts for charts, and black-scholes/greeks for options pricing math; wires a gen-help.mjs codegen script into predev and prebuild hooks.",
+      "tags": [
+        "configuration",
+        "build-system",
+        "dependencies",
+        "next-js",
+        "web3"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "predev/prebuild scripts run scripts/gen-help.mjs before next dev/build, indicating generated help/docs content is part of the build pipeline."
+    },
+    {
+      "id": "config:frontend/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "frontend/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the Next.js frontend enabling strict mode, bundler module resolution, incremental builds, and a \"@/*\" path alias resolving to the frontend root.",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system",
+        "next-js"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:complete-graph.mjs",
+      "type": "file",
+      "name": "complete-graph.mjs",
+      "filePath": "complete-graph.mjs",
+      "summary": "Standalone Node script that loads the assembled Smile knowledge graph, runs layer detection, heuristic tour generation, and graph validation/auto-fix via the understand-anything core package, then writes the final knowledge-graph.json.",
+      "tags": [
+        "tooling",
+        "build-script",
+        "knowledge-graph",
+        "entry-point"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Ad-hoc pipeline glue script that imports directly from the plugin's compiled core/dist output rather than a package name."
+    },
+    {
+      "id": "file:convert-batches.mjs",
+      "type": "file",
+      "name": "convert-batches.mjs",
+      "filePath": "convert-batches.mjs",
+      "summary": "CLI utility that converts raw extract-structure batch output (functions, classes, sections, services, endpoints, etc.) into normalized graph node/edge JSON consumed by merge-batch-graphs.py.",
+      "tags": [
+        "tooling",
+        "build-script",
+        "knowledge-graph",
+        "converter"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+      "type": "config",
+      "name": "AquaOptionSettlement.json",
+      "filePath": "cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+      "summary": "Foundry-generated build artifact for AquaOptionSettlement containing the ABI, bytecode, deployed bytecode, and method identifiers, used as the source for the CRE workflow's generated TypeScript bindings.",
+      "tags": [
+        "abi",
+        "generated",
+        "contract-interface",
+        "build-artifact"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cre-workflow/contracts/evm/ts/generated/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "cre-workflow/contracts/evm/ts/generated/index.ts",
+      "summary": "Auto-generated barrel file re-exporting the typed bindings for AquaOptionSettlement and its mock, produced by the `cre generate-bindings evm` CLI step.",
+      "tags": [
+        "barrel",
+        "generated",
+        "entry-point",
+        "typescript"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Marked 'DO NOT EDIT' \u2014 regenerated from the ABI JSON by the Chainlink CRE CLI."
+    },
+    {
+      "id": "config:cre-workflow/contracts/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "cre-workflow/contracts/package.json",
+      "summary": "Package manifest for the CRE contracts sub-module, declaring dependencies on the Chainlink CRE SDK and viem used by the generated TypeScript bindings.",
+      "tags": [
+        "configuration",
+        "package-manifest",
+        "chainlink-cre"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:cre-workflow/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "cre-workflow/package.json",
+      "summary": "Package manifest for the Chainlink CRE settlement workflow, defining CLI scripts to generate bindings, build, simulate, and deploy the on-chain ETH/USD median-consensus settlement workflow.",
+      "tags": [
+        "configuration",
+        "package-manifest",
+        "chainlink-cre",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:cre-workflow/project.yaml",
+      "type": "config",
+      "name": "project.yaml",
+      "filePath": "cre-workflow/project.yaml",
+      "summary": "CRE CLI project settings defining staging (Sepolia) and production (mainnet) RPC endpoints used when building, simulating, and deploying the settlement workflow.",
+      "tags": [
+        "configuration",
+        "chainlink-cre",
+        "deployment",
+        "infrastructure"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/app/globals.css",
+      "type": "file",
+      "name": "globals.css",
+      "filePath": "frontend/app/globals.css",
+      "summary": "Global Tailwind v4 stylesheet defining light/dark CSS custom properties for background, foreground, and font variables used across the Next.js app.",
+      "tags": [
+        "styling",
+        "tailwind",
+        "theme",
+        "css"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/app/layout.tsx",
+      "type": "file",
+      "name": "layout.tsx",
+      "filePath": "frontend/app/layout.tsx",
+      "summary": "Root Next.js App Router layout that loads Geist fonts, sets page metadata, imports global styles, and wraps the app tree in the client-side Providers component.",
+      "tags": [
+        "entry-point",
+        "component",
+        "layout",
+        "nextjs"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/app/providers.tsx",
+      "type": "file",
+      "name": "providers.tsx",
+      "filePath": "frontend/app/providers.tsx",
+      "summary": "Client-only wrapper that composes WagmiProvider and a React Query QueryClientProvider around the app, wiring up wallet connectivity and async state caching.",
+      "tags": [
+        "component",
+        "provider",
+        "wagmi",
+        "react-query"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/components/RegisterSeries.tsx",
+      "type": "file",
+      "name": "RegisterSeries.tsx",
+      "filePath": "frontend/components/RegisterSeries.tsx",
+      "summary": "React component/form allowing an LP to register a new option series (call/put, strike, expiry) on-chain via the AquaOptionSettlement contract, tracking transaction state and showing the resulting series details.",
+      "tags": [
+        "component",
+        "web3",
+        "form",
+        "wagmi",
+        "api-handler"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:frontend/eslint.config.mjs",
+      "type": "file",
+      "name": "eslint.config.mjs",
+      "filePath": "frontend/eslint.config.mjs",
+      "summary": "Flat ESLint configuration for the Next.js frontend, extending eslint-config-next's core-web-vitals and TypeScript rule sets and overriding default ignore patterns.",
+      "tags": [
+        "configuration",
+        "linting",
+        "nextjs"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/next.config.ts",
+      "type": "file",
+      "name": "next.config.ts",
+      "filePath": "frontend/next.config.ts",
+      "summary": "Next.js build configuration enabling static export mode with a configurable base path (for GitHub Pages subpath hosting), trailing slashes, and unoptimized images.",
+      "tags": [
+        "configuration",
+        "build-system",
+        "nextjs",
+        "deployment"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Static export (`output: 'export'`) with an env-driven basePath is what allows the app to be hosted on GitHub Pages under a project subpath."
+    },
+    {
+      "id": "file:frontend/postcss.config.mjs",
+      "type": "file",
+      "name": "postcss.config.mjs",
+      "filePath": "frontend/postcss.config.mjs",
+      "summary": "PostCSS configuration registering the Tailwind CSS v4 PostCSS plugin used to process globals.css.",
+      "tags": [
+        "configuration",
+        "tailwind",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/public/help.html",
+      "type": "file",
+      "name": "help.html",
+      "filePath": "frontend/public/help.html",
+      "summary": "Static, dark-themed standalone HTML documentation page rendered from the repo README.md (via marked) at build time, including client-side Mermaid rendering for architecture diagrams; opened from the app's Help link.",
+      "tags": [
+        "documentation",
+        "generated",
+        "static-page"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Fully self-contained static file (no bundler) so it stays deployable on GitHub Pages; Mermaid is loaded from a CDN at runtime."
+    },
+    {
+      "id": "file:frontend/scripts/gen-help.mjs",
+      "type": "file",
+      "name": "gen-help.mjs",
+      "filePath": "frontend/scripts/gen-help.mjs",
+      "summary": "Build script that converts the repository README.md into public/help.html using marked, run via the predev/prebuild npm hooks so the in-app Help page stays in sync with the README.",
+      "tags": [
+        "build-script",
+        "documentation",
+        "generator",
+        "tooling"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/types/finance.d.ts",
+      "type": "file",
+      "name": "finance.d.ts",
+      "filePath": "frontend/types/finance.d.ts",
+      "summary": "Ambient TypeScript type declarations for the untyped 'black-scholes' and 'greeks' npm packages, describing the Black-Scholes pricer and option Greeks (delta, gamma, theta, vega, rho) functions used by the frontend's pricing UI.",
+      "tags": [
+        "type-definition",
+        "finance",
+        "pricing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:run-phases.mjs",
+      "type": "file",
+      "name": "run-phases.mjs",
+      "filePath": "run-phases.mjs",
+      "summary": "Orchestrator script that runs understand-anything phases 2-7 (file analysis, graph assembly, architecture/layer detection, tour generation, validation, and final save) for the Smile project, loading the plugin's core package directly.",
+      "tags": [
+        "tooling",
+        "build-script",
+        "knowledge-graph",
+        "orchestrator",
+        "entry-point"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:script/DemoTrade.s.sol",
+      "type": "file",
+      "name": "DemoTrade.s.sol",
+      "filePath": "script/DemoTrade.s.sol",
+      "summary": "Foundry demo script exercising the full official-Aqua trade loop against a running node: an LP authorizes and ships a covered-call range, a buyer purchases an option priced by the SwapVM opcode, then sells half back at the live bid.",
+      "tags": [
+        "script",
+        "demo",
+        "web3",
+        "aqua",
+        "foundry"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:script/Deploy.s.sol",
+      "type": "file",
+      "name": "Deploy.s.sol",
+      "filePath": "script/Deploy.s.sol",
+      "summary": "Foundry deployment script that provisions the Smile stack per network (Sepolia testnet tokens/oracle, mainnet fork with official Aqua, or blank Anvil with mock tokens/oracle), deploying the SwapVM router, pricing engine, Uniswap v4 hook, collateral vault, and settlement contract, then wiring them together and printing addresses.",
+      "tags": [
+        "script",
+        "deployment",
+        "foundry",
+        "infrastructure",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/hooks/OptionPricingHook.sol",
+      "type": "file",
+      "name": "OptionPricingHook.sol",
+      "filePath": "src/hooks/OptionPricingHook.sol",
+      "summary": "Uniswap v4 hook implementing the on-chain implied-volatility surface for the options pool: vetoes swaps priced outside a 5% band around the pricing engine's fair value (beforeSwap) and applies demand-driven feedback to per-tenor sigma buckets (afterSwap).",
+      "tags": [
+        "smart-contract",
+        "uniswap-v4",
+        "hook",
+        "pricing",
+        "volatility"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Stores volatility as a 4-bucket tenor term structure plus a signed skew parameter, exposed live to the SwapVM option-premium instruction via sigmaFor()."
+    },
+    {
+      "id": "file:src/mocks/MockV3Aggregator.sol",
+      "type": "file",
+      "name": "MockV3Aggregator.sol",
+      "filePath": "src/mocks/MockV3Aggregator.sol",
+      "summary": "Minimal Chainlink AggregatorV3-compatible mock oracle with settable spot price and full round history, used for local Anvil runs and Foundry tests in place of the real Chainlink ETH/USD feed.",
+      "tags": [
+        "smart-contract",
+        "mock",
+        "oracle",
+        "testing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/OptionToken.sol",
+      "type": "file",
+      "name": "OptionToken.sol",
+      "filePath": "src/OptionToken.sol",
+      "summary": "ERC-20 token representing a single option position (underlying, strike, expiry, call/put flag set immutably at construction), mintable and burnable only by its owning vault.",
+      "tags": [
+        "smart-contract",
+        "token",
+        "erc20",
+        "data-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "type": "file",
+      "name": "OptionPremiumInstruction.sol",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "summary": "Custom 1inch SwapVM instruction that prices a covered-call option two-sidedly (Ask on open, Bid on close) inside the official SwapVM engine, decoding packed maker terms and taker-selected strike, reading the live vol surface and Chainlink-style oracle, and computing premium via SmileMath.",
+      "tags": [
+        "smart-contract",
+        "swapvm",
+        "pricing",
+        "oracle",
+        "1inch-aqua"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Maker args are a tightly packed 136-byte calldata layout (oracle, sigma source, tokens, strike range, expiry, alpha/beta, staleness) parsed via byte-slice offsets, mirroring official SwapVM ArgsBuilder conventions."
+    },
+    {
+      "id": "file:src/swapvm/OptionPricingEngine.sol",
+      "type": "file",
+      "name": "OptionPricingEngine.sol",
+      "filePath": "src/swapvm/OptionPricingEngine.sol",
+      "summary": "Pure on-chain quoting facade over SmileMath that mirrors the SwapVM instruction's pricing math, letting the frontend and Uniswap v4 hook compute identical Ask/Bid premiums without touching storage.",
+      "tags": [
+        "smart-contract",
+        "pricing",
+        "volatility",
+        "view-functions"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:convert-batches.mjs:convertBatch",
+      "type": "function",
+      "name": "convertBatch",
+      "filePath": "convert-batches.mjs",
+      "lineRange": [
+        13,
+        342
+      ],
+      "summary": "Reads a raw batch-N.json extract-structure result, builds file/function/class/service/endpoint/step/resource nodes plus their containment and cross-reference edges, dedupes edges, and writes batch-N-converted.json.",
+      "tags": [
+        "converter",
+        "graph-building",
+        "utility"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:run-phases.mjs:runPhase2",
+      "type": "function",
+      "name": "runPhase2",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        72,
+        119
+      ],
+      "summary": "Phase 2 driver: writes the scan/batch input to disk and spawns the file-analyzer's extract-structure script per batch to produce structural extraction results.",
+      "tags": [
+        "orchestrator",
+        "pipeline-phase"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:runPhase4",
+      "type": "function",
+      "name": "runPhase4",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        127,
+        159
+      ],
+      "summary": "Phase 4 driver: loads the assembled graph, filters file-level nodes, runs heuristic layer detection, and writes the layers output to intermediate storage.",
+      "tags": [
+        "orchestrator",
+        "pipeline-phase",
+        "layer-detection"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:runPhase5",
+      "type": "function",
+      "name": "runPhase5",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        161,
+        192
+      ],
+      "summary": "Phase 5 driver: loads the graph and layers, generates a heuristic guided tour of the codebase, and persists it to tour.json.",
+      "tags": [
+        "orchestrator",
+        "pipeline-phase",
+        "tour-generation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:runPhase6",
+      "type": "function",
+      "name": "runPhase6",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        194,
+        246
+      ],
+      "summary": "Phase 6 driver: assembles the full knowledge graph (nodes, edges, layers, tour, metadata), validates it, auto-fixes reported issues, and writes the final graph JSON.",
+      "tags": [
+        "orchestrator",
+        "pipeline-phase",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:runPhase7",
+      "type": "function",
+      "name": "runPhase7",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        248,
+        309
+      ],
+      "summary": "Phase 7 driver: runs the graph-reviewer step, writes a completion timestamp/commit-hash marker, and archives/rotates prior intermediate artifacts.",
+      "tags": [
+        "orchestrator",
+        "pipeline-phase",
+        "cleanup"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:getGitCommitHash",
+      "type": "function",
+      "name": "getGitCommitHash",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        311,
+        318
+      ],
+      "summary": "Runs `git rev-parse HEAD` synchronously to stamp the generated knowledge graph with the current commit hash.",
+      "tags": [
+        "utility",
+        "git"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:run-phases.mjs:detectHeuristicLayers",
+      "type": "function",
+      "name": "detectHeuristicLayers",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        321,
+        377
+      ],
+      "summary": "Fallback, non-LLM layer detector that buckets file nodes into architectural layers using path-prefix and import-edge heuristics when LLM-based layer detection isn't available.",
+      "tags": [
+        "heuristic",
+        "layer-detection",
+        "graph-analysis"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:run-phases.mjs:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "run-phases.mjs",
+      "lineRange": [
+        380,
+        393
+      ],
+      "summary": "Top-level entry point that sequentially invokes phases 2 through 7 to run the entire understand-anything analysis pipeline.",
+      "tags": [
+        "entry-point",
+        "orchestrator"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/app/layout.tsx:RootLayout",
+      "type": "function",
+      "name": "RootLayout",
+      "filePath": "frontend/app/layout.tsx",
+      "lineRange": [
+        22,
+        37
+      ],
+      "summary": "Default-exported root layout component that renders the HTML/body shell with Geist font variables and wraps children in the Providers component.",
+      "tags": [
+        "component",
+        "layout",
+        "entry-point"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/app/providers.tsx:Providers",
+      "type": "function",
+      "name": "Providers",
+      "filePath": "frontend/app/providers.tsx",
+      "lineRange": [
+        8,
+        15
+      ],
+      "summary": "Exported client component that instantiates a React Query QueryClient and wraps children with WagmiProvider and QueryClientProvider for wallet/state context.",
+      "tags": [
+        "component",
+        "provider",
+        "wagmi"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/components/RegisterSeries.tsx:RegisterSeries",
+      "type": "function",
+      "name": "RegisterSeries",
+      "filePath": "frontend/components/RegisterSeries.tsx",
+      "lineRange": [
+        51,
+        232
+      ],
+      "summary": "Exported form component letting a connected wallet register a new option series on the AquaOptionSettlement contract: derives a seriesId via keccak256, submits the registerSeries transaction, tracks confirmation, and displays the resulting series details with copy-to-clipboard.",
+      "tags": [
+        "component",
+        "web3",
+        "form",
+        "wagmi"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:src/OptionToken.sol:OptionToken",
+      "type": "class",
+      "name": "OptionToken",
+      "filePath": "src/OptionToken.sol",
+      "lineRange": [
+        9,
+        37
+      ],
+      "summary": "ERC-20 + Ownable contract holding immutable option metadata (underlying, strike, expiry, call/put) with owner-gated mint/burn used by the vault to represent open option positions.",
+      "tags": [
+        "smart-contract",
+        "token",
+        "data-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/hooks/OptionPricingHook.sol:OptionPricingHook",
+      "type": "class",
+      "name": "OptionPricingHook",
+      "filePath": "src/hooks/OptionPricingHook.sol",
+      "lineRange": [
+        23,
+        195
+      ],
+      "summary": "Uniswap v4 IHooks implementation maintaining a per-tenor-bucket volatility surface with signed skew, enforcing oracle-bounded swap pricing, and applying demand feedback on every swap.",
+      "tags": [
+        "smart-contract",
+        "uniswap-v4",
+        "hook",
+        "volatility"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/hooks/OptionPricingHook.sol:beforeSwap",
+      "type": "function",
+      "name": "beforeSwap",
+      "filePath": "src/hooks/OptionPricingHook.sol",
+      "lineRange": [
+        145,
+        175
+      ],
+      "summary": "IHooks callback that decodes packed hookData (spot, strike, expiry, alpha), computes the pricing engine's fair value, and reverts if the execution price deviates more than 5% from it.",
+      "tags": [
+        "smart-contract",
+        "validation",
+        "pricing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/hooks/OptionPricingHook.sol:afterSwap",
+      "type": "function",
+      "name": "afterSwap",
+      "filePath": "src/hooks/OptionPricingHook.sol",
+      "lineRange": [
+        178,
+        190
+      ],
+      "summary": "IHooks callback invoked by the pool manager after every swap that bumps all sigma buckets up on buys and down on sells, implementing surface-wide demand-driven IV feedback.",
+      "tags": [
+        "smart-contract",
+        "volatility",
+        "event-handler"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/mocks/MockV3Aggregator.sol:MockV3Aggregator",
+      "type": "class",
+      "name": "MockV3Aggregator",
+      "filePath": "src/mocks/MockV3Aggregator.sol",
+      "lineRange": [
+        8,
+        50
+      ],
+      "summary": "Chainlink AggregatorV3-compatible mock storing a full round history so permissionless, round-bracketed settlement logic can be exercised in tests and local Anvil runs.",
+      "tags": [
+        "smart-contract",
+        "mock",
+        "oracle",
+        "testing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/swapvm/OptionPremiumInstruction.sol:OptionPremiumInstruction",
+      "type": "class",
+      "name": "OptionPremiumInstruction",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        63,
+        199
+      ],
+      "summary": "Custom SwapVM instruction contract pricing a covered-call two-sidedly (Ask to open, Bid to close), parsing packed maker terms, resolving the taker's chosen strike, reading the live vol surface/oracle, and rounding correctly per exact-in/exact-out direction.",
+      "tags": [
+        "smart-contract",
+        "swapvm",
+        "pricing",
+        "1inch-aqua"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:src/swapvm/OptionPremiumInstruction.sol:OptionPremiumArgsBuilder",
+      "type": "class",
+      "name": "OptionPremiumArgsBuilder",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        19,
+        50
+      ],
+      "summary": "Library that packs the 136-byte maker argument layout (oracle, sigma source, tokens, decimals, strike range, expiry, alpha/beta, staleness) for OptionPremiumInstruction, mirroring official SwapVM ArgsBuilder conventions.",
+      "tags": [
+        "smart-contract",
+        "library",
+        "encoding"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/swapvm/OptionPremiumInstruction.sol:_optionPremiumXD",
+      "type": "function",
+      "name": "_optionPremiumXD",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        103,
+        153
+      ],
+      "summary": "Core SwapVM instruction body: determines swap direction (open vs. close), validates expiry, resolves strike/spot/sigma, computes the smile-adjusted premium via SmileMath, and sets ctx.swap.amountIn/amountOut with side-correct rounding.",
+      "tags": [
+        "smart-contract",
+        "pricing",
+        "swapvm"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/swapvm/OptionPremiumInstruction.sol:_parseArgs",
+      "type": "function",
+      "name": "_parseArgs",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        155,
+        168
+      ],
+      "summary": "Decodes the packed 136-byte maker calldata into the OptionTerms struct via fixed-offset byte slicing.",
+      "tags": [
+        "smart-contract",
+        "encoding",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/OptionPremiumInstruction.sol:_takerStrike",
+      "type": "function",
+      "name": "_takerStrike",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        173,
+        185
+      ],
+      "summary": "Reads the taker-chosen strike from taker instruction args (or falls back to a fixed strike when strikeMin equals strikeMax) and validates it falls within the maker's authorized strike range.",
+      "tags": [
+        "smart-contract",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/OptionPremiumInstruction.sol:_oracleSpotWad",
+      "type": "function",
+      "name": "_oracleSpotWad",
+      "filePath": "src/swapvm/OptionPremiumInstruction.sol",
+      "lineRange": [
+        189,
+        198
+      ],
+      "summary": "Reads the latest Chainlink-style oracle round, checks for a positive answer and staleness bound, and normalizes the spot price to WAD precision.",
+      "tags": [
+        "smart-contract",
+        "oracle",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/swapvm/OptionPricingEngine.sol:OptionPricingEngine",
+      "type": "class",
+      "name": "OptionPricingEngine",
+      "filePath": "src/swapvm/OptionPricingEngine.sol",
+      "lineRange": [
+        11,
+        61
+      ],
+      "summary": "Pure/view quoting facade exposing quote(), quoteSurface(), smileVol(), and computePremium() so off-chain (frontend) and on-chain (Uniswap v4 hook) consumers can independently compute the same Ask/Bid premium as the SwapVM instruction.",
+      "tags": [
+        "smart-contract",
+        "pricing",
+        "volatility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/OptionPricingEngine.sol:computePremium",
+      "type": "function",
+      "name": "computePremium",
+      "filePath": "src/swapvm/OptionPricingEngine.sol",
+      "lineRange": [
+        51,
+        60
+      ],
+      "summary": "Computes time-to-expiry from the current block timestamp and delegates to SmileMath.premium for the intrinsic-plus-time-value parametric option premium.",
+      "tags": [
+        "smart-contract",
+        "pricing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:script/DemoTrade.s.sol:DemoTrade",
+      "type": "class",
+      "name": "DemoTrade",
+      "filePath": "script/DemoTrade.s.sol",
+      "lineRange": [
+        18,
+        73
+      ],
+      "summary": "Foundry Script contract driving an end-to-end demo: LP authorizes/ships a covered-call range through official Aqua, a buyer purchases an option via SwapVM pricing, then sells half back at the live bid.",
+      "tags": [
+        "script",
+        "demo",
+        "aqua",
+        "foundry"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:script/DemoTrade.s.sol:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "script/DemoTrade.s.sol",
+      "lineRange": [
+        19,
+        72
+      ],
+      "summary": "Script entry point that reads LP/buyer keys and contract addresses from env vars, authorizes and ships a strike range via Aqua, executes a buy through the vault, and closes half the position, logging balances at each step.",
+      "tags": [
+        "script",
+        "demo",
+        "entry-point",
+        "aqua"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:script/Deploy.s.sol:Deploy",
+      "type": "class",
+      "name": "Deploy",
+      "filePath": "script/Deploy.s.sol",
+      "lineRange": [
+        24,
+        138
+      ],
+      "summary": "Foundry Script contract that deploys the full Smile stack (router, pricing engine, hook, vault, settlement) against Sepolia, a mainnet fork with official Aqua, or a blank Anvil instance with mock tokens/oracle, then wires the contracts together.",
+      "tags": [
+        "script",
+        "deployment",
+        "foundry",
+        "infrastructure"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:script/Deploy.s.sol:MockERC20",
+      "type": "class",
+      "name": "MockERC20",
+      "filePath": "script/Deploy.s.sol",
+      "lineRange": [
+        17,
+        22
+      ],
+      "summary": "Minimal mintable ERC-20 with configurable decimals used to stand in for USDC/WETH when deploying to a blank local Anvil chain.",
+      "tags": [
+        "smart-contract",
+        "mock",
+        "token",
+        "testing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:script/Deploy.s.sol:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "script/Deploy.s.sol",
+      "lineRange": [
+        36,
+        137
+      ],
+      "summary": "Deployment entry point that branches on chain ID/fork flag to select real or mock tokens and oracle, deploys the SwapVM router, pricing engine, Uniswap v4 hook, collateral vault, and settlement contract, wires them together, sets the protocol fee, and logs all deployed addresses in an env-var-friendly format.",
+      "tags": [
+        "script",
+        "deployment",
+        "entry-point",
+        "infrastructure"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/swapvm/SmileMath.sol",
+      "type": "file",
+      "name": "SmileMath.sol",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "summary": "Fixed-point option-premium math library shared by the SwapVM pricing opcode and the vault's put-pricing path; implements the parametric volatility smile/skew model, the time-value premium formula, WAD-precision ln/sqrt approximations, and token-decimal scaling helpers.",
+      "tags": [
+        "utility",
+        "math",
+        "option-pricing",
+        "fixed-point",
+        "library"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses WAD (1e18) fixed-point arithmetic throughout and a Pad\u00e9-like series approximation for natural log to avoid an external math-library dependency; every function is `internal pure` so the library inlines with zero external call overhead."
+    },
+    {
+      "id": "class:src/swapvm/SmileMath.sol:SmileMath",
+      "type": "class",
+      "name": "SmileMath",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        10,
+        123
+      ],
+      "summary": "Solidity library implementing the parametric volatility smile (sigma_strike = sigma * (1 + alpha*ln(K/S)^2 + beta*ln(K/S))) and the intrinsic-plus-time-value premium formula used identically by the SwapVM custom opcode and the vault's cash-secured-put pricing path.",
+      "tags": [
+        "library",
+        "option-pricing",
+        "volatility-smile",
+        "math"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:smileVol",
+      "type": "function",
+      "name": "smileVol",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        30,
+        47
+      ],
+      "summary": "Computes the strike-dependent implied volatility using a symmetric smile term plus a directional skew term (beta), floored at 10% of the base sigma so deep OTM/ITM wings can never price to zero.",
+      "tags": [
+        "option-pricing",
+        "volatility",
+        "math"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:premium",
+      "type": "function",
+      "name": "premium",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        53,
+        79
+      ],
+      "summary": "Computes the WAD-denominated option premium as intrinsic value plus time value (spot * sigma_strike * sqrt(T/365d) * moneyness-damping), rounding up 1 wei on buys (Ask) and flooring on sells (Bid) to create a consistent bid/ask spread.",
+      "tags": [
+        "option-pricing",
+        "premium-calculation",
+        "math"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:lnWad",
+      "type": "function",
+      "name": "lnWad",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        83,
+        91
+      ],
+      "summary": "Approximates the natural logarithm of a WAD fixed-point value via a Pad\u00e9-like series accurate to roughly 0.5% for K/S ratios in [0.5, 2.0]; used to compute ln(K/S) for the smile formula.",
+      "tags": [
+        "math",
+        "fixed-point",
+        "approximation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:sqrtWad",
+      "type": "function",
+      "name": "sqrtWad",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        95,
+        102
+      ],
+      "summary": "Computes an integer square root of a WAD-scaled value via Newton's method, used to derive sqrt(time-to-expiry) for the premium's time-value term.",
+      "tags": [
+        "math",
+        "fixed-point",
+        "newtons-method"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:scaleFromWad",
+      "type": "function",
+      "name": "scaleFromWad",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        106,
+        115
+      ],
+      "summary": "Converts an 18-decimal WAD USD amount into a token's native decimal precision, rounding up for Ask-side payouts and flooring for Bid-side payouts.",
+      "tags": [
+        "utility",
+        "decimal-scaling"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/swapvm/SmileMath.sol:scaleToWad",
+      "type": "function",
+      "name": "scaleToWad",
+      "filePath": "src/swapvm/SmileMath.sol",
+      "lineRange": [
+        118,
+        122
+      ],
+      "summary": "Converts a token-native decimal amount up to 18-decimal WAD precision, e.g. for normalizing an oracle price before pricing math.",
+      "tags": [
+        "utility",
+        "decimal-scaling"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "type": "file",
+      "name": "SmileSwapVMRouter.sol",
+      "filePath": "src/swapvm/SmileSwapVMRouter.sol",
+      "summary": "Custom Aqua SwapVM application that extends 1inch's official SwapVM/AquaOpcodes instruction set with a custom option-premium opcode (33); this is the on-chain program LPs `Aqua.ship()` their covered-call strategies to.",
+      "tags": [
+        "entry-point",
+        "swap-vm",
+        "option-pricing",
+        "aqua-integration"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Multiple inheritance from Simulator, SwapVM, AquaOpcodes and OptionPremiumInstruction composes the official SwapVM opcode set with a project-specific instruction via an opcode-index dispatch override."
+    },
+    {
+      "id": "class:src/swapvm/SmileSwapVMRouter.sol:SmileSwapVMRouter",
+      "type": "class",
+      "name": "SmileSwapVMRouter",
+      "filePath": "src/swapvm/SmileSwapVMRouter.sol",
+      "lineRange": [
+        20,
+        39
+      ],
+      "summary": "The Aqua app contract for covered calls: inherits the official SwapVM engine plus AquaOpcodes and overrides `_dispatch` to route opcode 33 to the custom option-premium pricing instruction before falling through to the official opcode set. LPs ship strategies here; on swap, SwapVM JIT-pulls collateral and pushes premium via Aqua.",
+      "tags": [
+        "contract",
+        "swap-vm",
+        "aqua-app",
+        "dispatcher"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/swapvm/SmileSwapVMRouter.sol:_dispatch",
+      "type": "function",
+      "name": "_dispatch",
+      "filePath": "src/swapvm/SmileSwapVMRouter.sol",
+      "lineRange": [
+        32,
+        38
+      ],
+      "summary": "Overrides SwapVM opcode dispatch: routes the custom option-premium opcode (33) to `OptionPremiumInstruction._optionPremiumXD`, otherwise delegates to the official `AquaOpcodes._runOpcode`.",
+      "tags": [
+        "dispatcher",
+        "opcode-routing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/vaults/AquaCollateralVault.sol",
+      "type": "file",
+      "name": "AquaCollateralVault.sol",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "summary": "Core JIT (just-in-time) collateral vault built on the official 1inch Aqua protocol: LPs authorize strike ranges without pre-depositing collateral, covered calls match through the SmileSwapVMRouter SwapVM program while cash-secured puts match directly against this contract as an AquaApp; manages the full buy/close/redeem/reclaim option lifecycle plus protocol fees.",
+      "tags": [
+        "vault",
+        "aqua-integration",
+        "option-pricing",
+        "collateral-management",
+        "core-logic"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses Aqua's push/pull JIT-collateral primitives together with SwapVM's Maker/Taker traits encoding to build swap orders as byte-packed opcode programs at read time; immutable per-authorization snapshots (fee, staleness, skew) keep already-shipped strategies stable even as global config changes."
+    },
+    {
+      "id": "class:src/vaults/AquaCollateralVault.sol:AquaCollateralVault",
+      "type": "class",
+      "name": "AquaCollateralVault",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        52,
+        743
+      ],
+      "summary": "The central vault contract managing LP range authorizations, option buy/sellback/redemption flows, and collateral accounting for both SwapVM-routed covered calls and directly Aqua-pulled cash-secured puts.",
+      "tags": [
+        "contract",
+        "vault",
+        "option-lifecycle",
+        "aqua-app"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:src/vaults/AquaCollateralVault.sol:IOptionPricingHook",
+      "type": "class",
+      "name": "IOptionPricingHook",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        27,
+        31
+      ],
+      "summary": "Interface for the pluggable volatility hook that supplies live sigma/beta values and receives buy/sell sigma-bump signals; wired optionally via `setHook`, with a fixed DEFAULT_SIGMA fallback when unset.",
+      "tags": [
+        "interface",
+        "option-pricing",
+        "hook"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:seriesId",
+      "type": "function",
+      "name": "seriesId",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        161,
+        163
+      ],
+      "summary": "Computes the canonical series identifier as keccak256(authId, strike), used to key settlement registration and lookup.",
+      "tags": [
+        "utility",
+        "identifier"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:authorizeRange",
+      "type": "function",
+      "name": "authorizeRange",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        173,
+        209
+      ],
+      "summary": "LP entry point: registers an immutable strike-range strategy (collateral/premium tokens, expiry, capacity, fee/staleness/skew snapshot) without transferring any tokens; the LP still must approve Aqua and call `Aqua.ship()` using {getShipParams} to activate it.",
+      "tags": [
+        "api-handler",
+        "lp-authorization",
+        "state-mutating"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:revokeAuthorization",
+      "type": "function",
+      "name": "revokeAuthorization",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        214,
+        218
+      ],
+      "summary": "Marks an LP's range authorization inactive in the vault's registry; the LP separately calls `Aqua.dock()` to revoke the underlying Aqua allowance. Already-matched positions are unaffected.",
+      "tags": [
+        "api-handler",
+        "lp-authorization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "function",
+      "name": "buildOrder",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        237,
+        289
+      ],
+      "summary": "Rebuilds the canonical SwapVM order for a call range as a byte-packed opcode program (salt, deadline, optional fee-skip jump, optional protocol fee, and the custom option-premium instruction), then wraps it in MakerTraits.",
+      "tags": [
+        "swap-vm",
+        "order-encoding",
+        "core-logic"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:getShipParams",
+      "type": "function",
+      "name": "getShipParams",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        302,
+        328
+      ],
+      "summary": "Produces the (app, strategy, tokens, amounts) tuple an LP passes to the official `Aqua.ship()` to activate a range, differing between the SwapVM-routed call path and the direct AquaApp put path.",
+      "tags": [
+        "aqua-integration",
+        "lp-authorization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:getDockParams",
+      "type": "function",
+      "name": "getDockParams",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        331,
+        349
+      ],
+      "summary": "Produces the (app, strategyHash, tokens) tuple an LP passes to the official `Aqua.dock()` to revoke a shipped strategy's allowance.",
+      "tags": [
+        "aqua-integration",
+        "lp-authorization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_putStrategy",
+      "type": "function",
+      "name": "_putStrategy",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        353,
+        365
+      ],
+      "summary": "ABI-encodes the full terms of a put strategy (for data availability per Aqua conventions) since puts ship directly to this vault acting as its own AquaApp rather than through the SwapVM router.",
+      "tags": [
+        "aqua-integration",
+        "order-encoding"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:buy",
+      "type": "function",
+      "name": "buy",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        381,
+        409
+      ],
+      "summary": "Buyer entry point: validates the requested strike is within the LP's authorized range, routes to the call (SwapVM) or put (direct Aqua pull) leg, mints/lazily-deploys the option series token, and bumps the volatility hook.",
+      "tags": [
+        "api-handler",
+        "option-lifecycle",
+        "state-mutating"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_buyCallViaSwapVM",
+      "type": "function",
+      "name": "_buyCallViaSwapVM",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        414,
+        449
+      ],
+      "summary": "Covered-call buy leg: quotes and swaps through the official SwapVM router as taker, pulling the buyer's premium in and JIT-pulling collateral from the LP wallet into vault escrow atomically.",
+      "tags": [
+        "swap-vm",
+        "option-lifecycle",
+        "aqua-integration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_buyPutViaAquaPull",
+      "type": "function",
+      "name": "_buyPutViaAquaPull",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        454,
+        476
+      ],
+      "summary": "Cash-secured-put buy leg: computes the Ask premium via the live volatility surface, transfers premium plus fee from the buyer to the LP/fee recipient, and JIT-pulls collateral from the LP wallet via `Aqua.pull()` under a per-strategy reentrancy lock.",
+      "tags": [
+        "option-pricing",
+        "option-lifecycle",
+        "aqua-integration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_mintSeries",
+      "type": "function",
+      "name": "_mintSeries",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        479,
+        509
+      ],
+      "summary": "Lazily deploys a new OptionToken for an (authId, strike) series on first buy, registers it with the settlement registry, tracks the LP's locked collateral position, and mints units to the buyer.",
+      "tags": [
+        "option-lifecycle",
+        "state-mutating",
+        "factory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:close",
+      "type": "function",
+      "name": "close",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        531,
+        563
+      ],
+      "summary": "Early-close (sellback) entry point: burns the holder's option units and pays out the live Bid via a reverse SwapVM swap (calls) or direct Aqua pull/push (puts), restoring the LP's JIT capacity.",
+      "tags": [
+        "api-handler",
+        "option-lifecycle",
+        "state-mutating"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_sellbackCallViaSwapVM",
+      "type": "function",
+      "name": "_sellbackCallViaSwapVM",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        567,
+        599
+      ],
+      "summary": "Covered-call sellback leg: executes a reverse SwapVM swap (exactIn = option units) that pushes escrowed collateral back to the LP wallet and pulls the Bid premium straight to the holder.",
+      "tags": [
+        "swap-vm",
+        "option-lifecycle",
+        "aqua-integration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_sellbackPutViaAqua",
+      "type": "function",
+      "name": "_sellbackPutViaAqua",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        604,
+        621
+      ],
+      "summary": "Put sellback leg: computes the Bid premium from the live surface, pulls it from the LP wallet to the holder via `Aqua.pull()`, and pushes escrowed USDC collateral back, restoring the strategy's capacity.",
+      "tags": [
+        "option-pricing",
+        "option-lifecycle",
+        "aqua-integration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:redeem",
+      "type": "function",
+      "name": "redeem",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        632,
+        651
+      ],
+      "summary": "Post-expiry entry point: burns option tokens and pays the cash-settled intrinsic value out of locked collateral once the series has settled via {AquaOptionSettlement}; OTM redemptions pay zero.",
+      "tags": [
+        "api-handler",
+        "settlement",
+        "state-mutating"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:reclaimCollateral",
+      "type": "function",
+      "name": "reclaimCollateral",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        656,
+        674
+      ],
+      "summary": "LP entry point post-settlement: releases locked collateral in excess of the worst-case amount still owed to outstanding holders (all of it if OTM, the non-intrinsic remainder if ITM).",
+      "tags": [
+        "api-handler",
+        "settlement",
+        "collateral-management"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_intrinsicPayout",
+      "type": "function",
+      "name": "_intrinsicPayout",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        680,
+        691
+      ],
+      "summary": "Computes the cash-settled intrinsic value in collateral-token units for a given settlement price, strike, and amount, consistently for both call (WETH) and put (USDC) legs.",
+      "tags": [
+        "math",
+        "settlement",
+        "option-pricing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_settlementOf",
+      "type": "function",
+      "name": "_settlementOf",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        693,
+        696
+      ],
+      "summary": "Looks up whether a series has settled and its settlement price from the {AquaOptionSettlement} registry contract.",
+      "tags": [
+        "settlement",
+        "lookup"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:releaseCollateral",
+      "type": "function",
+      "name": "releaseCollateral",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        699,
+        704
+      ],
+      "summary": "Owner-only escape hatch to manually release an LP's locked collateral, bypassing the normal settlement flow.",
+      "tags": [
+        "admin",
+        "collateral-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_putUnitPremiumWad",
+      "type": "function",
+      "name": "_putUnitPremiumWad",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        710,
+        722
+      ],
+      "summary": "Computes the per-unit put premium in WAD USD from the live volatility surface (Ask when buying, Bid otherwise), reading sigma from the hook or a default fallback \u2014 the vault-side twin of the SwapVM custom pricing instruction.",
+      "tags": [
+        "option-pricing",
+        "math",
+        "core-logic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaCollateralVault.sol:_spotWad",
+      "type": "function",
+      "name": "_spotWad",
+      "filePath": "src/vaults/AquaCollateralVault.sol",
+      "lineRange": [
+        724,
+        732
+      ],
+      "summary": "Reads the latest Chainlink spot price and enforces the configured staleness bound before scaling it to WAD precision for use in pricing.",
+      "tags": [
+        "oracle",
+        "validation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/vaults/AquaOptionSettlement.sol",
+      "type": "file",
+      "name": "AquaOptionSettlement.sol",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "summary": "Expiry-price settlement registry for option series: records the Chainlink-CRE-forwarded consensus price (CRE path) or a permissionlessly-verified first-post-expiry Chainlink round (fallback path), immutably and exactly once per series; collateral custody and payout remain in the vault.",
+      "tags": [
+        "oracle",
+        "settlement",
+        "chainlink",
+        "cre-integration"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "The permissionless fallback path verifies on-chain that the supplied Chainlink round is the first round updated at/after expiry (checking the predecessor round), removing reliance on a single trusted price writer while still allowing the CRE forwarder path as the primary/demo route."
+    },
+    {
+      "id": "class:src/vaults/AquaOptionSettlement.sol:AquaOptionSettlement",
+      "type": "class",
+      "name": "AquaOptionSettlement",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "lineRange": [
+        20,
+        121
+      ],
+      "summary": "Ownable registry contract storing one immutable settlement price per option series, writable either by the Chainlink CRE forwarder or permissionlessly via on-chain-verified Chainlink round data.",
+      "tags": [
+        "contract",
+        "settlement",
+        "registry",
+        "oracle"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaOptionSettlement.sol:registerSeries",
+      "type": "function",
+      "name": "registerSeries",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "lineRange": [
+        59,
+        77
+      ],
+      "summary": "Called by the registrar vault on the first mint of each (range, strike) series to record its terms in the registry, callable only once per series.",
+      "tags": [
+        "registry",
+        "state-mutating"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaOptionSettlement.sol:settleSeries",
+      "type": "function",
+      "name": "settleSeries",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "lineRange": [
+        80,
+        85
+      ],
+      "summary": "CRE path: the trusted Chainlink CRE forwarder writes the DON's consensus settlement price (WAD) for an expired series, exactly once.",
+      "tags": [
+        "settlement",
+        "chainlink",
+        "cre-integration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/vaults/AquaOptionSettlement.sol:settleWithChainlinkRound",
+      "type": "function",
+      "name": "settleWithChainlinkRound",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "lineRange": [
+        94,
+        113
+      ],
+      "summary": "Permissionless settlement path: anyone supplies a Chainlink roundId and the contract verifies on-chain that it is the first round updated at or after expiry (checking the predecessor round was updated before expiry), preventing cherry-picking a favorable later price.",
+      "tags": [
+        "settlement",
+        "chainlink",
+        "permissionless",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:src/vaults/AquaOptionSettlement.sol:_pendingSeries",
+      "type": "function",
+      "name": "_pendingSeries",
+      "filePath": "src/vaults/AquaOptionSettlement.sol",
+      "lineRange": [
+        115,
+        120
+      ],
+      "summary": "Validation gate shared by both settlement paths: fetches a series and requires it exists, has expired, and is not already settled.",
+      "tags": [
+        "validation",
+        "settlement"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "function:frontend/app/page.tsx:switchToNetwork",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "function:frontend/app/page.tsx:Home",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "function:frontend/app/page.tsx:Home",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:authRangeStrikes",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:smileVol",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:normalCDF",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:callDelta",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:blackScholesCall",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:blackScholesPut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:priceWAD",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:optionPriceWAD",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:formatWAD",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:LPSummaryBar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:SellPanel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:BuyPanel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:ClosePanel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:StrikeRow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:OptionMatrix",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "function:frontend/components/OptionMatrix.tsx:OptionMatrix",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/PayoffBuilder.tsx",
+      "target": "function:frontend/components/PayoffBuilder.tsx:PayoffChart",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/PayoffBuilder.tsx",
+      "target": "function:frontend/components/PayoffBuilder.tsx:StatsStrip",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/PayoffBuilder.tsx",
+      "target": "function:frontend/components/PayoffBuilder.tsx:PayoffBuilder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/PayoffBuilder.tsx",
+      "target": "function:frontend/components/PayoffBuilder.tsx:PayoffBuilder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/TxProof.tsx",
+      "target": "function:frontend/components/TxProof.tsx:TxProof",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/TxProof.tsx",
+      "target": "function:frontend/components/TxProof.tsx:TxProof",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapSpot.ts",
+      "target": "function:frontend/hooks/useUniswapSpot.ts:fetchUniswap",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapSpot.ts",
+      "target": "function:frontend/hooks/useUniswapSpot.ts:fetchChainlink",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapSpot.ts",
+      "target": "function:frontend/hooks/useUniswapSpot.ts:useUniswapSpot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapSpot.ts",
+      "target": "function:frontend/hooks/useUniswapSpot.ts:useUniswapSpot",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapTrade.ts",
+      "target": "function:frontend/hooks/useUniswapTrade.ts:fetchUniswapSwapQuote",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/hooks/useUniswapTrade.ts",
+      "target": "function:frontend/hooks/useUniswapTrade.ts:fetchUniswapSwapQuote",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/components/AuthorizeRange.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/components/LPDashboard.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/components/OptionMatrix.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/components/PayoffBuilder.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/components/TxProof.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/page.tsx",
+      "target": "file:frontend/hooks/useUniswapSpot.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "file:frontend/components/AuthorizeRange.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "file:frontend/components/PayoffBuilder.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/OptionMatrix.tsx",
+      "target": "file:frontend/hooks/useUniswapTrade.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/hooks/useUniswapSpot.ts:useUniswapSpot",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:frontend/components/OptionMatrix.tsx:BuyPanel",
+      "target": "function:frontend/hooks/useUniswapTrade.ts:fetchUniswapSwapQuote",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/components/AuthorizeRange.tsx:AuthorizeRange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/components/LPDashboard.tsx:LPDashboard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/components/OptionMatrix.tsx:OptionMatrix",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/components/PayoffBuilder.tsx:PayoffBuilder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "function:frontend/app/page.tsx:Home",
+      "target": "function:frontend/components/TxProof.tsx:TxProof",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "target": "class:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts:AquaOptionSettlement",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "target": "class:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts:AquaOptionSettlement",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "target": "function:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts:newAquaOptionSettlementMock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "target": "function:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts:newAquaOptionSettlementMock",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+      "target": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cre-workflow/settlement/main.ts",
+      "target": "function:cre-workflow/settlement/main.ts:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/settlement/main.ts",
+      "target": "function:cre-workflow/settlement/main.ts:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cre-workflow/settlement/main.ts",
+      "target": "file:cre-workflow/settlement/workflow.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "function:cre-workflow/settlement/workflow.ts:settle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "function:cre-workflow/settlement/workflow.ts:onCronTrigger",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "function:cre-workflow/settlement/workflow.ts:onCronTrigger",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "function:cre-workflow/settlement/workflow.ts:initWorkflow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "function:cre-workflow/settlement/workflow.ts:initWorkflow",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cre-workflow/settlement/workflow.ts",
+      "target": "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:cre-workflow/settlement/workflow.ts:settle",
+      "target": "class:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts:AquaOptionSettlement",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:cre-workflow/settlement/main.ts:main",
+      "target": "function:cre-workflow/settlement/workflow.ts:initWorkflow",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/AuthorizeRange.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/LPDashboard.tsx",
+      "target": "file:frontend/components/AuthorizeRange.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/LPDashboard.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/TradeButton.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/components/AuthorizeRange.tsx",
+      "target": "function:frontend/components/AuthorizeRange.tsx:AuthorizeRange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/AuthorizeRange.tsx",
+      "target": "function:frontend/components/AuthorizeRange.tsx:AuthorizeRange",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/LPDashboard.tsx",
+      "target": "function:frontend/components/LPDashboard.tsx:LPDashboard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/LPDashboard.tsx",
+      "target": "function:frontend/components/LPDashboard.tsx:LPDashboard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/LPDashboard.tsx",
+      "target": "function:frontend/components/LPDashboard.tsx:Stat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/TradeButton.tsx",
+      "target": "function:frontend/components/TradeButton.tsx:TradeButton",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/TradeButton.tsx",
+      "target": "function:frontend/components/TradeButton.tsx:TradeButton",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "pipeline:.github/workflows/pages.yml",
+      "target": "step:.github/workflows/pages.yml:build",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "pipeline:.github/workflows/pages.yml",
+      "target": "step:.github/workflows/pages.yml:deploy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:.github/workflows/pages.yml:deploy",
+      "target": "step:.github/workflows/pages.yml:build",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/pages.yml",
+      "target": "config:frontend/package.json",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:local.sh",
+      "target": "function:local.sh:stop_existing",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:local.sh",
+      "target": "config:foundry.toml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:.env.example",
+      "target": "file:local.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:package.json",
+      "target": "document:remappings.txt",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:foundry.toml",
+      "target": "document:remappings.txt",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:PLAN.md",
+      "target": "config:foundry.toml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:PLAN.md",
+      "target": "document:remappings.txt",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:local.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:foundry.toml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:PLAN.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:cre-workflow/settlement/workflow.yaml",
+      "target": "config:cre-workflow/settlement/config.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:cre-workflow/settlement/workflow.yaml",
+      "target": "file:cre-workflow/settlement/main.ts",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:cre-workflow/settlement/tsconfig.json",
+      "target": "file:cre-workflow/settlement/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:cre-workflow/settlement/tsconfig.json",
+      "target": "file:cre-workflow/settlement/workflow.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:cre-workflow/settlement/package.json",
+      "target": "file:cre-workflow/settlement/main.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:frontend/CLAUDE.md",
+      "target": "document:frontend/AGENTS.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:frontend/README.md",
+      "target": "file:frontend/app/page.tsx",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:frontend/package.json",
+      "target": "file:frontend/scripts/gen-help.mjs",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:frontend/tsconfig.json",
+      "target": "file:frontend/app/page.tsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/app/layout.tsx",
+      "target": "file:frontend/app/globals.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/layout.tsx",
+      "target": "file:frontend/app/providers.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/app/providers.tsx",
+      "target": "file:frontend/config/wagmi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:convert-batches.mjs",
+      "target": "function:convert-batches.mjs:convertBatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:runPhase2",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:runPhase4",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:runPhase5",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:runPhase6",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:runPhase7",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:getGitCommitHash",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:detectHeuristicLayers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:run-phases.mjs",
+      "target": "function:run-phases.mjs:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/app/layout.tsx",
+      "target": "function:frontend/app/layout.tsx:RootLayout",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/app/layout.tsx",
+      "target": "function:frontend/app/layout.tsx:RootLayout",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/app/providers.tsx",
+      "target": "function:frontend/app/providers.tsx:Providers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/app/providers.tsx",
+      "target": "function:frontend/app/providers.tsx:Providers",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/components/RegisterSeries.tsx",
+      "target": "function:frontend/components/RegisterSeries.tsx:RegisterSeries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:frontend/components/RegisterSeries.tsx",
+      "target": "function:frontend/components/RegisterSeries.tsx:RegisterSeries",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/OptionToken.sol",
+      "target": "class:src/OptionToken.sol:OptionToken",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/hooks/OptionPricingHook.sol",
+      "target": "class:src/hooks/OptionPricingHook.sol:OptionPricingHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/hooks/OptionPricingHook.sol",
+      "target": "function:src/hooks/OptionPricingHook.sol:beforeSwap",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/hooks/OptionPricingHook.sol",
+      "target": "function:src/hooks/OptionPricingHook.sol:afterSwap",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/mocks/MockV3Aggregator.sol",
+      "target": "class:src/mocks/MockV3Aggregator.sol:MockV3Aggregator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "class:src/swapvm/OptionPremiumInstruction.sol:OptionPremiumInstruction",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "class:src/swapvm/OptionPremiumInstruction.sol:OptionPremiumArgsBuilder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "function:src/swapvm/OptionPremiumInstruction.sol:_optionPremiumXD",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "function:src/swapvm/OptionPremiumInstruction.sol:_parseArgs",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "function:src/swapvm/OptionPremiumInstruction.sol:_takerStrike",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "target": "function:src/swapvm/OptionPremiumInstruction.sol:_oracleSpotWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPricingEngine.sol",
+      "target": "class:src/swapvm/OptionPricingEngine.sol:OptionPricingEngine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/OptionPricingEngine.sol",
+      "target": "function:src/swapvm/OptionPricingEngine.sol:computePremium",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/DemoTrade.s.sol",
+      "target": "class:script/DemoTrade.s.sol:DemoTrade",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/DemoTrade.s.sol",
+      "target": "function:script/DemoTrade.s.sol:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "class:script/Deploy.s.sol:Deploy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "class:script/Deploy.s.sol:MockERC20",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "function:script/Deploy.s.sol:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "file:src/swapvm/OptionPricingEngine.sol",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "file:src/hooks/OptionPricingHook.sol",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:script/Deploy.s.sol",
+      "target": "file:src/mocks/MockV3Aggregator.sol",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:script/DemoTrade.s.sol",
+      "target": "file:src/OptionToken.sol",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:src/hooks/OptionPricingHook.sol",
+      "target": "file:src/swapvm/OptionPricingEngine.sol",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/scripts/gen-help.mjs",
+      "target": "file:frontend/public/help.html",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+      "target": "file:cre-workflow/contracts/evm/ts/generated/index.ts",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:frontend/postcss.config.mjs",
+      "target": "file:frontend/app/globals.css",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "class:src/swapvm/SmileMath.sol:SmileMath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:smileVol",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:premium",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:lnWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:sqrtWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:scaleFromWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "function:src/swapvm/SmileMath.sol:scaleToWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileMath.sol",
+      "target": "class:src/swapvm/SmileMath.sol:SmileMath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "target": "class:src/swapvm/SmileSwapVMRouter.sol:SmileSwapVMRouter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "target": "function:src/swapvm/SmileSwapVMRouter.sol:_dispatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "target": "class:src/swapvm/SmileSwapVMRouter.sol:SmileSwapVMRouter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "target": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "class:src/swapvm/SmileSwapVMRouter.sol:SmileSwapVMRouter",
+      "target": "class:src/swapvm/OptionPremiumInstruction.sol:OptionPremiumInstruction",
+      "type": "inherits",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "function:src/swapvm/SmileSwapVMRouter.sol:_dispatch",
+      "target": "function:src/swapvm/OptionPremiumInstruction.sol:_optionPremiumXD",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "class:src/vaults/AquaCollateralVault.sol:AquaCollateralVault",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "class:src/vaults/AquaCollateralVault.sol:IOptionPricingHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:seriesId",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:authorizeRange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:revokeAuthorization",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:getShipParams",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:getDockParams",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_putStrategy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_buyCallViaSwapVM",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_buyPutViaAquaPull",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_mintSeries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:close",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_sellbackCallViaSwapVM",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_sellbackPutViaAqua",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:redeem",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:reclaimCollateral",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_intrinsicPayout",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_settlementOf",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:releaseCollateral",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_putUnitPremiumWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_spotWad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "class:src/vaults/AquaCollateralVault.sol:AquaCollateralVault",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "file:src/OptionToken.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "file:src/swapvm/SmileMath.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "file:src/swapvm/SmileSwapVMRouter.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "file:src/swapvm/OptionPremiumInstruction.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/vaults/AquaCollateralVault.sol",
+      "target": "file:src/vaults/AquaOptionSettlement.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_buyPutViaAquaPull",
+      "target": "function:src/swapvm/SmileMath.sol:scaleFromWad",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_sellbackPutViaAqua",
+      "target": "function:src/swapvm/SmileMath.sol:scaleFromWad",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_putUnitPremiumWad",
+      "target": "function:src/swapvm/SmileMath.sol:smileVol",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_putUnitPremiumWad",
+      "target": "function:src/swapvm/SmileMath.sol:premium",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_spotWad",
+      "target": "function:src/swapvm/SmileMath.sol:scaleToWad",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_mintSeries",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:registerSeries",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_mintSeries",
+      "target": "function:src/vaults/AquaCollateralVault.sol:seriesId",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:authorizeRange",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:authorizeRange",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_putStrategy",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:getShipParams",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:getShipParams",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_putStrategy",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:buy",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_buyCallViaSwapVM",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:buy",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_buyPutViaAquaPull",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:buy",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_mintSeries",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_buyCallViaSwapVM",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:close",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_sellbackCallViaSwapVM",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:close",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_sellbackPutViaAqua",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_sellbackCallViaSwapVM",
+      "target": "function:src/vaults/AquaCollateralVault.sol:buildOrder",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:redeem",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_settlementOf",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:redeem",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_intrinsicPayout",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:reclaimCollateral",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_settlementOf",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:reclaimCollateral",
+      "target": "function:src/vaults/AquaCollateralVault.sol:_intrinsicPayout",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaCollateralVault.sol:_settlementOf",
+      "target": "function:src/vaults/AquaCollateralVault.sol:seriesId",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "class:src/vaults/AquaOptionSettlement.sol:AquaOptionSettlement",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:registerSeries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:settleSeries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:settleWithChainlinkRound",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:_pendingSeries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "class:src/vaults/AquaOptionSettlement.sol:AquaOptionSettlement",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/vaults/AquaOptionSettlement.sol",
+      "target": "file:src/swapvm/SmileMath.sol",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:src/vaults/AquaOptionSettlement.sol:settleWithChainlinkRound",
+      "target": "function:src/swapvm/SmileMath.sol:scaleToWad",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaOptionSettlement.sol:settleSeries",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:_pendingSeries",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/vaults/AquaOptionSettlement.sol:settleWithChainlinkRound",
+      "target": "function:src/vaults/AquaOptionSettlement.sol:_pendingSeries",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:smart-contracts",
+      "name": "Smart Contracts",
+      "description": "The on-chain Solidity options protocol \u2014 the JIT collateral vault, the custom SwapVM router and option-premium pricing instruction/math library, the Uniswap v4 volatility-smile hook, the OptionToken, the settlement registry, and the Foundry deploy/demo scripts that provision and exercise them.",
+      "nodeIds": [
+        "file:src/hooks/OptionPricingHook.sol",
+        "file:src/mocks/MockV3Aggregator.sol",
+        "file:src/OptionToken.sol",
+        "file:src/swapvm/OptionPremiumInstruction.sol",
+        "file:src/swapvm/OptionPricingEngine.sol",
+        "file:src/swapvm/SmileMath.sol",
+        "file:src/swapvm/SmileSwapVMRouter.sol",
+        "file:src/vaults/AquaCollateralVault.sol",
+        "file:src/vaults/AquaOptionSettlement.sol",
+        "file:script/DemoTrade.s.sol",
+        "file:script/Deploy.s.sol"
+      ]
+    },
+    {
+      "id": "layer:frontend",
+      "name": "Frontend (Next.js dApp)",
+      "description": "The Smile Next.js/React trading dApp \u2014 wallet-connected pages and components for LP range authorization, the option chain and payoff builder, series registration, on-chain proof, live price/trade hooks, wagmi wiring, and the app's own build, lint, styling, type, and docs configuration.",
+      "nodeIds": [
+        "file:frontend/app/page.tsx",
+        "file:frontend/components/OptionMatrix.tsx",
+        "file:frontend/components/PayoffBuilder.tsx",
+        "file:frontend/components/TxProof.tsx",
+        "file:frontend/hooks/useUniswapSpot.ts",
+        "file:frontend/hooks/useUniswapTrade.ts",
+        "file:frontend/components/AuthorizeRange.tsx",
+        "file:frontend/components/LPDashboard.tsx",
+        "file:frontend/components/TradeButton.tsx",
+        "file:frontend/config/wagmi.ts",
+        "document:frontend/AGENTS.md",
+        "document:frontend/CLAUDE.md",
+        "document:frontend/README.md",
+        "config:frontend/package.json",
+        "config:frontend/tsconfig.json",
+        "file:frontend/app/globals.css",
+        "file:frontend/app/layout.tsx",
+        "file:frontend/app/providers.tsx",
+        "file:frontend/components/RegisterSeries.tsx",
+        "file:frontend/eslint.config.mjs",
+        "file:frontend/next.config.ts",
+        "file:frontend/postcss.config.mjs",
+        "file:frontend/public/help.html",
+        "file:frontend/scripts/gen-help.mjs",
+        "file:frontend/types/finance.d.ts"
+      ]
+    },
+    {
+      "id": "layer:cre-workflow",
+      "name": "Chainlink CRE Settlement Workflow",
+      "description": "The off-chain Chainlink CRE TypeScript workflow that reads the ETH/USD price feed on a cron trigger and submits DON-signed settleSeries reports to the on-chain AquaOptionSettlement contract, plus its code-generated contract bindings, mocks, and CRE deployment/build configuration.",
+      "nodeIds": [
+        "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts",
+        "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement_mock.ts",
+        "file:cre-workflow/settlement/main.ts",
+        "file:cre-workflow/settlement/workflow.ts",
+        "config:cre-workflow/settlement/config.json",
+        "config:cre-workflow/settlement/package.json",
+        "config:cre-workflow/settlement/tsconfig.json",
+        "config:cre-workflow/settlement/workflow.yaml",
+        "config:cre-workflow/contracts/evm/src/abi/AquaOptionSettlement.json",
+        "file:cre-workflow/contracts/evm/ts/generated/index.ts",
+        "config:cre-workflow/contracts/package.json",
+        "config:cre-workflow/package.json",
+        "config:cre-workflow/project.yaml"
+      ]
+    },
+    {
+      "id": "layer:project-config",
+      "name": "Project Configuration & CI/CD",
+      "description": "Repo-root build configuration and secrets templates (Foundry config, remappings, npm manifest, .env.example), top-level project documentation (README, build plan), the local dev orchestration script, and the GitHub Actions pipeline that deploys the frontend to GitHub Pages.",
+      "nodeIds": [
+        "config:.env.example",
+        "document:PLAN.md",
+        "document:README.md",
+        "config:foundry.toml",
+        "file:local.sh",
+        "config:package.json",
+        "document:remappings.txt",
+        "config:skills-lock.json",
+        "pipeline:.github/workflows/pages.yml",
+        "step:.github/workflows/pages.yml:build",
+        "step:.github/workflows/pages.yml:deploy"
+      ]
+    },
+    {
+      "id": "layer:tooling",
+      "name": "Knowledge-Graph Tooling",
+      "description": "Standalone understand-anything meta-tooling scripts (graph assembly, batch conversion, phase orchestration) used to generate this project's knowledge graph \u2014 not part of the Smile product itself.",
+      "nodeIds": [
+        "file:complete-graph.mjs",
+        "file:convert-batches.mjs",
+        "file:run-phases.mjs"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Project Overview",
+      "description": "README.md introduces Smile as a non-custodial, parametric options marketplace built on 1inch Aqua, Uniswap v4 Hooks, and Chainlink CRE. It explains the three problems Smile targets \u2014 fragmented strike liquidity, yield-killing collateral lock-up, and the lack of emergent market makers \u2014 plus the math behind the volatility smile, deployed addresses, and run instructions. Keep this framing in mind: every contract and UI component in this tour maps back to one of these three problems.",
+      "nodeIds": [
+        "document:README.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Core Protocol: The JIT Collateral Vault",
+      "description": "AquaCollateralVault.sol is the heart of the on-chain protocol \u2014 it lets LPs authorize a strike range without pre-depositing collateral, then manages the full buy/close/redeem/reclaim lifecycle of an option as collateral is committed just-in-time. This 'just-in-time' design is Smile's answer to the collateral lock-up problem from the README: LP capital keeps earning yield elsewhere until a buyer actually matches a strike. With the highest fan-out of any Solidity file in the protocol, this vault is the coordination point every other contract in this tour connects back to.",
+      "nodeIds": [
+        "file:src/vaults/AquaCollateralVault.sol"
+      ],
+      "languageLesson": "Solidity vault contracts typically separate authorization state (what an LP has committed to) from settlement state (what has actually been collateralized), so a single contract can safely track partially-filled, multi-party positions without pre-funding every possible outcome."
+    },
+    {
+      "order": 3,
+      "title": "The SwapVM Option Pricing Engine",
+      "description": "This tightly coupled cluster prices every trade: SmileSwapVMRouter.sol extends 1inch's SwapVM/AquaOpcodes with a custom option-premium opcode where LPs 'ship' covered-call strategies; OptionPremiumInstruction.sol is that custom instruction, pricing a covered call two-sidedly; SmileMath.sol is the fixed-point library underneath, implementing a parametric volatility smile/skew model and the time-value premium formula; and OptionPricingEngine.sol is a pure quoting facade that mirrors the same math for off-chain or read-only calls. Together they solve the README's 'thin liquidity at each strike' problem \u2014 one router, one pricing formula, quoting an entire strike range from a single capital pool.",
+      "nodeIds": [
+        "file:src/swapvm/SmileSwapVMRouter.sol",
+        "file:src/swapvm/OptionPremiumInstruction.sol",
+        "file:src/swapvm/SmileMath.sol",
+        "file:src/swapvm/OptionPricingEngine.sol"
+      ],
+      "languageLesson": "Fixed-point WAD (18-decimal) math libraries with custom ln/sqrt implementations are how Solidity approximates continuous financial formulas \u2014 like a volatility surface \u2014 without floating point, since the EVM only has integer arithmetic."
+    },
+    {
+      "order": 4,
+      "title": "Option Tokens & Settlement Registry",
+      "description": "OptionToken.sol is a minimal ERC-20 representing a single option position, mintable and burnable only by its owning vault from Step 2 \u2014 this is what a buyer actually holds after a trade fills. AquaOptionSettlement.sol is the expiry-price registry: it records either a Chainlink CRE-forwarded consensus price or a permissionless fallback price, which the vault later reads to compute payoffs. This pairing closes the loop between 'what you own' and 'what it's worth at expiry.'",
+      "nodeIds": [
+        "file:src/OptionToken.sol",
+        "file:src/vaults/AquaOptionSettlement.sol"
+      ]
+    },
+    {
+      "order": 5,
+      "title": "Uniswap v4 Volatility Hook & Oracle",
+      "description": "OptionPricingHook.sol is a Uniswap v4 hook that enforces the on-chain implied-volatility surface at the swap level: it can veto mispriced swaps and applies demand-driven feedback, directly using the OptionPricingEngine from Step 3. This is how Smile lets arbitrageurs continuously correct mispricing, as described in the README. MockV3Aggregator.sol is a minimal Chainlink AggregatorV3-compatible mock oracle used to simulate price feeds locally on Anvil, standing in for the real Chainlink feed the CRE workflow reads in Step 7.",
+      "nodeIds": [
+        "file:src/hooks/OptionPricingHook.sol",
+        "file:src/mocks/MockV3Aggregator.sol"
+      ],
+      "languageLesson": "Uniswap v4 hooks plug into specific lifecycle points of a swap (e.g. beforeSwap/afterSwap) and can revert to block a swap outright \u2014 that veto power is what lets OptionPricingHook reject trades that violate its pricing model instead of just adjusting the price after the fact."
+    },
+    {
+      "order": 6,
+      "title": "Deployment & Demo Scripts",
+      "description": "Deploy.s.sol is the Foundry script that provisions the entire Smile stack per network \u2014 deploying and wiring the vault, router, hook, oracle, and token together, which is the fastest way to see how Steps 2-5 fit into one deployment graph. DemoTrade.s.sol then exercises the full trade loop end-to-end: an LP authorizes and ships a covered-call range, a buyer purchases, and half the position is sold back. Together they're the executable proof that the contracts from the previous steps actually compose.",
+      "nodeIds": [
+        "file:script/Deploy.s.sol",
+        "file:script/DemoTrade.s.sol"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "Chainlink CRE Settlement Workflow",
+      "description": "This off-chain TypeScript workflow closes the settlement loop from Step 4. main.ts is the workflow binary's entry point, creating and starting the CRE runner; workflow.ts defines the actual logic \u2014 a cron-triggered job that reads the Chainlink ETH/USD feed and submits a DON-signed settleSeries report; and AquaOptionSettlement.ts is the code-generated TypeScript client binding used to read contract state and submit that report on-chain. This is the automated, decentralized alternative to a centralized price oracle updating AquaOptionSettlement.sol from Step 4.",
+      "nodeIds": [
+        "file:cre-workflow/settlement/main.ts",
+        "file:cre-workflow/settlement/workflow.ts",
+        "file:cre-workflow/contracts/evm/ts/generated/AquaOptionSettlement.ts"
+      ],
+      "languageLesson": "A DON (Decentralized Oracle Network) -signed report means multiple independent nodes must agree on a value before it's submitted on-chain \u2014 this is what makes the settlement price trustworthy without relying on any single party, including Chainlink itself."
+    },
+    {
+      "order": 8,
+      "title": "Frontend Entry Point & Wallet Config",
+      "description": "page.tsx is the Next.js app-router root and has the highest fan-out in the whole codebase: it wires up wallet connection, network switching, and a live ETH/USD spot price, then renders the four main tabs that make up the rest of the frontend tour. wagmi.ts is the config it and nearly every other component depend on \u2014 chains, connectors, deployed contract addresses, and the minimal Aqua/vault ABIs needed to call the contracts from Steps 2-4 directly from the browser.",
+      "nodeIds": [
+        "file:frontend/app/page.tsx",
+        "file:frontend/config/wagmi.ts"
+      ]
+    },
+    {
+      "order": 9,
+      "title": "LP Flow: Authorize, Register, Monitor",
+      "description": "AuthorizeRange.tsx implements the LP's three-step flow \u2014 ERC-20 approve, vault authorizeRange, then Aqua.ship \u2014 to register a strike range and JIT collateral commitment, the frontend counterpart to the vault mechanics from Step 2. RegisterSeries.tsx lets an LP register a brand-new option series on-chain via AquaOptionSettlement, and LPDashboard.tsx then displays that LP's wallet balance plus their active authorization's strike range, expiry, and locked-versus-available collateral. Together these three components are the entire LP-side experience of supplying options liquidity without locking up capital.",
+      "nodeIds": [
+        "file:frontend/components/AuthorizeRange.tsx",
+        "file:frontend/components/RegisterSeries.tsx",
+        "file:frontend/components/LPDashboard.tsx"
+      ]
+    },
+    {
+      "order": 10,
+      "title": "Buyer Flow: Option Chain & Payoff Builder",
+      "description": "OptionMatrix.tsx implements a client-side Black-Scholes volatility-smile pricing model \u2014 deliberately mirroring the on-chain SmileMath from Step 3 \u2014 and renders the strike/expiry matrix buyers trade from, with TradeButton.tsx executing the fill by calling the vault's pull() function. PayoffBuilder.tsx lets a buyer compose multi-leg strategies and visualize P&L curves, breakevens, and Greeks before committing. Both are backed by useUniswapTrade.ts, which requests swap quotes from the Uniswap Trading API, and useUniswapSpot.ts, which supplies a live ETH/USD price with a three-tier fallback (Uniswap API, then Chainlink, then a static price) so the UI never breaks even if an upstream API is down.",
+      "nodeIds": [
+        "file:frontend/components/OptionMatrix.tsx",
+        "file:frontend/components/PayoffBuilder.tsx",
+        "file:frontend/components/TradeButton.tsx",
+        "file:frontend/hooks/useUniswapTrade.ts",
+        "file:frontend/hooks/useUniswapSpot.ts"
+      ],
+      "languageLesson": "React hooks with tiered fallback logic (try API A, fall back to B, fall back to a constant) push resiliency into a single reusable function, so every component that needs a spot price gets the same fallback guarantees for free instead of reimplementing error handling."
+    },
+    {
+      "order": 11,
+      "title": "Closing the Loop: On-chain Proof",
+      "description": "TxProof.tsx is the fourth tab from Step 8's page.tsx, and it's the payoff of everything before it: it displays the deployed contract addresses and transaction links from Step 6's deployment, plus the most recent Uniswap swap transaction, linked to the block explorer. This is where a user can independently verify that the vault, the pricing engine, and the settlement registry are exactly the contracts the frontend claims to be talking to.",
+      "nodeIds": [
+        "file:frontend/components/TxProof.tsx"
+      ]
+    },
+    {
+      "order": 12,
+      "title": "Local Dev Orchestration",
+      "description": "local.sh is the one-command way to run the entire stack locally: it starts Anvil, deploys the contracts from Step 6, funds fork accounts, writes the resulting addresses into frontend/.env.local, and launches the Next.js dev server \u2014 stitching together everything from Steps 2 through 10 into a single local environment. foundry.toml configures the Solidity build itself (solc 0.8.30, Cancun EVM target, optimizer with via-IR), while .env.example documents every secret and endpoint the stack needs, from the deployer key to the CRE forwarder address.",
+      "nodeIds": [
+        "file:local.sh",
+        "config:foundry.toml",
+        "config:.env.example"
+      ]
+    },
+    {
+      "order": 13,
+      "title": "CI/CD: Deploying the Frontend",
+      "description": "pages.yml is the GitHub Actions pipeline that builds the Next.js frontend from Steps 8-11 as a static export and deploys it to GitHub Pages, giving anyone a public, wallet-connected instance of the dApp without running local.sh themselves. It's a natural capstone: the same frontend you've just toured through nine components gets automatically rebuilt and republished on every relevant change.",
+      "nodeIds": [
+        "pipeline:.github/workflows/pages.yml"
+      ],
+      "languageLesson": "GitHub Actions workflows split work into jobs (which can run in parallel or be chained with `needs`) and each job runs a sequence of steps; a static-export pipeline like this one typically has a build job that produces an artifact and a separate deploy job that publishes it, keeping the build environment isolated from the deployment target."
+    }
+  ]
+}

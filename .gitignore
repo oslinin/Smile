@@ -12,6 +12,14 @@ node_modules/
 frontend/.next/
 frontend/out/
 
+# Python vol-surface renderer
+volsurface/.venv/
+volsurface/__pycache__/
+
 # OS
 .DS_Store
 frontend/.env.local
+
+# understand-anything scratch/trash (auto-purged after 7 days)
+.understand-anything/.trash-*/
+.understand-anything/tmp/

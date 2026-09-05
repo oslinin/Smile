@@ -2,6 +2,7 @@
   "name": "cre-workflow",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.10.0",
   "description": "Chainlink CRE settlement workflow — ETH/USD median consensus settles expired options on-chain",
   "scripts": {
     "bindings": "cre generate-bindings evm",

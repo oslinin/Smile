@@ -24,6 +24,7 @@ import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
+import { VolSurface, type SurfaceTrade } from "@/components/VolSurface";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
 import { useState, useEffect } from "react";
 
@@ -99,9 +100,19 @@ export default function Home() {
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
-  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "lp-position" | "proof">("income");
+  const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
+  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "surface" | "lp-position" | "proof">("income");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
+
+  // Notify the Python vol-surface renderer of each confirmed trade so it bumps
+  // the traded tenor bucket. DTE comes from the active LP authorization's expiry.
+  const notifySurface = (direction: "buy" | "sell") => {
+    const dte = activeAuth
+      ? Math.max(0, Math.round((activeAuth.expiry - Date.now() / 1000) / 86400))
+      : 30;
+    setSurfaceTrade((prev) => ({ dte, direction, nonce: (prev?.nonce ?? 0) + 1 }));
+  };
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -158,6 +169,7 @@ export default function Home() {
     { id: "income",       label: "One-Click Income" },
     { id: "lp-auth",      label: "LP — Authorize Strike Range" },
     { id: "chain",        label: "Option Chain + Payoff Builder" },
+    { id: "surface",      label: "Vol Surface · Python" },
     { id: "lp-position",  label: "LP Position" },
     { id: "proof",        label: "On-Chain Proof · Anvil" },
   ] as const;
@@ -349,8 +361,8 @@ export default function Home() {
                 spot={spotPrice ?? 3420}
                 activeAuth={activeAuth}
                 onSwapTx={setSwapTx}
-                onBuyConfirmed={(leg) => setConfirmedLegs(prev => [...prev, leg])}
-                onSellConfirmed={(leg) => setConfirmedLegs(prev => [...prev, leg])}
+                onBuyConfirmed={(leg) => { setConfirmedLegs(prev => [...prev, leg]); notifySurface("buy"); }}
+                onSellConfirmed={(leg) => { setConfirmedLegs(prev => [...prev, leg]); notifySurface("sell"); }}
               />
             </section>
             <section>
@@ -360,6 +372,15 @@ export default function Home() {
               <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} />
             </section>
           </div>
+        )}
+
+        {activeTab === "surface" && (
+          <section>
+            <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
+              Volatility Surface
+            </h2>
+            <VolSurface spot={spotPrice ?? 3420} trade={surfaceTrade} />
+          </section>
         )}
 
         {activeTab === "lp-position" && (
