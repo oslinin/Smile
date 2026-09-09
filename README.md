@@ -721,6 +721,27 @@ signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.m
 > `onlyCRE`. Wiring the live on-chain write (an `onReport` entrypoint + registered
 > forwarder) is a follow-up; the CRE CLI **simulation above** is the demonstrated path.
 
+### 7. Explore the Codebase — Knowledge Graph
+
+The repo ships a generated map of itself — [`.understand-anything/knowledge-graph.json`](.understand-anything/knowledge-graph.json) —
+166 nodes (files, functions, contracts) and 219 edges (imports, calls, contains)
+grouped into 5 architecture layers, plus a 13-step guided tour, produced by an
+`understand-anything`-style codebase analyzer.
+
+To browse it interactively:
+
+```bash
+./view-knowledge-graph.sh
+```
+
+This serves `.understand-anything/` on `http://localhost:4321` (override with
+`PORT=...`) and opens [`viewer.html`](.understand-anything/viewer.html) — a
+force-directed graph you can filter by layer, search by file/symbol name, and
+click through the guided tour, with each node's summary and tags shown in a
+side panel. It must be served over HTTP (not opened as a local `file://` page)
+so the browser can `fetch()` the JSON; the script handles that. Stop it with
+`Ctrl+C`.
+
 ---
 
 ## End-to-End Demo Walkthrough
@@ -808,6 +829,9 @@ signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.m
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 ├── docs/                     # grant proposal, build notes, CRE transcript
 ├── test/                     # Foundry tests (82 passing)
+├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
+│                             #   layers, guided tour) + viewer.html — see §7 above
+├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
 └── foundry.toml              # solc 0.8.30, via_ir
 ```
 
