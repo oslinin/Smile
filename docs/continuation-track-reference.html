@@ -278,8 +278,11 @@
       <strong>Deadline: September 13, 12:00 PM.</strong> Execution order, as decided on
       Sept 10: Part A (SpreadVault) → Part C (subgraph) → Arc (tracked in
       <code class="code">docs/plans/2026-09-10-arc-bounty.md</code>) → Part B (MarginVault, stretch —
-      cut first if the clock runs out). Rows flip from "Not started" to "Done" as each task's
-      commit lands; the overview of all three bounties is
+      cut first if the clock runs out). <strong>Outcome, Sept 10 evening:</strong> A1–A4, B1–B8 and
+      C1–C5 all landed, MarginVault included; the RFQ tier first scoped as the Arc plan's stretch
+      X7 was built too and is tracked here as <strong>A6</strong> — it is a third Aqua app, so it
+      belongs with the 1inch work, not with Arc. Rows flip from "Not started" to "Done" as each
+      task's commit lands; the overview of all three bounties is
       <code class="code">docs/plans/2026-09-10-ethonline26-bounties.md</code>. The main
       <a href="reference-table.html">Reference Table</a> still lists only implemented/designed
       protocol items. The MarginVault plan defines a <strong>v1</strong> scope only (puts only, no
@@ -370,6 +373,20 @@
         </tr>
 
         <!-- PART B: MarginVault -->
+        <!-- A6: RFQ tier (1inch) — first scoped as the Arc plan's stretch X7, but it is an Aqua app on any chain -->
+        <tr class="row-A">
+          <td><span class="code">A6</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>Hybrid RFQ tier (R6) — Derive-inspired signed quotes</strong> — the limitations doc's Phase-3 recommendation (first scoped as the Arc plan's stretch item X7, but nothing in it is Arc-specific — it is a third Aqua app, so it lives with the 1inch work): tier 1 stays the formula surface (permissionless, always live, the fallback); tier 2 lets an LP sign EIP-712 quotes off-chain from any pricing model and a taker fill them, settling through the identical Aqua JIT pull. Tradfi's "NBBO + price improvement".
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/RfqVault.sol</span> <span class="code">test/RfqVault.t.sol</span> <span class="code">frontend/components/RfqDesk.tsx</span> <span class="code">script/rfq-lifecycle.sh</span>; <span class="code">script/Deploy.s.sol</span> (<span class="code">_deployRfq</span>), <span class="code">local.sh</span>, <span class="code">wagmi.ts</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Built as a sibling AquaApp, not a SwapVM instruction (nonces need state; the custody model, not the pricing path, is what Aqua contributes). <span class="code">openRange</span> ships calls (WETH) or puts (USDC), fully collateralized; the LP signs <span class="code">Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</span> under domain "Smile RFQ" v1; <span class="code">fill</span> recovers the signer, checks ttl / size / nonce, takes premium + 1 % fee, pulls collateral JIT under <span class="code">nonReentrantStrategy</span>, mints one OptionToken per (range, strike), registers with its own settlement; <span class="code">formulaQuote</span> exposes the tier-1 Ask and <span class="code">QuoteFilled</span> emits both prices. Single-use nonces, <span class="code">cancelQuote</span>, no <span class="code">close()</span>. 8 tests (wrong signer / oversize / off-range / cancelled / expired / tampered all revert; ITM call settles with conservation). The RFQ tab signs with <span class="code">useSignTypedData</span> (no gas) and shows quote vs formula; <span class="code">script/rfq-lifecycle.sh</span> on Anvil: formula Ask 691.93 USDC, signed quote 685.01, taker paid 691.93 incl. fee vs 698.92 on tier 1, 1 WETH pulled JIT at the fill, replay rejected <span class="code">QuoteUsed</span>. Runtime 12,714 bytes; 200 Foundry tests. Not on a testnet.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Stretch · built</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A3')">A3</span><span class="ref-link" onclick="scrollTo('B3')">B3</span></span></td>
+        </tr>
+
         <tr class="row-B">
           <td><span class="code">B1</span></td>
           <td><span class="cat">Part B</span></td>
@@ -549,20 +566,6 @@
           <td><span class="status not-started">Not started</span></td>
           <td>Day 5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M10')">M10</span></span></td>
-        </tr>
-
-        <!-- PART D: Arc stretch that got built -->
-        <tr class="row-D">
-          <td><span class="code">X7</span></td>
-          <td><span class="cat">Part D</span></td>
-          <td>
-            <strong>Hybrid RFQ tier (R6) — Derive-inspired signed quotes</strong> — the Arc plan's stretch item and the limitations doc's Phase-3 recommendation: tier 1 stays the formula surface (permissionless, always live, the fallback); tier 2 lets an LP sign EIP-712 quotes off-chain from any pricing model and a taker fill them, settling through the identical Aqua JIT pull. Tradfi's "NBBO + price improvement".
-            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/RfqVault.sol</span> <span class="code">test/RfqVault.t.sol</span> <span class="code">frontend/components/RfqDesk.tsx</span> <span class="code">script/rfq-lifecycle.sh</span>; <span class="code">script/Deploy.s.sol</span> (<span class="code">_deployRfq</span>), <span class="code">local.sh</span>, <span class="code">wagmi.ts</span></div>
-            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Built as a sibling AquaApp, not a SwapVM instruction (nonces need state; the custody model, not the pricing path, is what Aqua contributes). <span class="code">openRange</span> ships calls (WETH) or puts (USDC), fully collateralized; the LP signs <span class="code">Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</span> under domain "Smile RFQ" v1; <span class="code">fill</span> recovers the signer, checks ttl / size / nonce, takes premium + 1 % fee, pulls collateral JIT under <span class="code">nonReentrantStrategy</span>, mints one OptionToken per (range, strike), registers with its own settlement; <span class="code">formulaQuote</span> exposes the tier-1 Ask and <span class="code">QuoteFilled</span> emits both prices. Single-use nonces, <span class="code">cancelQuote</span>, no <span class="code">close()</span>. 8 tests (wrong signer / oversize / off-range / cancelled / expired / tampered all revert; ITM call settles with conservation). The RFQ tab signs with <span class="code">useSignTypedData</span> (no gas) and shows quote vs formula; <span class="code">script/rfq-lifecycle.sh</span> on Anvil: formula Ask 691.93 USDC, signed quote 685.01, taker paid 691.93 incl. fee vs 698.92 on tier 1, 1 WETH pulled JIT at the fill, replay rejected <span class="code">QuoteUsed</span>. Runtime 12,714 bytes; 200 Foundry tests. Not on a testnet.</div>
-          </td>
-          <td><span class="status done">Done</span></td>
-          <td>Stretch</td>
-          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A3')">A3</span><span class="ref-link" onclick="scrollTo('B3')">B3</span></span></td>
         </tr>
 
         <!-- MILESTONES -->
