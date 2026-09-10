@@ -86,6 +86,13 @@ The S12 formulas are right in exact arithmetic but not in integers: rounding eac
 **Verify:** `forge test --match-contract SpreadSettlementTest` passes.
 **Commit:** `feat(spread): debit spreads collateralized by the long OptionToken`
 
+### A6 (built beyond this plan, 2026-09-10): RfqVault — R6 hybrid RFQ tier
+**Files:** `src/periphery/RfqVault.sol`, `test/RfqVault.t.sol`, `frontend/components/RfqDesk.tsx`, `script/rfq-lifecycle.sh`; `script/Deploy.s.sol` (`_deployRfq`), `local.sh`, `wagmi.ts`.
+**What:** a third sibling AquaApp. The LP ships a range (calls WETH / puts USDC, tier-1 collateral rules), signs EIP-712 `Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)` off-chain, and `fill()` recovers the signer, checks ttl / size / nonce, takes premium + fee and pulls the collateral JIT through this vault's Aqua strategy. `formulaQuote()` is the tier-1 Ask for the same range; nonces are single-use and cancellable; no `close()`. Own settlement; `redeem` / `reclaim` as the main vault.
+**Why here:** it was first written up as the Arc plan's stretch X7, but it is chain-agnostic Aqua work — the same custody model as A1–A4 with a signed price instead of a formula price — so it belongs with Part A.
+**Verified:** 8 tests; `./script/rfq-lifecycle.sh` on Anvil (formula 691.93 USDC → signed 685.01, 1 WETH pulled JIT at the fill, second fill of the nonce reverts `QuoteUsed`).
+**Commits:** `feat(rfq): RfqVault — EIP-712 signed-quote tier settling through the same Aqua pull`, `feat(rfq): deploy wiring, RFQ tab with wallet-signed quotes, Anvil lifecycle script`.
+
 ## Part B: MarginVault (rung 4), opt-in true margin
 
 Scope for v1: short puts, USDC only. The main vault already forces `collateralToken == premiumToken` for puts, so margin, premium, penalties, backstop and insurance are one token and the waterfall needs no swap. Calls follow once a WETH shortfall can be paid. No `close()` in v1: a buyback priced off sigma and paid from locked margin would let a manipulated sigma drain margin (L7).

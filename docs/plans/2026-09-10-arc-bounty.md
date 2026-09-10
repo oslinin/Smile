@@ -237,6 +237,14 @@ the throwaway testnet experiments from today.
 
 ## X7 (stretch): R6 hybrid RFQ tier, Derive-inspired
 
+> **Built 2026-09-10 — and re-homed under 1inch.** Shipped as
+> `src/periphery/RfqVault.sol` (a sibling Aqua app, not the SwapVM
+> instruction sketched below — nonce replay protection needs state). Since
+> nothing in it is Arc-specific it is tracked as A6 in
+> `docs/continuation-track-reference.html` and as "Part C — RfqVault" in the
+> 1inch section of `2026-09-10-ethonline26-bounties.md`; this section stays
+> as the record of where the idea came from. Not deployed to Arc.
+
 Already fully speced in `docs/limitations.md`/`docs/solutions.md` R6 — a
 `signedPremium` SwapVM instruction verifying an LP's EIP-712 quote
 `(strike, expiry, premium, maxAmount, ttl, nonce)`, settling through the
@@ -288,7 +296,8 @@ slot can realistically hold, not a full week of runway.
 | M5 | Submitted | X8 | **Sept 13, 12:00 PM** |
 | M6 (post-submission) | Deployed to Arc **mainnet** for the $2,000 bonus | X6 | Sept 16-30 |
 
-Cut for the Sept 13 submission outright: X4 (Gateway) and X7 (RFQ).
+Cut for the Sept 13 submission outright: X4 (Gateway). X7 (RFQ) was cut
+here and then built as a 1inch piece instead (see the note in X7).
 
 **Cut order if time compresses:** X4 (Gateway) and X7 (RFQ) are already
 cut for Sept 13. Next to go: X2/X5 (the FX deploy + trade) — but only on a

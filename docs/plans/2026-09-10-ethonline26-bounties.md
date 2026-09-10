@@ -139,6 +139,27 @@ and there's still runway before Sept 13.
 
 ---
 
+### Part C — RfqVault (R6 hybrid RFQ) — built 2026-09-10, beyond the plan
+
+First scoped as the Arc plan's stretch item X7 (the "advanced programmable
+money flows" ask was the excuse), but the artifact is a third Aqua app on
+any chain, so it is a 1inch submission piece — the same JIT-pull custody
+model with a different pricing path. `src/periphery/RfqVault.sol`: the LP
+ships a range, signs EIP-712 `Quote(authId, strike, maxAmount,
+premiumPerUnit, ttl, nonce)` off-chain from any model, and a taker's
+`fill()` recovers the signer, checks ttl / size / nonce, takes premium +
+fee and pulls the collateral JIT through Aqua under the strategy
+reentrancy guard. `formulaQuote()` exposes the tier-1 Ask the quote is
+beating; quotes are single-use and cancellable; no `close()` so holders
+are never captive to a market maker's uptime. Built as a vault rather than
+a `signedPremium` SwapVM instruction because nonce replay protection needs
+state an instruction doesn't have. Eight tests (200 total), the **RFQ ·
+Signed Quotes** tab (wallet-signed quotes), `script/rfq-lifecycle.sh`
+(formula Ask 691.93 USDC → signed 685.01, 1 WETH pulled JIT, replay
+rejected). Not on a testnet. Story for the 1inch judges: tier 1 is the
+public floor, tier 2 is price improvement from makers who bring their own
+models — tradfi's NBBO — and both settle through the identical Aqua pull.
+
 ## The Graph — Best AI Tooling or AI Use Case
 
 **Full plan:** [`2026-09-09-theGraph.md`](./2026-09-09-theGraph.md) —
@@ -293,20 +314,14 @@ than a slide.
 }
 ```
 
-### Circle Gateway and RFQ (R6) — Gateway cut; RFQ built after all
+### Circle Gateway — cut for Sept 13
 
-> **Status update, 2026-09-10 evening:** with every other track done, RFQ
-> was built on the user's call as a sibling AquaApp (`RfqVault`, not a
-> SwapVM instruction — nonces need state an instruction doesn't have and
-> the JIT custody model is the point, not the pricing path). Eight tests,
-> an RFQ tab with wallet-signed EIP-712 quotes, `script/rfq-lifecycle.sh`.
-> Not on a testnet. Gateway stays cut.
-
-Both were explicitly out of scope for the 3-day submission — Gateway's Arc
-availability isn't even confirmed yet, and RFQ was always a bigger,
-separate architectural build. Revisit only in the Sept 16-30 window if the
-mainnet bonus is being pursued with spare time. Full stories for both are
-still in `docs/plans/2026-09-10-arc-bounty.md` for later.
+Explicitly out of scope for the 3-day submission — Gateway's Arc
+availability isn't even confirmed yet. Revisit only in the Sept 16-30
+window if the mainnet bonus is being pursued with spare time; the story is
+still in `docs/plans/2026-09-10-arc-bounty.md` (X4). The RFQ tier that used
+to share this section was built and belongs to the 1inch track — see
+**Part C — RfqVault** above; nothing in it is Arc-specific.
 
 ---
 

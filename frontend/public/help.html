@@ -1284,7 +1284,7 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
 <tr>
 <td><strong>RfqVault — R6 hybrid RFQ</strong></td>
 <td>The &quot;NBBO + price improvement&quot; tier from the limitations doc: an LP ships a range to a third sibling AquaApp, then signs EIP-712 quotes off-chain (no gas) — <code>(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</code> — and a taker fills one; the vault recovers the signer and pulls the collateral JIT through Aqua exactly as tier 1. <code>formulaQuote()</code> shows the tier-1 Ask the quote is beating. Single-use nonces, cancellable; no <code>close()</code> (sellbacks stay on tier 1).</td>
-<td>1inch · Build an Aqua App · Arc plan X7</td>
+<td>1inch · Build an Aqua App</td>
 <td><code>src/periphery/RfqVault.sol</code> · <code>test/RfqVault.t.sol</code> (8) · the <strong>RFQ · Signed Quotes</strong> tab · <code>script/rfq-lifecycle.sh</code></td>
 </tr>
 <tr>
