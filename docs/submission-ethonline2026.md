@@ -124,7 +124,10 @@ indexing the EthOnline 2026 Sepolia deployment of the full stack
 ([`sepolia-deployment.md`](sepolia-deployment.md): real Circle USDC,
 canonical WETH, Chainlink ETH/USD). Authorization #0 (calls $2,300–$2,800,
 tx `0x98e4e922…`) was queryable within a minute of `Aqua.ship`
-(`0x878d8bb5…`), `hasIndexingErrors: false`. A local graph-node was
+(`0x878d8bb5…`); the `Fill` for a real 0.01-unit $2,500 call
+(`0x505285ff…`, 0.01 WETH pulled JIT from the LP wallet, premium 5.636405
+USDC) appeared one block after the buy with `usedCollateral` refreshed
+through the bound `authorizations()` call; `hasIndexingErrors: false`. A local graph-node was
 attempted and abandoned: no arm64 image exists and qemu emulation
 segfaults on the build machine — documented in `subgraph/README.md`.
 
