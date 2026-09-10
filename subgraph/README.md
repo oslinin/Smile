@@ -26,6 +26,22 @@ Plan: `docs/plans/2026-09-09-theGraph.md`.
 }
 ```
 
+## Graph Studio: `smile-sepolia` (the judged deployment)
+
+Deployed 2026-09-10 with graph-cli 0.98 (`graph auth <deploy key>`, then
+`graph deploy smile-sepolia --network sepolia --version-label vX.Y.Z`;
+`networks.json` carries the per-network address + startBlock so
+`subgraph.yaml` stays on `localhost`):
+
+| | |
+|---|---|
+| Studio | https://thegraph.com/studio/subgraph/smile-sepolia |
+| Query (HTTP) | `https://api.studio.thegraph.com/query/44448/smile-sepolia/<version>` |
+| v0.0.1 | IPFS `QmQX7gssM4VG1ez7AAjFdYkJbnsDNvo1Se6jgczWMER2JC`, indexes the README's older Sepolia vault `0x5115fbdb810D1dB316034fF670c65c45d875f887` from block 11,676,000 — synced, no indexing errors, and no data: that vault predates ranges and has never emitted an event |
+
+Set `NEXT_PUBLIC_SUBGRAPH_URL` to the query URL of the version you want the
+app and copilot to read; leave it unset for the RPC fallback.
+
 ## Local: graph-node against the `./local.sh` Anvil
 
 **x86-64 hosts only.** `graphprotocol/graph-node` ships amd64 images

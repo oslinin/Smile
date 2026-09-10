@@ -180,6 +180,17 @@
       }
     }
 
+    .status.in-progress {
+      background: #cfe2ff;
+      color: #084298;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.in-progress {
+        background: #0d3b66;
+        color: #6ea8fe;
+      }
+    }
+
     .cat {
       font-size: 10px;
       font-weight: 600;
@@ -510,9 +521,10 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Deploy contracts + subgraph to Sepolia (the judged deployment)</strong> — no Sepolia deployment exists yet for this repo at all (only a local Anvil broadcast history), so this task is a real first deploy, not a re-point. The one task in the whole plan marked "cannot be cut" — an Anvil-only subgraph isn't judgeable for the bounty.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/networks.json</span>; runs <span class="code">forge script script/Deploy.s.sol --rpc-url sepolia --broadcast</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/networks.json</span>; runs <span class="code">forge script script/Deploy.s.sol --rpc-url sepolia --broadcast</span></div>
+            <div class="impl"><span class="impl-label">In progress 2026-09-10</span><strong>Studio half done:</strong> <span class="code">smile-sepolia</span> v0.0.1 deployed (<a href="https://thegraph.com/studio/subgraph/smile-sepolia">Studio</a>, query <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.1</span>), synced to head with no indexing errors — but pointed at the README's older Sepolia vault <span class="code">0x5115…f887</span>, which has never emitted an event, so it holds no data. <strong>Contracts half pending:</strong> the current stack needs a fresh Sepolia deploy plus a few authorize → ship → buy transactions before v0.0.2 can index real fills; the deployer <span class="code">0x2816…6bf1</span> holds 0 Sepolia ETH.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status in-progress">In progress</span></td>
           <td>Day 4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C4')">C4</span><span class="ref-link" onclick="scrollTo('M8')">M8</span></span></td>
         </tr>
