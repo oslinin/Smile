@@ -10,6 +10,12 @@
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
 import { CONTRACTS } from "@/config/wagmi";
 import { ALPHA, SIGMA_GLOBAL } from "@/lib/options";
+import {
+  subgraphEnabled,
+  fetchActiveAuthorizations,
+  fetchAuthorizationsByLp,
+  type SubgraphAuthorization,
+} from "@/lib/subgraph";
 
 const WAD = 1e18;
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
@@ -91,7 +97,9 @@ export function getPublicClient(chainId?: number): PublicClient {
   const url =
     chainId === 11155111
       ? process.env.COPILOT_RPC_SEPOLIA || "https://ethereum-sepolia-rpc.publicnode.com"
-      : "http://127.0.0.1:8545"; // Anvil (31337) / Hardhat (1337) local devnet
+      : chainId === 5042002
+        ? process.env.COPILOT_RPC_ARC || "https://rpc.testnet.arc.network" // Circle Arc testnet
+        : "http://127.0.0.1:8545"; // Anvil (31337) / Hardhat (1337) local devnet
   return createPublicClient({ transport: http(url) });
 }
 
@@ -109,14 +117,46 @@ export interface AuthSummary {
   utilizationPct: number;
 }
 
+function fromSubgraph(r: SubgraphAuthorization, now: number): AuthSummary {
+  const dec = r.isCall ? 1e18 : 1e6;
+  const max = Number(r.maxCollateral) / dec;
+  const used = Number(r.usedCollateral) / dec;
+  return {
+    authId: Number(r.authId),
+    lp: r.lp,
+    strikeMin: Number(r.strikeMin) / WAD,
+    strikeMax: Number(r.strikeMax) / WAD,
+    expiry: Number(r.expiry),
+    expiresInDays: Math.round(((Number(r.expiry) - now) / 86400) * 10) / 10,
+    isCall: r.isCall,
+    collateralToken: r.collateralToken,
+    maxCollateral: max,
+    usedCollateral: used,
+    utilizationPct: max > 0 ? Math.round((used / max) * 1000) / 10 : 0,
+  };
+}
+
 export async function readAuths(client: PublicClient, opts?: { lp?: string }): Promise<AuthSummary[]> {
   const vault = CONTRACTS.aquaVault as Address;
   if (!vault) return [];
+  const now = Date.now() / 1000;
+
+  // Indexed path: every authorization, one query, no MAX_AUTHS cap
+  // (docs/limitations.md L12a). Falls back to the bounded RPC scan below
+  // when the subgraph isn't configured or is unreachable.
+  if (subgraphEnabled()) {
+    try {
+      const rows = opts?.lp ? await fetchAuthorizationsByLp(opts.lp) : await fetchActiveAuthorizations();
+      return rows.filter((r) => r.active).map((r) => fromSubgraph(r, now));
+    } catch (err) {
+      console.warn("copilot: subgraph unavailable, falling back to RPC scan:", (err as Error).message);
+    }
+  }
+
   const nextAuthId = Number(
     await client.readContract({ address: vault, abi: VAULT_ABI, functionName: "nextAuthId" })
   );
   const count = Math.min(nextAuthId, MAX_AUTHS);
-  const now = Date.now() / 1000;
 
   const rows = await Promise.all(
     Array.from({ length: count }, (_, i) =>

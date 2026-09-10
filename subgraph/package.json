@@ -10,9 +10,9 @@
     "create-local": "graph create --node http://localhost:8120/ smile/local",
     "remove-local": "graph remove --node http://localhost:8120/ smile/local",
     "deploy-local": "graph deploy --node http://localhost:8120/ --ipfs http://localhost:5001 --version-label v0.0.1 smile/local",
-    "node:up": "sudo docker-compose -p smile-graph up -d",
-    "node:down": "sudo docker-compose -p smile-graph down -v",
-    "node:logs": "sudo docker-compose -p smile-graph logs -f graph-node"
+    "node:up": "sudo docker compose -p smile-graph up -d",
+    "node:down": "sudo docker compose -p smile-graph down -v",
+    "node:logs": "sudo docker compose -p smile-graph logs -f graph-node"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "0.98.1",

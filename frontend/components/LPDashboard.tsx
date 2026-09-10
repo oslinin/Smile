@@ -3,6 +3,7 @@
 import { useAccount, useReadContract, useBalance, usePublicClient } from "wagmi";
 import { useState, useEffect, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
+import { subgraphEnabled, fetchAuthorizationsByLp } from "@/lib/subgraph";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 
 const VAULT_ABI = [
@@ -42,18 +43,39 @@ export function LPDashboard() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const [mounted, setMounted] = useState(false);
-  // The connected wallet's own most-recently-authorized *active* range —
-  // found via getLogs on `RangeAuthorized`'s indexed `lp` topic, since there
-  // is no indexer to ask "list this LP's authorizations" directly. Distinct
+  // The connected wallet's own most-recently-authorized *active* range.
+  // Read from the subgraph when NEXT_PUBLIC_SUBGRAPH_URL is set (one indexed
+  // query), otherwise via getLogs on `RangeAuthorized`'s indexed `lp` topic
+  // — the fallback for local Anvil dev with no indexer running. Distinct
   // from app/page.tsx's `activeAuth`, which tracks the market-wide latest
   // authorization (any LP) for the buyer-facing option chain — see
-  // docs/limitations.md "LP Dashboard identity" for why these can't share
-  // one piece of state.
+  // docs/limitations.md L12a for why these can't share one piece of state.
   const [myAuth, setMyAuth] = useState<ActiveAuth | null>(null);
   useEffect(() => { setMounted(true); }, []);
 
   const refreshMyAuth = useCallback(async () => {
     if (!publicClient || !address || !CONTRACTS.aquaVault) { setMyAuth(null); return; }
+    if (subgraphEnabled()) {
+      try {
+        const live = (await fetchAuthorizationsByLp(address)).find((r) => r.active);
+        setMyAuth(
+          live
+            ? {
+                authId: BigInt(live.authId),
+                strikeMin: Number(live.strikeMin) / 1e18,
+                strikeMax: Number(live.strikeMax) / 1e18,
+                expiry: Number(live.expiry),
+                isCall: live.isCall,
+                lp: live.lp,
+                collateralToken: live.collateralToken,
+              }
+            : null
+        );
+        return;
+      } catch {
+        // Indexer unreachable — fall through to the on-chain scan.
+      }
+    }
     const logs = await publicClient.getLogs({
       address: CONTRACTS.aquaVault as `0x${string}`,
       event: VAULT_ABI[1],

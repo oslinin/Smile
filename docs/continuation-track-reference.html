@@ -477,20 +477,22 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Local graph-node against Anvil, docker-compose</strong> — a 3-container stack (graph-node, IPFS, Postgres) pointed at this VPS's own Anvil RPC, for fast dev iteration before the real Sepolia deploy. Verified by querying it directly and matching a `cast call` on the same authorization.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/docker-compose.yml</span> <span class="code">subgraph/README.md</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/docker-compose.yml</span> <span class="code">subgraph/README.md</span> <span class="code">local.sh</span> (Anvil now also binds the docker bridge)</div>
+            <div class="impl"><span class="impl-label">Blocked on this host, 2026-09-10</span>the compose stack (graph-node, IPFS, Postgres; ports remapped off 8000) and the Anvil bridge binding are in place, but <span class="code">graphprotocol/graph-node</span> ships amd64 images only (checked v0.36–v0.38 and latest) and crashes under qemu emulation on this arm64 VPS. Runs as written on an x86-64 host; on arm64 the judged path is Graph Studio (C5), which is the one that matters for the bounty anyway.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status gated">Blocked: arm64 host</span></td>
           <td>Day 2</td>
-          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C2')">C2</span><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C2')">C2</span><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
         </tr>
         <tr class="row-C">
           <td><span class="code">C4</span></td>
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Wire the frontend to the subgraph (Sepolia + local dual-mode)</strong> — `LPDashboard.tsx` and the copilot's `readAuths` query the subgraph via GraphQL when `NEXT_PUBLIC_SUBGRAPH_URL` is set; the existing `eth_getLogs`/RPC-scan paths stay as the fallback for local Anvil dev with no indexer running — never deleted, per the plan's ground rules.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">frontend/lib/subgraph.ts</span>; modifies <span class="code">LPDashboard.tsx</span>, <span class="code">lib/copilot/chain.ts</span>, <span class="code">.env.example</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">frontend/lib/subgraph.ts</span>; <span class="code">LPDashboard.tsx</span>, <span class="code">lib/copilot/chain.ts</span>, <span class="code">.env.example</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10 (code)</span><span class="code">lib/subgraph.ts</span> is a thin GraphQL fetch client with typed <span class="code">Authorization</span> queries (by LP, all active). <span class="code">LPDashboard</span> and the copilot's <span class="code">readAuths</span> take the indexed path when <span class="code">NEXT_PUBLIC_SUBGRAPH_URL</span> is set — no <span class="code">MAX_AUTHS</span> cap on that path — and fall back to the existing getLogs / RPC scan on any error or when unset. Type-checks clean; exercised for real once the Studio endpoint (C5) exists, since no local graph-node runs on this host (C3).</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C3')">C3</span><span class="ref-link" onclick="scrollTo('M7')">M7</span></span></td>
         </tr>

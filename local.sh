@@ -50,9 +50,16 @@ if [ -n "${FORK_URL:-}" ]; then
   export FORK_MAINNET=true
 fi
 
+# Also listen on the docker bridge when one exists, so the local graph-node
+# (subgraph/docker-compose.yml) can index this chain via host.docker.internal
+# without exposing the dev RPC on a public interface.
+DOCKER0_IP=$(ip -4 -o addr show docker0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+ANVIL_HOSTS="127.0.0.1${DOCKER0_IP:+,$DOCKER0_IP}"
+
 anvil \
   --chain-id 31337 \
   --block-time 1 \
+  --host "$ANVIL_HOSTS" \
   --port 8545 \
   ${FORK_ARGS} \
   > /tmp/anvil-options.log 2>&1 &
