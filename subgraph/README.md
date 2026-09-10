@@ -37,7 +37,8 @@ Deployed 2026-09-10 with graph-cli 0.98 (`graph auth <deploy key>`, then
 |---|---|
 | Studio | https://thegraph.com/studio/subgraph/smile-sepolia |
 | Query (HTTP) | `https://api.studio.thegraph.com/query/44448/smile-sepolia/<version>` |
-| v0.0.1 | IPFS `QmQX7gssM4VG1ez7AAjFdYkJbnsDNvo1Se6jgczWMER2JC`, indexes the README's older Sepolia vault `0x5115fbdb810D1dB316034fF670c65c45d875f887` from block 11,676,000 — synced, no indexing errors, and no data: that vault predates ranges and has never emitted an event |
+| v0.0.1 | IPFS `QmQX7gssM4VG1ez7AAjFdYkJbnsDNvo1Se6jgczWMER2JC`, indexed the README's older Sepolia vault `0x5115fbdb810D1dB316034fF670c65c45d875f887` — synced, no errors, no data: that vault predates ranges and never emitted an event |
+| **v0.0.2** (current) | indexes the EthOnline 2026 Sepolia deployment's `AquaCollateralVault` `0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D` from its deploy block 11,677,088 ([docs/sepolia-deployment.md](../docs/sepolia-deployment.md)); returned Authorization `#0` (calls $2,300–$2,800, 0.02 WETH) within a minute of `Aqua.ship` — `https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2` |
 
 Set `NEXT_PUBLIC_SUBGRAPH_URL` to the query URL of the version you want the
 app and copilot to read; leave it unset for the RPC fallback.

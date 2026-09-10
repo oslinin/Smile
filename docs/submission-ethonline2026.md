@@ -117,11 +117,16 @@ and how full are they" from one query.
 `lib/copilot/chain.ts` read the subgraph when `NEXT_PUBLIC_SUBGRAPH_URL` is
 set and fall back to RPC otherwise. Commits `476cb30`, `b818634`.
 
-**Status, honestly.** Mappings, tests, and wiring are complete; the hosted
-Studio deployment on Sepolia is pending (needs a funded deployer + Studio
-key). A local graph-node was attempted and abandoned: no arm64 image exists
-and qemu emulation segfaults on the build machine — documented in
-`subgraph/README.md` and the compose file is marked x86-64-only.
+**Live.** `smile-sepolia` on Graph Studio —
+https://thegraph.com/studio/subgraph/smile-sepolia, query endpoint
+`https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2` —
+indexing the EthOnline 2026 Sepolia deployment of the full stack
+([`sepolia-deployment.md`](sepolia-deployment.md): real Circle USDC,
+canonical WETH, Chainlink ETH/USD). Authorization #0 (calls $2,300–$2,800,
+tx `0x98e4e922…`) was queryable within a minute of `Aqua.ship`
+(`0x878d8bb5…`), `hasIndexingErrors: false`. A local graph-node was
+attempted and abandoned: no arm64 image exists and qemu emulation
+segfaults on the build machine — documented in `subgraph/README.md`.
 
 ## Arc — Best DeFi Application
 

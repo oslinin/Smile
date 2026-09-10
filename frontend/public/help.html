@@ -817,14 +817,11 @@ addresses above run).</p>
 </code></pre>
 <hr>
 <h2>📍 Deployed Addresses (Sepolia)</h2>
-<blockquote>
-<p>⚠️ <strong>Stale — v1 deployment.</strong> These are the original hackathon contracts, deployed
-<strong>before</strong> the official Aqua/SwapVM integration, the two-sided sellback, trustless
-settlement, and the protocol fee. Their ABIs are incompatible with the current
-frontend; a redeploy of the new stack (Aqua, <code>SmileSwapVMRouter</code>, oracle, vault,
-settlement) is pending. Until then, use the <a href="#4-deploy-to-anvil-local">local Anvil path</a>,
-which deploys and exercises everything.</p>
-</blockquote>
+<p>Redeployed 2026-09-10 (EthOnline 2026) — the full current stack, on real
+Circle USDC, canonical WETH and the real Chainlink ETH/USD feed. Every
+address, deploy hash and demo transaction: <a href="docs/sepolia-deployment.md">docs/sepolia-deployment.md</a>;
+<code>.env.sepolia.example</code> points the app at it. The Graph Studio subgraph
+<code>smile-sepolia</code> indexes this vault (<a href="subgraph/README.md">subgraph/README.md</a>).</p>
 <table>
 <thead>
 <tr>
@@ -833,20 +830,44 @@ which deploys and exercises everything.</p>
 </tr>
 </thead>
 <tbody><tr>
+<td><strong>Aqua</strong> (official registry)</td>
+<td><a href="https://sepolia.etherscan.io/address/0x915Bc53936Ecb14A18dB8270A4a648E8dE248749"><code>0x915Bc53936Ecb14A18dB8270A4a648E8dE248749</code></a></td>
+</tr>
+<tr>
+<td><strong>SmileSwapVMRouter</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x44E2213838913aeC52410ec815b07D15Fcf0a72c"><code>0x44E2213838913aeC52410ec815b07D15Fcf0a72c</code></a></td>
+</tr>
+<tr>
 <td><strong>OptionPricingEngine</strong></td>
-<td><a href="https://sepolia.etherscan.io/address/0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532"><code>0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532</code></a></td>
+<td><a href="https://sepolia.etherscan.io/address/0x681Bd7583B6612FFf1539781e8d5d7Db565994B3"><code>0x681Bd7583B6612FFf1539781e8d5d7Db565994B3</code></a></td>
 </tr>
 <tr>
 <td><strong>OptionPricingHook</strong></td>
-<td><a href="https://sepolia.etherscan.io/address/0x15578B9248b574194867Ab204bE4161213Acf194"><code>0x15578B9248b574194867Ab204bE4161213Acf194</code></a></td>
+<td><a href="https://sepolia.etherscan.io/address/0xCa84Df6F9317FABDE1fD21f4bee25Cb2a8ba1676"><code>0xCa84Df6F9317FABDE1fD21f4bee25Cb2a8ba1676</code></a></td>
 </tr>
 <tr>
 <td><strong>AquaCollateralVault</strong></td>
-<td><a href="https://sepolia.etherscan.io/address/0x5115fbdb810D1dB316034fF670c65c45d875f887"><code>0x5115fbdb810D1dB316034fF670c65c45d875f887</code></a></td>
+<td><a href="https://sepolia.etherscan.io/address/0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D"><code>0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D</code></a></td>
 </tr>
 <tr>
 <td><strong>AquaOptionSettlement</strong></td>
-<td><a href="https://sepolia.etherscan.io/address/0x5c9E7BB8db084A955acD519f61287d24Ff24F211"><code>0x5c9E7BB8db084A955acD519f61287d24Ff24F211</code></a></td>
+<td><a href="https://sepolia.etherscan.io/address/0x17aAAf612cB5b7b3749Cf22b0b2e0CB1AdA77ca1"><code>0x17aAAf612cB5b7b3749Cf22b0b2e0CB1AdA77ca1</code></a></td>
+</tr>
+<tr>
+<td><strong>SmileQuoteLens</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0xad1cE2065f1588caFB6BA6176D1b87cf4Ec7B8D6"><code>0xad1cE2065f1588caFB6BA6176D1b87cf4Ec7B8D6</code></a></td>
+</tr>
+<tr>
+<td><strong>SpreadVault</strong> (S12)</td>
+<td><a href="https://sepolia.etherscan.io/address/0x94eE3E1747e96fd643f464ae42db5899Ce878391"><code>0x94eE3E1747e96fd643f464ae42db5899Ce878391</code></a></td>
+</tr>
+<tr>
+<td><strong>MarginVault</strong> (S13)</td>
+<td><a href="https://sepolia.etherscan.io/address/0x23F9a08F44fBBCABe9Fdf0d458f226ABb3A84742"><code>0x23F9a08F44fBBCABe9Fdf0d458f226ABb3A84742</code></a></td>
+</tr>
+<tr>
+<td><strong>MarginBackstop</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x6eEE1ec5F1AFA7Fb8353016a50fBA9C50791FdA2"><code>0x6eEE1ec5F1AFA7Fb8353016a50fBA9C50791FdA2</code></a></td>
 </tr>
 <tr>
 <td><strong>USDC</strong> (Circle Sepolia)</td>
@@ -856,9 +877,13 @@ which deploys and exercises everything.</p>
 <td><strong>WETH</strong> (canonical Sepolia)</td>
 <td><a href="https://sepolia.etherscan.io/address/0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9"><code>0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9</code></a></td>
 </tr>
+<tr>
+<td><strong>Chainlink ETH/USD</strong></td>
+<td><a href="https://sepolia.etherscan.io/address/0x694AA1769357215DE4FAC081bf1f309aDC325306"><code>0x694AA1769357215DE4FAC081bf1f309aDC325306</code></a></td>
+</tr>
 </tbody></table>
 <blockquote>
-<p><em>Frontend deployed at <strong><a href="https://oslinin.github.io/Smile">https://oslinin.github.io/Smile</a></strong> (WalletConnect enabled). The live site currently targets the v1 contracts above — on-chain interactions there will work again after the Sepolia redeploy.</em></p>
+<p><em>Frontend deployed at <strong><a href="https://oslinin.github.io/Smile">https://oslinin.github.io/Smile</a></strong> (WalletConnect enabled). The live site still targets the pre-event v1 contracts (<code>AquaCollateralVault</code> <code>0x5115…f887</code>, incompatible ABI); point a build at <code>.env.sepolia.example</code> to use this deployment.</em></p>
 </blockquote>
 <hr>
 <h2>🛠️ How to Run the Project</h2>
@@ -1208,7 +1233,7 @@ and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>doc
 <td><strong>The Graph subgraph</strong></td>
 <td>Indexes every LP authorization and fill. Replaces the capped brute-force scan the LP Dashboard and the AI copilot used (<code>chain.ts</code> stopped seeing anything past 50 authorizations — <a href="docs/limitations.md">L12a</a>) with one query, RPC path kept as the fallback.</td>
 <td>The Graph · AI tooling / agent on live chain data</td>
-<td><code>subgraph/</code> · <code>frontend/lib/subgraph.ts</code> · <code>components/LPDashboard.tsx</code>, <code>lib/copilot/chain.ts</code></td>
+<td><code>subgraph/</code> · <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Studio: <code>smile-sepolia</code></a> · <code>frontend/lib/subgraph.ts</code> · <code>components/LPDashboard.tsx</code>, <code>lib/copilot/chain.ts</code></td>
 </tr>
 <tr>
 <td><strong>Arc testnet deployment</strong></td>
@@ -1311,6 +1336,7 @@ cd keeper &amp;&amp; npm install &amp;&amp; MARGIN_VAULT=… MARGIN_SETTLEMENT=�
 
 cd subgraph &amp;&amp; pnpm install &amp;&amp; pnpm codegen &amp;&amp; pnpm build   # The Graph subgraph (see subgraph/README.md)
 
+cp .env.sepolia.example frontend/.env.local                  # point the app (+ subgraph URL) at the Sepolia deployment
 cp .env.arc.example frontend/.env.local                      # point the app at the Arc testnet deployment
 PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills on Arc, as plain cast sends
 </code></pre>
@@ -1318,7 +1344,7 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <ul>
 <li><strong>SpreadVault</strong>: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional <code>SpreadPremiumInstruction</code> SwapVM opcode for the call-credit leg was not attempted.</li>
 <li><strong>MarginVault</strong>: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range <code>maxBlockNotional</code> not ported (the global backstop-coupled ceiling bounds exposure instead); no <code>close()</code> by design (a sigma-priced buyback paid from margin is L7&#39;s attack). Runs on Anvil via <code>script/margin-lifecycle.sh</code> and the keeper; not deployed to Arc/Sepolia. <a href="docs/limitations.md">L13</a> is the honest list of what it does not promise.</li>
-<li><strong>Subgraph</strong>: mappings, schema, tests, and the frontend/copilot wiring are done; the local graph-node compose is x86-64-only (no arm64 image; emulation crashes) and the judged Graph Studio deployment on Sepolia is pending a funded deployer and a Studio key.</li>
+<li><strong>Subgraph</strong>: live on Graph Studio as <code>smile-sepolia</code> v0.0.2 (<code>https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</code>), indexing the Sepolia deployment above — Authorization #0 was queryable within a minute of <code>Aqua.ship</code>. The local graph-node compose is x86-64-only (no arm64 image; emulation crashes). G6/G7 stretch (long positions via dynamic data sources, a Subgraph MCP) not attempted.</li>
 <li><strong>Arc</strong>: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork&#39;s pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.</li>
 </ul>
 <hr>
