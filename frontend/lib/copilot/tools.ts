@@ -71,7 +71,7 @@ export function buildTools(ctx: CopilotContext) {
   return {
     read_docs: tool({
       description:
-        "Read a full section of the Smile protocol documentation (README, limitations, solutions). Use for questions about protocol economics, design trade-offs, limitations (L1-L12), planned solutions (S1-S12), and competitor comparisons. Cite the section id in your answer.",
+        "Read a full section of the Smile protocol documentation (README, limitations, solutions, the AI copilot's own docs). Use for questions about protocol economics, design trade-offs, limitations (L1-L12), planned solutions (S1-S12), competitor comparisons, and questions about the copilot itself (what it can do, how to enable it). Cite the section id in your answer.",
       inputSchema: z.object({
         sectionId: z
           .string()

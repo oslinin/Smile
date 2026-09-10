@@ -74,6 +74,7 @@ const pages = [
   { id: "overview", label: "Overview", source: "README.md", mermaid: true },
   { id: "limitations", label: "Limitations", source: "docs/limitations.md", mermaid: false },
   { id: "solutions", label: "Solutions", source: "docs/solutions.md", mermaid: false },
+  { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
 ];
 
 // Every doc (not just the README) goes through extractMath first, so KaTeX

@@ -106,6 +106,7 @@
       <button class="nav-link" data-page="overview">Overview</button>
         <button class="nav-link" data-page="limitations">Limitations</button>
         <button class="nav-link" data-page="solutions">Solutions</button>
+        <button class="nav-link" data-page="copilot">AI Copilot</button>
         <button class="nav-link" data-page="reference">Reference Table</button>
     </nav>
     <div class="content">
@@ -983,6 +984,21 @@ a KeystoneForwarder that calls <code>onReport(bytes,bytes)</code> on the receive
 <code>onlyCRE</code>. Wiring the live on-chain write (an <code>onReport</code> entrypoint + registered
 forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the demonstrated path.</p>
 </blockquote>
+<h3>7. Explore the Codebase — Knowledge Graph</h3>
+<p>The repo ships a generated map of itself — <a href=".understand-anything/knowledge-graph.json"><code>.understand-anything/knowledge-graph.json</code></a> —
+166 nodes (files, functions, contracts) and 219 edges (imports, calls, contains)
+grouped into 5 architecture layers, plus a 13-step guided tour, produced by an
+<code>understand-anything</code>-style codebase analyzer.</p>
+<p>To browse it interactively:</p>
+<pre><code class="language-bash">./view-knowledge-graph.sh
+</code></pre>
+<p>This serves <code>.understand-anything/</code> on <code>http://localhost:4321</code> (override with
+<code>PORT=...</code>) and opens <a href=".understand-anything/viewer.html"><code>viewer.html</code></a> — a
+force-directed graph you can filter by layer, search by file/symbol name, and
+click through the guided tour, with each node&#39;s summary and tags shown in a
+side panel. It must be served over HTTP (not opened as a local <code>file://</code> page)
+so the browser can <code>fetch()</code> the JSON; the script handles that. Stop it with
+<code>Ctrl+C</code>.</p>
 <hr>
 <h2>End-to-End Demo Walkthrough</h2>
 <table>
@@ -1105,6 +1121,9 @@ forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the 
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 ├── docs/                     # grant proposal, build notes, CRE transcript
 ├── test/                     # Foundry tests (82 passing)
+├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
+│                             #   layers, guided tour) + viewer.html — see §7 above
+├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
 └── foundry.toml              # solc 0.8.30, via_ir
 </code></pre>
 <hr>
@@ -1371,6 +1390,26 @@ is firm; an Aqua quote is indicative. Mitigations — honest depth display,
 slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 <a href="./solutions.md">solutions.md</a> (S1–S4).</p>
+<h3>L12a. No indexer — &quot;my authorizations&quot; is a linear on-chain scan</h3>
+<p>There is no subgraph or indexing service. <code>LPDashboard</code> finds &quot;the connected
+wallet&#39;s own active authorization&quot; (<code>components/LPDashboard.tsx</code>) by calling
+<code>eth_getLogs</code> for <code>RangeAuthorized</code> filtered on the indexed <code>lp</code> topic, then
+reading <code>authorizations(authId)</code> for each match, newest-first, until it finds
+one still <code>active</code>. This is correct — unlike the earlier version, which
+displayed whichever authorization was <em>globally</em> most recent (any LP), so one
+LP&#39;s <code>authorizeRange</code> could silently evict a different LP&#39;s still-active range
+from the dashboard&#39;s — and buyer-facing option chain&#39;s — single-slot state —
+but it does not scale: cost grows linearly with how many ranges that address
+has ever authorized, and <code>getLogs</code> against <code>fromBlock: 0</code> gets slow or
+rate-limited on a real RPC provider once history is long. It also still only
+surfaces <strong>one</strong> authorization: if the same LP has multiple simultaneously
+active ranges (this can happen — nothing stops an LP from authorizing a
+second range before closing the first), only the most-recently-created one is
+shown or tradable; the older one stays fully active and fillable on-chain, it
+is just invisible in the UI. A real fix (subgraph, or a small indexing
+service backed by the same <code>RangeAuthorized</code>/<code>AuthorizationRevoked</code> events)
+would return the LP&#39;s complete active-range list in one query and let the UI
+show — and let buyers trade against — all of them, not just the latest.</p>
 <h3>L12. The per-trade gas floor — and where it actually comes from</h3>
 <p>Every fill pays a fixed gas overhead, which sets a minimum economical trade
 size: below it, gas dominates the premium. Measured (<code>test/GasProbe.t.sol</code>,
@@ -1925,6 +1964,101 @@ requires no liquidation engine.</li>
 </ul>
 </article>
     </section>
+    <section id="page-copilot" class="page" data-mermaid="false">
+      <article class="doc"><h1>AI Copilot</h1>
+<p>Smile ships an in-app AI chat assistant — the <strong>Copilot</strong>. It is not
+mentioned in the README; this page is its documentation.</p>
+<h2>Where it lives</h2>
+<p>A floating chat button, bottom-right corner of every tab in the app
+(<code>frontend/components/copilot/CopilotPanel.tsx</code>). Click it to open a
+slide-over chat panel with a few starter prompts:</p>
+<ul>
+<li>&quot;Explain the volatility smile in this protocol&quot;</li>
+<li>&quot;I&#39;m bullish on ETH — show me trade ideas&quot;</li>
+<li>&quot;How does Smile compare to Panoptic?&quot;</li>
+<li>&quot;Quiz me on the Greeks&quot;</li>
+</ul>
+<p>It sends <code>{spot, chainId, address}</code> with every message, so its pricing and
+on-chain answers always match what&#39;s visibly on screen — the server prices
+with the same code the payoff builder uses, and reads the same connected
+wallet address wagmi has.</p>
+<h2>Turning it on</h2>
+<p>The Copilot is hidden unless <code>NEXT_PUBLIC_COPILOT=1</code> is set (it&#39;s absent on
+the static GitHub Pages export, which has no API server to talk to). Even
+with the flag on, the backend (<code>app/api/copilot/route.ts</code>) needs an LLM
+provider key to actually answer — set one of these in <code>frontend/.env.local</code>
+(<code>local.sh</code> preserves them across restarts):</p>
+<pre><code>NEXT_PUBLIC_COPILOT=1
+COPILOT_PROVIDER=anthropic   # or openai / google
+# the provider&#39;s own API key env var, e.g. ANTHROPIC_API_KEY=...
+COPILOT_MODEL=               # optional override; defaults to claude-opus-4-8 / gpt-5-mini / gemini-2.5-pro
+</code></pre>
+<p><strong>Bring-your-own-key</strong> is also supported without touching <code>.env.local</code>: the
+panel&#39;s settings gear lets a visitor paste their own Anthropic/OpenAI/Google
+key, stored only in that browser&#39;s <code>localStorage</code> and sent per-request via
+headers — never persisted server-side.</p>
+<h2>What it can actually do</h2>
+<p>The Copilot is tool-calling, not free-floating chat — every substantive
+answer comes from one of these (<code>frontend/lib/copilot/tools.ts</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>read_docs</code></td>
+<td>Reads a full section of the README/limitations/solutions docs and cites it.</td>
+</tr>
+<tr>
+<td><code>get_market_state</code></td>
+<td>Live ETH spot, smile parameters, ATM vol, expected move, 25-delta risk reversal/butterfly.</td>
+</tr>
+<tr>
+<td><code>price_strategy</code></td>
+<td>Prices a multi-leg strategy at the protocol&#39;s smile — cost, max P/L, PoP, breakevens, net Greeks; renders a payoff chart.</td>
+</tr>
+<tr>
+<td><code>suggest_strategies</code></td>
+<td>Candidate strategies from the catalog for a stated market view, with live-priced strikes.</td>
+</tr>
+<tr>
+<td><code>scenario_analysis</code></td>
+<td>Stress-tests a strategy across spot/vol shifts, optionally rolled forward in time.</td>
+</tr>
+<tr>
+<td><code>analyze_adjustment</code></td>
+<td>Economics of rolling/modifying an existing position — before/after risk and cash flow.</td>
+</tr>
+<tr>
+<td><code>get_onchain_quote</code></td>
+<td>Cross-checks a quote against the deployed pricing engine contract directly (a real <code>eth_call</code>, not the frontend model).</td>
+</tr>
+<tr>
+<td><code>get_positions</code></td>
+<td>The connected wallet&#39;s balances, LP range authorizations, and long option positions.</td>
+</tr>
+<tr>
+<td><code>portfolio_risk</code></td>
+<td>Aggregate Greeks/risk across the connected wallet&#39;s long positions, with a stress grid.</td>
+</tr>
+<tr>
+<td><code>propose_trade</code></td>
+<td>Renders an interactive trade card with a &quot;Load into Payoff Builder&quot; button — the Copilot never executes trades itself.</td>
+</tr>
+<tr>
+<td><code>quiz_question</code></td>
+<td>Asks one interactive multiple-choice question, scored against a real pricing-tool answer.</td>
+</tr>
+</tbody></table>
+<p><code>get_positions</code> and <code>portfolio_risk</code> currently read on-chain state directly
+(<code>frontend/lib/copilot/chain.ts</code>) with a hard cap of 50 authorizations ever
+created (<code>MAX_AUTHS</code>) — see <code>docs/limitations.md</code> L12a and
+<code>docs/plans/2026-09-09-theGraph.md</code> for the subgraph work replacing that
+scan.</p>
+</article>
+    </section>
     <section id="page-reference" class="page page-reference">
       <iframe src="/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
     </section>
@@ -1935,7 +2069,7 @@ requires no liquidation engine.</li>
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ["overview","limitations","solutions","reference"];
+    var VALID_PAGES = ["overview","limitations","solutions","copilot","reference"];
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 

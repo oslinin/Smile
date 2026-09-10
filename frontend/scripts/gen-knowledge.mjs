@@ -15,6 +15,7 @@ const DOCS = [
   { source: "README.md", prefix: "readme" },
   { source: "docs/limitations.md", prefix: "limitations" },
   { source: "docs/solutions.md", prefix: "solutions" },
+  { source: "docs/copilot.md", prefix: "copilot" },
 ];
 
 const slug = (s) =>
