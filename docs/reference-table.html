@@ -199,6 +199,21 @@
       .refs { color: #999; }
     }
 
+    .impl {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+      .impl { color: #999; }
+    }
+    .impl-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-right: 4px;
+    }
+
     .ref-link {
       display: inline-block;
       margin-right: 4px;
@@ -419,7 +434,10 @@
         <tr class="row-S">
           <td><span class="code">S1</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Honest depth display</strong> — compute live `min(maxCollateral − used, wallet, allowance)` via staticcall; eliminate phantom depth before failed txs and adversarial lying.</td>
+          <td>
+            <strong>Honest depth display</strong> — the "size shown to a taker" number can lie: an LP's authorized `maxCollateral` might exceed what's actually still in their wallet or approved to Aqua. Fix: before showing any depth number, live-`staticcall` `min(maxCollateral − used, wallet balance, Aqua allowance)` and show that instead. No contract change — this is a frontend/API-layer read. Turns "phantom depth → failed transaction at fill time" into "taker sees the true number before ever clicking buy."
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">frontend/hooks/useFirmDepth.ts</span> <span class="code">frontend/components/OptionMatrix.tsx:230</span></div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P0</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('P0')">P0</span></span></td>
@@ -427,7 +445,10 @@
         <tr class="row-S">
           <td><span class="code">S2</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Firmness bond</strong> — LP escrows slashable bond at `authorize`; if JIT pull fails, taker claims fixed compensation for gas+adverse selection; bond returns at deauth.</td>
+          <td>
+            <strong>Firmness bond</strong> — S1 stops honest LPs from accidentally displaying depth they can't back; it does nothing about an LP who deliberately displays size they never intend to honor. Fix: at `authorizeRange`, the LP escrows a small slashable bond (bps of `maxCollateral`, owner-tunable via `firmnessBondBps`). If the JIT pull ever fails at fill time, the taker's transaction claims a fixed slice of that bond — compensation for gas and for having revealed their trading intent for nothing. The bond returns in full when the LP deauthorizes cleanly.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">AquaCollateralVault.sol:226</span> (set rate) <span class="code">:309-317</span> (escrow at authorize)</div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P1</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S3')">S3</span><span class="ref-link" onclick="scrollTo('P1')">P1</span></span></td>
@@ -435,7 +456,10 @@
         <tr class="row-S">
           <td><span class="code">S3</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Fill-reliability score</strong> — persist `(fills, failedPulls)` per LP; frontends badge by reliability; reputation complements bond (bond prices single failure, score prices pattern).</td>
+          <td>
+            <strong>Fill-reliability score</strong> — S2's bond prices a single bad fill; it can't tell a taker "this LP fails 1 in 3 pulls." Fix: the vault already knows every time a pull succeeds or fails (that's what pays out the S2 bond) — persist it as a per-LP `(fills, failedPulls)` counter and expose it publicly, so frontends and routers can sort/badge LPs by track record instead of trusting a single bond amount.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">AquaCollateralVault.sol:148-149</span> (counters) <span class="code">:549</span> (fill++) <span class="code">:691</span> (failedPull++)</div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P1</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S2')">S2</span><span class="ref-link" onclick="scrollTo('P1')">P1</span><span class="ref-link" onclick="scrollTo('P3')">its data gates P3</span></span></td>
@@ -443,7 +467,10 @@
         <tr class="row-S">
           <td><span class="code">S4</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Firm tier</strong> — MVP shipped: `FirmEscrow` wrapper becomes the maker wallet, collateral has no exit but Aqua's pull, lens prefers firm at equal price. Full version (yield-bearing wstETH/sDAI escrow) deferred.</td>
+          <td>
+            <strong>Firm tier</strong> — S1-S3 make soft (Aqua) liquidity honestly *priced*, but a taker who needs a guarantee, not a probability, still has nothing. Fix: a parallel wrapper contract that <em>becomes</em> the LP's wallet from Aqua's perspective, so the collateral has no exit except Aqua's own `pull()` — firm by construction, can't fail at fill time. The quote lens prefers a firm maker over a soft one at equal price, so soft liquidity has to be strictly cheaper to still win flow.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">src/periphery/FirmEscrow.sol:30</span> (MVP: plain WETH/USDC only — yield-bearing wstETH/sDAI escrow from the full design is not built yet)</div>
+          </td>
           <td><span class="status implemented">MVP implemented</span></td>
           <td>P3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('P3')">P3</span></span></td>
@@ -451,7 +478,10 @@
         <tr class="row-S">
           <td><span class="code">S5</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Per-range LP-quoted vol</strong> — add `sigmaMulBps` multiplier per auth; opinionated LPs quote own vol; protocol surface is default for passive LPs; enables competitive vol discovery.</td>
+          <td>
+            <strong>Per-range LP-quoted vol</strong> — today every LP is a price-taker of one global volatility surface set by the protocol; nobody can express "I think this is too cheap/expensive." Fix: an optional `sigmaMulBps` multiplier baked into each authorization at creation — 0 means "use the protocol default," anything else scales the surface for that LP's own range. Exactly how professional options desks quote: in vol, not price.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">AquaCollateralVault.sol:271</span> (param) <span class="code">:287</span> (stored on the auth)</div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P2</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L6')">L6</span><span class="ref-link" onclick="scrollTo('S6')">S6</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
@@ -459,7 +489,10 @@
         <tr class="row-S">
           <td><span class="code">S6</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Best-quote routing</strong> — `bestQuote` scans all active ranges, skips phantom depth, returns best executable Ask; `buyBest` routes to it; S5+S6 = competitive vol discovery.</td>
+          <td>
+            <strong>Best-quote routing</strong> — S5 lets LPs disagree on vol, but a taker calling one specific `authId` only ever sees one LP's opinion. Fix: a router view that scans every active authorization covering a strike, skips anything whose S1 depth check would fail, and returns the single best executable Ask — plus `buyBest` to route straight to it. S5 (LPs can disagree) + S6 (takers always see the best of that disagreement) together is the actual price-discovery mechanism: the touch across competing ranges <em>is</em> the market vol, no external IV oracle required.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">src/periphery/SmileQuoteLens.sol:60</span> (bestQuote) <span class="code">:101</span> (buyBest)</div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P2</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L11')">L11</span><span class="ref-link" onclick="scrollTo('S5')">S5</span><span class="ref-link" onclick="scrollTo('P2')">P2</span></span></td>
@@ -467,7 +500,10 @@
         <tr class="row-S">
           <td><span class="code">S7</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>External IV anchor (optional)</strong> — anchor protocol σ to external IV (e.g., Deribit ATM); fallback if S5/S6 vol discovery stays thin; adds oracle dependency, gate on evidence of drift.</td>
+          <td>
+            <strong>External IV anchor (optional)</strong> — S5/S6 assume competing ranges show up to discover fair vol; if they don't (thin early liquidity), the passive default surface just random-walks off-fair with no correction. Fallback: peg the default surface's σ to an external reference (e.g. Deribit ATM IV) with a bounded, mean-reverting deviation around it. Deliberately <em>not</em> the endgame — it adds a new oracle dependency — so it only gets built if S8's markout data actually shows the passive tier drifting.
+            <div class="impl"><span class="impl-label">Implements</span> not built — gated on S8 evidence of surface drift; no code yet</div>
+          </td>
           <td><span class="status planned">Planned</span></td>
           <td>P5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('S5')">S5</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
@@ -475,7 +511,10 @@
         <tr class="row-S">
           <td><span class="code">S8</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Markout instrumentation</strong> — off-chain job: for every fill, re-quote at +1/+5/+30min; record deltas as P&L telescope; gate on evidence of pick-offs and toxicity.</td>
+          <td>
+            <strong>Markout instrumentation</strong> — every other gate in this table ("is pricing fair," "do pick-offs exist," "should S7 get built") is a guess without a number behind it. Fix: an off-chain job that, for every fill, re-quotes the protocol's own surface at +1/+5/+30 minutes later and records the delta. Persistent negative markouts (the LP's side consistently worse a few minutes after the fill) is the standard empirical signature of adverse selection — this is the instrument that turns "we think snipers are picking us off" into a measured number.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">analytics/markouts.mjs</span></div>
+          </td>
           <td><span class="status implemented">Implemented</span></td>
           <td>P0</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L1')">L1</span><span class="ref-link" onclick="scrollTo('R6')">R6</span><span class="ref-link" onclick="scrollTo('P0')">P0</span></span></td>
@@ -483,7 +522,10 @@
         <tr class="row-S">
           <td><span class="code">S9</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Covered-call / cash-secured-put one-click product</strong> — One-Click Income tab: delta-band presets → strike range + est. APR → auto-chained authorize+ship; LP-run self-custodial auto-roll keeper (settle → reclaim → revoke → re-ship at today's spot).</td>
+          <td>
+            <strong>Covered-call / cash-secured-put one-click product</strong> — S1-S8 make the underlying market honest and competitive; this is the first product actually built on top of it. Pick a side (calls/puts) and a delta-band risk preset (10-20Δ / 20-30Δ / 30-40Δ — delta here reads as "rough probability of finishing in the money") and the UI turns that into a concrete strike range, shows an estimated premium APR, and auto-chains approve → authorizeRange → Aqua.ship as one flow. A separate keeper script handles auto-roll at expiry (settle → reclaim leftover collateral → revoke → re-ship a fresh range at the new spot) — deliberately LP-run, not protocol-run, since rolling needs the LP's own signature and nobody else should be able to touch the position.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">frontend/components/IncomeOneClick.tsx</span> <span class="code">keeper/roll.mjs</span></div>
+          </td>
           <td><span class="status implemented">MVP implemented</span></td>
           <td>P4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
@@ -491,7 +533,10 @@
         <tr class="row-S">
           <td><span class="code">S10</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>1inch ecosystem distribution</strong> — options premiums routed by SwapVM; 1inch aggregation/Fusion integrates them; demand-side flow via integrators, not standalone UI.</td>
+          <td>
+            <strong>1inch ecosystem distribution</strong> — a business-development lever, not a code change: because option premiums are quoted through a SwapVM strategy (the same mechanism 1inch's own aggregation/Fusion already routes through), 1inch's router can discover and fill Smile's option liquidity like any other swap route, and the option tokens themselves are plain ERC-20s tradable anywhere — no bespoke integration needed on 1inch's side, just listing/registry/grant work on Smile's.
+            <div class="impl"><span class="impl-label">Implements</span> not applicable — distribution/BD track, no separate code path beyond the existing SwapVM strategy</div>
+          </td>
           <td><span class="status planned">Planned</span></td>
           <td>P4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
@@ -499,7 +544,10 @@
         <tr class="row-S">
           <td><span class="code">S11</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Long-tail listings</strong> — permissionless options on LST/LRT, L2 variants, blue-chip DeFi tokens; thin feeds need conservative params (wider spreads, lower caps, longer staleness).</td>
+          <td>
+            <strong>Long-tail listings</strong> — Deribit only lists three assets; Smile can permissionlessly list options on anything with a reliable price feed (LST/LRT tokens, L2-native majors, blue-chip DeFi tokens) — a market with zero centralized competition. The catch: thinner feeds are easier to manipulate, so each long-tail listing needs more conservative per-authorization parameters (wider spread floors, lower per-block caps, longer staleness bounds) — all args that already exist on `authorizeRange`, nothing new to build there.
+            <div class="impl"><span class="impl-label">Implements</span> not built yet — the per-auth parameters it needs (spread floor, block cap, staleness bound) already exist; listing itself is unstarted</div>
+          </td>
           <td><span class="status planned">Planned</span></td>
           <td>P4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('P4')">P4</span></span></td>
@@ -507,7 +555,10 @@
         <tr class="row-S">
           <td><span class="code">S12</span></td>
           <td><span class="cat">Solution</span></td>
-          <td><strong>Defined-risk netting</strong> — spreads collateralized at true max loss (credit spreads ~16× tighter, condors max-not-sum, debit spreads zero); designed as a sibling SpreadVault AquaApp (main vault untouched); implementation gated on spread demand.</td>
+          <td>
+            <strong>Defined-risk netting</strong> — today a call spread (long a far strike, short a near one) locks collateral for the short leg as if it were naked, even though the structure's true worst case is capped at the strike gap. Fix: vault-level netting so a recognized two-leg structure only locks its actual max loss — credit spreads end up roughly 16× tighter, an iron condor locks the max of its two sides (never the sum, since one settlement price can't breach both), and a debit spread needs zero extra collateral beyond the long leg it already owns. Designed as a separate sibling `SpreadVault` app so the main vault's bytecode is never touched; implementation stays gated on evidence of actual spread demand.
+            <div class="impl"><span class="impl-label">Implements</span> design-only — <span class="code">docs/plans/2026-07-12-s12-defined-risk-netting.md</span>; no <span class="code">SpreadVault.sol</span> exists yet</div>
+          </td>
           <td><span class="status planned">Designed</span></td>
           <td>P5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
