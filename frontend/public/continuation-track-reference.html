@@ -400,9 +400,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Margin calls, covered immunity, withdrawals</strong> — what happens when a writer's margin falls below maintenance: free balance gets swept first, then an opt-in Aqua credit line attempts a bounded auto top-up, and only if that's not enough does the position actually flag for liquidation (with a 1-hour grace period). A writer who's fully hedged (holds the matching long position) is immune to being flagged at all.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">MarginVault.sol</span>; test <span class="code">test/MarginCall.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.deposit / withdraw / health / isCovered / flag / topUp / startAuction / coverShort</span> <span class="code">test/MarginCall.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">flag(sid, writer)</span>: under MM at the worst-of-hour mark, the vault first cures toward IM on the writer's behalf — free balance, then (range opted in) a pull from the same Aqua allowance the fill used, bounded by shipped / wallet / approval — and flags only if still under MM. Test: a crash to $2,000 auto-tops the ATM put from 1,500 to 2,000 USDC out of the writer's own shipped allowance, no flag. <span class="code">topUp</span> (anyone) clears the flag at IM, excess past full cover lands in free; <span class="code">startAuction</span> after the 1 h grace judges health on rounds posted after the flag only (a dip that recovered unflags instead); covered puts are <span class="code">Covered()</span>-immune; <span class="code">withdraw</span> refused while flagged / in debt / stale and never below IM across every open position; <span class="code">coverShort</span> burns own longs and frees the margin pro rata. 11 tests.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 11</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B3')">B3</span><span class="ref-link" onclick="scrollTo('M4')">M4</span></span></td>
         </tr>
@@ -411,9 +412,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Writer-takeover auction and backstop pool</strong> — what happens after the grace period expires with no cure: a 30-minute auction lets another writer take over the flagged position (rising bonus, 1%→10% of notional) for a discount; if nobody bids, the pre-funded backstop pool absorbs it instead. Either way the holder's option token is untouched — only who's on the hook for it changes.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">MarginVault.sol</span>, <span class="code">MarginBackstop.sol</span>; test <span class="code">test/MarginAuction.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.takeoverBonusBps / takeOver / absorb / hasExpiredUnfinalized</span> <span class="code">src/periphery/MarginBackstop.sol</span> <span class="code">test/MarginAuction.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">takeOver(sid, writer)</span>: bonus 1 % → 10 % of notional over the 30 min window; <span class="code">min(locked, MM + bonus + penalty)</span> travels with the position — bonus to the bidder, 2 % penalty to insurance (0.25 % to the flagger), the rest seeds the bidder who posts only <span class="code">IM − seed</span>; the holder's OptionToken is untouched; whatever exceeded the liability is the old writer's again as free balance; no self-takeover. Worked numbers at a $2,000 mark: 1,500 moves, bidder posts 725, holds 2,000. <span class="code">absorb</span> after the window: the backstop adopts the position and draws only <span class="code">MM − seed</span> (175 USDC in the test), keeper tip 0.5 %. <span class="code">MarginBackstop</span>: share-based deposit with dead shares, 24 h <span class="code">requestWithdraw</span>, <span class="code">withdraw</span> floored at <span class="code">max(poolRequirement, nakedNotional / 10)</span> and frozen while any expired series is unfinalized, vault-only <span class="code">draw</span>, epoch roll voiding every share on a full draw. Whole-unit takeover only (partial-unit is on the cut list). 7 tests, plus a book-balance check: vault USDC == Σ locked + free + insurance + claimable.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 11</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B4')">B4</span><span class="ref-link" onclick="scrollTo('M4')">M4</span></span></td>
         </tr>
@@ -567,8 +569,10 @@
         <tr class="row-M">
           <td><span class="code">M4</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Crash, margin call, takeover, absorb into the backstop</strong> — the liquidation path runs end to end, not just in isolation.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Crash, margin call, takeover, absorb into the backstop</strong> — the liquidation path runs end to end, not just in isolation.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test/MarginAuction.t.sol</span>: ATM put filled at 1,500 locked → crash to $2,000 → <span class="code">flag</span> → 1 h grace → post-flag round → <span class="code">startAuction</span> → either <span class="code">takeOver</span> (bidder posts 725, holds at IM 2,000) or, 30 min later, <span class="code">absorb</span> (backstop draws 175, holds at MM 1,600, <span class="code">poolRequirement</span> = 3,000). Holder's token unchanged throughout. 185 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 11</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B4')">B4</span><span class="ref-link" onclick="scrollTo('B5')">B5</span></span></td>
         </tr>
