@@ -71,7 +71,7 @@ export function buildTools(ctx: CopilotContext) {
   return {
     read_docs: tool({
       description:
-        "Read a full section of the Smile protocol documentation (README, limitations, solutions, the AI copilot's own docs). Use for questions about protocol economics, design trade-offs, limitations (L1-L13), planned solutions (S1-S13), competitor comparisons, and questions about the copilot itself (what it can do, how to enable it). Cite the section id in your answer.",
+        "Read a full section of the Smile documentation (README, the User Guide, limitations, solutions, the AI copilot's own docs). Use the User Guide ('guide-*' sections) for how-to questions: buying and closing options, building multi-leg strategies, providing liquidity (one-click, ranges, spreads, margin, RFQ), margin calls and the liquidation waterfall, which tab does what, networks. Use the others for protocol economics, design trade-offs, limitations (L1-L13), planned solutions (S1-S13), competitor comparisons, and questions about the copilot itself. Cite the section id in your answer.",
       inputSchema: z.object({
         sectionId: z
           .string()

@@ -104,6 +104,7 @@
     <nav class="sidebar">
       <h2>Smile Docs</h2>
       <button class="nav-link" data-page="overview">Overview</button>
+        <button class="nav-link" data-page="guide">User Guide</button>
         <button class="nav-link" data-page="limitations">Limitations</button>
         <button class="nav-link" data-page="solutions">Solutions</button>
         <button class="nav-link" data-page="copilot">AI Copilot</button>
@@ -1419,6 +1420,149 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <p><em>Built for the 1inch + Uniswap + Chainlink Hackathon.</em></p>
 </article>
     </section>
+    <section id="page-guide" class="page" data-mermaid="false">
+      <article class="doc"><h1>User Guide — trading and providing liquidity on Smile</h1>
+<p>This is the hands-on guide: what each tab does, how to build a trade, how
+to earn as a liquidity provider, and what you are risking on each rung.
+The <a href="../README.md">README</a> explains <em>why</em> the protocol is built this way;
+this page explains <em>how to use it</em>. The AI copilot (bottom-right) has read
+this guide and can walk you through any step or explain a position you
+already hold.</p>
+<h2>The one idea to understand first</h2>
+<p>On Smile a <strong>writer</strong> (liquidity provider, LP) never deposits collateral
+up front. They <em>authorize</em> a range of strikes and expiries and ship that
+allowance to 1inch Aqua; the collateral stays in their wallet. When a
+<strong>taker</strong> buys an option, the exact collateral for that fill is pulled
+just-in-time (JIT) through Aqua into the vault, and an ERC-20
+<strong>OptionToken</strong> is minted to the taker. Premiums are priced by the
+protocol&#39;s own vol surface (a SwapVM opcode; a Uniswap v4 hook nudges the
+surface with demand). At expiry, a Chainlink round fixes the settlement
+price permissionlessly; the holder redeems intrinsic value from the
+escrowed collateral, and the writer reclaims the rest.</p>
+<p>Everything below is a variation on where that collateral comes from and
+how much of it is needed.</p>
+<h2>Networks</h2>
+<table>
+<thead>
+<tr>
+<th>Network</th>
+<th>What is real</th>
+<th>How to use it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Anvil (local)</strong></td>
+<td>mock USDC / WETH, a settable oracle</td>
+<td><code>./local.sh</code>; MetaMask on chain 31337; time can be warped, so expiry, settlement and liquidation demos run in minutes</td>
+</tr>
+<tr>
+<td><strong>Sepolia</strong></td>
+<td>Circle USDC, canonical WETH, Chainlink ETH/USD; The Graph subgraph</td>
+<td>pick Sepolia in the network menu — the app carries the deployed addresses</td>
+</tr>
+<tr>
+<td><strong>Arc Testnet</strong></td>
+<td>Circle&#39;s native USDC for premium, collateral, margin and gas</td>
+<td>pick Arc Testnet (MetaMask adds chain 5042002)</td>
+</tr>
+</tbody></table>
+<p>The <strong>Overview</strong> tab shows which chain you are on and what is real there.
+The <strong>Receipts</strong> tab lists every deployed contract and recorded demo
+transaction with explorer links.</p>
+<h2>Buying an option (Trade tab)</h2>
+<ol>
+<li>The option chain shows strikes around spot with the live Ask (buy) and
+Bid (sell-back) for calls and puts, quoted from the surface.</li>
+<li>Pick a strike and size; approve USDC for the premium once.</li>
+<li><strong>Buy</strong>: the premium goes to the writer, the fee to the protocol, the
+collateral is pulled from the writer&#39;s wallet at that moment, and you
+receive the OptionToken.</li>
+<li><strong>Close early</strong>: sell the option back at the live Bid — the vault pays
+you from the writer&#39;s escrow and premium; there is always a formula
+price to exit at.</li>
+<li><strong>At expiry</strong>: anyone can settle the series with the first Chainlink
+round after expiry; then <strong>Redeem</strong> pays intrinsic value (calls in
+WETH as <code>(S−K)/S</code>, puts in USDC as <code>K−S</code>).</li>
+</ol>
+<p>The <strong>Strategy Builder</strong> under the chain lets you compose multi-leg
+strategies (20 presets by outlook, or custom legs) and shows the P&amp;L
+curve today / halfway / at expiry, a price × date P&amp;L heat map,
+breakevens, probability of profit, net greeks, and — Smile-specific —
+what a writer would have to lock for each sell leg on each vault.</p>
+<h2>Earning as a liquidity provider</h2>
+<h3>One-Click (Earn · One-Click)</h3>
+<p>The simplest way in: choose <em>covered calls</em> (hold WETH) or <em>cash-secured
+puts</em> (hold USDC), a delta band and a tenor; the app authorizes a range at
+those deltas and ships it to Aqua. <code>keeper/roll.mjs</code> can roll it every
+expiry with your own key.</p>
+<h3>Write a Range (Earn · Write a Range)</h3>
+<p>The full form: strike range, expiry, capacity, optional per-block cap and
+your own vol multiplier (your quote versus the surface — competing ranges
+<em>are</em> the vol discovery). Three steps: approve Aqua for the collateral,
+<code>authorizeRange</code>, <code>Aqua.ship</code>. Nothing leaves your wallet until a fill.
+Your positions and fills are on <strong>My Positions</strong> (read from The Graph on
+Sepolia, from RPC elsewhere).</p>
+<h3>Spreads (SpreadVault)</h3>
+<p>Write a <strong>credit spread</strong> — call credit (short K1, long K2) or put credit
+(short K2, long K1) — and only the structure&#39;s true maximum loss is
+escrowed: <code>(K2−K1)/K2</code> WETH per unit for calls, <code>K2−K1</code> USDC for puts.
+For a 3000/3200 call credit that is 0.0625 WETH instead of 1 WETH. The
+taker buys the whole structure as one SpreadToken and pays Ask(long leg)
+− Bid(short leg). Settlement is one price through one formula; the payout
+can never exceed the escrow.</p>
+<h3>Margin (MarginVault, opt-in)</h3>
+<p>Write puts posting <strong>initial margin</strong> instead of the strike: intrinsic
+plus a 50% buffer of the <em>worst-of-hour</em> Chainlink mark, capped at the
+strike — 1,500 USDC for an at-the-money 3,000 put. This is the one tier
+where &quot;the option always pays&quot; can break, so read the waterfall:</p>
+<ul>
+<li>Fall below the 30% <strong>maintenance</strong> floor and anyone may flag you. The
+vault first sweeps your free balance and, if you opted in, pulls a
+top-up from your Aqua allowance; only if that is not enough are you
+flagged. You have <strong>1 hour</strong> to top up to initial margin.</li>
+<li>Then a <strong>30-minute takeover auction</strong>: another writer can take your
+position with a rising bonus; what travels is <code>min(locked, MM + bonus + penalty)</code>. The holder&#39;s option is untouched.</li>
+<li>Unsold, the <strong>backstop pool</strong> (USDC deposited by anyone, 24 h withdrawal
+delay) adopts the position.</li>
+<li>At expiry each writer settles through locked → free → bad debt; the
+series then draws the backstop, then the insurance fund, and only then
+do holders take a <strong>haircut</strong> — announced by an event, after which the
+initial-margin buffer ratchets up.</li>
+</ul>
+<p>The <strong>Risk Monitor</strong> tab shows every position&#39;s health bar, the mark, the
+backstop and insurance, and a live timeline of flags, auctions, absorbs,
+settlements and haircuts. &quot;Explain with the copilot&quot; turns the timeline
+into a paragraph.</p>
+<p>Deposits and withdrawals of free balance go through <code>deposit</code> /
+<code>withdraw</code>; a withdrawal is refused while you are flagged, in debt, or if
+it would take any position below initial margin.</p>
+<h3>RFQ (RfqVault)</h3>
+<p>Ship a range as above, then <strong>sign quotes</strong> in your wallet — no gas — for
+a strike, size cap, price, and time-to-live. Price them off any model you
+like; the tab shows the formula Ask next to your quote. A taker fills the
+quote and the collateral is pulled exactly as on the other rungs. Quotes
+are single-use (nonce) and cancellable; there is no sell-back on this
+vault — holders exit through the formula tier.</p>
+<h2>Risks, plainly</h2>
+<ul>
+<li><strong>Main vault, spreads</strong>: fully collateralized at the true maximum loss;
+the risk is the option&#39;s own P&amp;L and the oracle at settlement.</li>
+<li><strong>Margin</strong>: liquidation risk for writers, and a bounded bad-debt risk
+for holders after the backstop and insurance are exhausted
+(<a href="limitations.md">L13</a>). Naked notional is capped at 7× the backstop.</li>
+<li><strong>Everywhere</strong>: premiums come from a model with a demand-driven sigma;
+displayed depth is only as firm as the writer&#39;s wallet — the firm-escrow
+tier and the S1 firmness checks exist for that (<a href="limitations.md">limitations</a>).</li>
+</ul>
+<h2>Asking the copilot</h2>
+<p>Try: <em>&quot;walk me through selling a 30-day cash-secured put&quot;</em>, <em>&quot;what does my
+range look like right now?&quot;</em>, <em>&quot;build me an iron condor around spot&quot;</em>
+(it loads the builder), <em>&quot;what happens to my margined put if ETH drops
+20%?&quot;</em>, <em>&quot;explain the last liquidation&quot;</em> (from the Risk Monitor), <em>&quot;how do
+I sign an RFQ quote?&quot;</em>. It reads the connected chain, the subgraph where
+available, and these docs.</p>
+</article>
+    </section>
     <section id="page-limitations" class="page" data-mermaid="false">
       <article class="doc"><h1>Known Limitations, Risks, and Recommendations</h1>
 <p>This document is the honest record of Smile&#39;s design trade-offs. It captures a
@@ -2440,7 +2584,7 @@ scan.</p>
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ["overview","limitations","solutions","copilot","reference","continuation-track"];
+    var VALID_PAGES = ["overview","guide","limitations","solutions","copilot","reference","continuation-track"];
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 

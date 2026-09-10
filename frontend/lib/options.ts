@@ -179,6 +179,7 @@ export interface PnlPoint {
   s: number;
   expiry: number; // P&L at nearest expiry
   now: number;    // P&L today (T+0 curve)
+  mid: number;    // P&L halfway to the nearest expiry
 }
 
 export function pnlSeries(legs: BuilderLeg[], spot: number, points = 200): PnlPoint[] {
@@ -192,8 +193,48 @@ export function pnlSeries(legs: BuilderLeg[], spot: number, points = 200): PnlPo
       s: Math.round(s),
       expiry: round2(strategyValue(legs, s, minDte) - cost),
       now: round2(strategyValue(legs, s, 0) - cost),
+      mid: round2(strategyValue(legs, s, minDte / 2) - cost),
     };
   });
+}
+
+/**
+ * OptionStrat-style P&L matrix: rows are underlying prices, columns are
+ * calendar days from today to the nearest expiry. Each cell is the
+ * strategy's P&L if the underlying is at that price on that day.
+ */
+export function pnlMatrix(legs: BuilderLeg[], spot: number, rows = 15, cols = 8): { prices: number[]; days: number[]; pnl: number[][] } {
+  const cost = entryCost(legs, spot);
+  const minDte = Math.min(...legs.map(dte));
+  const prices = Array.from({ length: rows }, (_, i) => Math.round(spot * (1.3 - (0.6 * i) / (rows - 1))));
+  const days = Array.from({ length: cols }, (_, j) => Math.round((minDte * j) / (cols - 1)));
+  const pnl = prices.map((p) => days.map((d) => round2(strategyValue(legs, p, d) - cost)));
+  return { prices, days, pnl };
+}
+
+/**
+ * What a writer locks on Smile for each sell leg of the strategy, per unit:
+ * naked (the main vault), netted if the same-type long leg caps the loss
+ * (SpreadVault, S12), and margined for puts (MarginVault, S13 — intrinsic
+ * plus a 50% buffer of spot, capped at the strike).
+ */
+export function writerCollateral(legs: BuilderLeg[], spot: number): { leg: BuilderLeg; naked: string; netted: string | null; margined: string | null }[] {
+  return legs
+    .filter((l) => l.direction === "sell")
+    .map((leg) => {
+      const longs = legs.filter((l) => l.direction === "buy" && l.isCall === leg.isCall && l.amount >= leg.amount);
+      let netted: string | null = null;
+      if (leg.isCall) {
+        const cap = longs.filter((l) => l.strike > leg.strike).sort((a, b) => a.strike - b.strike)[0];
+        if (cap) netted = `${((cap.strike - leg.strike) / cap.strike).toFixed(4)} ETH`;
+      } else {
+        const cap = longs.filter((l) => l.strike < leg.strike).sort((a, b) => b.strike - a.strike)[0];
+        if (cap) netted = `$${(leg.strike - cap.strike).toLocaleString()}`;
+      }
+      const naked = leg.isCall ? "1 ETH" : `$${leg.strike.toLocaleString()}`;
+      const margined = leg.isCall ? null : `$${Math.min(leg.strike, Math.max(leg.strike - spot, 0) + spot * 0.5).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      return { leg, naked, netted, margined };
+    });
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;

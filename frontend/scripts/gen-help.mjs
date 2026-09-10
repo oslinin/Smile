@@ -72,6 +72,7 @@ const readDoc = (relPath) => readFileSync(join(repoRoot, relPath), "utf8");
 
 const pages = [
   { id: "overview", label: "Overview", source: "README.md", mermaid: true },
+  { id: "guide", label: "User Guide", source: "docs/guide.md", mermaid: false },
   { id: "limitations", label: "Limitations", source: "docs/limitations.md", mermaid: false },
   { id: "solutions", label: "Solutions", source: "docs/solutions.md", mermaid: false },
   { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
