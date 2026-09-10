@@ -2,8 +2,9 @@
 
 Continuation-track entry. Repo: https://github.com/oslinin/Smile, branch
 `EthOnline2026_continuation_track`. Everything on `main` at `5b4cc63` predates
-the event (September 5, 2026); everything after is event work — 30 commits,
-~12,400 lines, one task per commit so the history reads as the build log.
+the event (September 5, 2026); everything after is event work — 63 commits,
+~22,800 lines added across 99 files, one task per commit so the history
+reads as the build log.
 
 The protocol itself — on-chain ETH options where LP collateral stays in the
 LP's wallet until a buyer matches, pulled just-in-time through 1inch Aqua,
@@ -15,14 +16,15 @@ per-bounty pitch and the audit trail a judge can follow.
 
 | Pre-existing (`main` @ `5b4cc63`) | Built at EthOnline 2026 |
 |---|---|
-| `AquaCollateralVault` (single-leg calls and puts, JIT pull through Aqua) | `SpreadVault` — a second AquaApp for defined-risk spreads, escrowing the true max loss |
-| `SmileSwapVMRouter` + `OptionPremiumInstruction` (opcode 33), `OptionPricingHook` | `SmilePremiumLib` — the vault's premium math as a library with an `isCall` flag |
-| `AquaOptionSettlement` (Chainlink round-verified, CRE keeper) | reused unchanged by the spread vault (its own instance) |
-| Next.js app: option matrix, LP range authorization, payoff builder, LP dashboard, vol surface, AI copilot | **Spreads · Defined Risk** tab; LP dashboard + copilot read from The Graph with RPC fallback; Arc in the network picker; OpenRouter copilot provider |
-| Sepolia deployment | Arc testnet deployment on Circle's real USDC |
-| 82 Foundry tests | 151 Foundry tests |
-| — | `subgraph/` — The Graph subgraph, schema, mappings, matchstick tests |
-| Help site (README, limitations, solutions, reference table) | Continuation Track tracker page, copilot help page, code references on every reference-table row |
+| `AquaCollateralVault` (single-leg calls and puts, JIT pull through Aqua) | Three sibling Aqua apps: `SpreadVault` (defined-risk netting), `MarginVault` + `MarginBackstop` (opt-in margined puts with a liquidation waterfall), `RfqVault` (LP-signed EIP-712 quotes) |
+| `SmileSwapVMRouter` + `OptionPremiumInstruction` (opcode 33), `OptionPricingHook` | `SmilePremiumLib` — the vault's premium math as a library with an `isCall` flag, shared by the new vaults |
+| `AquaOptionSettlement` (Chainlink round-verified, CRE keeper) | reused unchanged — one instance per new vault |
+| Next.js app: option matrix, LP range authorization, payoff builder, LP dashboard, vol surface, AI copilot | **Overview** (live ladder, receipts), **Spreads / Margin / RFQ / Risk Monitor** tabs, a TradingView-engine price chart with the strategy overlaid, an OptionStrat-grade builder (heat map, three curves, per-vault collateral), one build for Anvil / Sepolia / Arc, tabs in user language; LP dashboard + copilot read from The Graph with RPC fallback; OpenRouter provider; a User Guide the copilot reads |
+| A stale v1 Sepolia deployment | The full current stack redeployed on Sepolia (Circle USDC, canonical WETH, Chainlink) with real fills; the full stack on Arc testnet on Circle's native USDC with real fills on every vault |
+| 82 Foundry tests | 200 Foundry tests |
+| — | `subgraph/` — The Graph subgraph, live on Studio as `smile-sepolia` with real data |
+| — | `script/*-lifecycle.sh`, `script/arc-*.sh`, `keeper/margin.mjs`, `deployments/` (every broadcast log) |
+| Help site (README, limitations, solutions, reference table) | Continuation Track tracker page, User Guide, copilot help page, S12/S13/L13/R6 entries, submission notes, video walkthrough instructions |
 
 ## 1inch — Build an Aqua App: `SpreadVault`
 
