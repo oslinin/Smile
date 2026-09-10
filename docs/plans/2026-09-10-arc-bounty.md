@@ -244,33 +244,44 @@ submitting for."
 
 ## Milestones
 
-Day targets are against the real calendar (today: Sept 10; Arc mainnet
-launches Sept 16; bounty deadline Sept 30), not a generic day-count.
+**Corrected 2026-09-10:** the hackathon submission deadline is **September
+13, 12:00 PM** — not Sept 30. Sept 30 is only the grace window for Arc's
+extra $2,000 mainnet bonus, and Arc mainnet doesn't launch until Sept 16,
+so X6 is necessarily a post-submission follow-up. Arc is third in the
+cross-bounty execution order (after SpreadVault and The Graph — see
+`2026-09-10-ethonline26-bounties.md`), so the rows below are what the Arc
+slot can realistically hold, not a full week of runway.
 
 | | Demoable | Tasks | Target |
 |---|---|---|---|
-| M1 | A real, live EUR/USD-relevant price read from an Arc testnet oracle via `cast call` | X1 | Sept 11 |
-| M2 | FX vault deployed to Arc testnet with real EURC/USDC | X2 | Sept 12 |
-| M3 | Frontend connects to Arc testnet and shows live FX quotes | X3 | Sept 13 |
-| M4 | A real FX trade executes end to end on Arc testnet | X5 | Sept 14 |
-| M5 (conditional) | Gateway-based onboarding works, or explicitly documented as cut | X4 | Sept 15 |
-| M6 | Deployed to Arc **mainnet** | X6 | Sept 16-17 (mainnet launch + buffer) |
-| M7 | Submission materials complete, submitted | X8 | by Sept 30, don't wait until the deadline |
+| M1 | Frontend connects to Arc testnet and the already-deployed ETH product is demoable in the real UI | X3 (network entry only) | Sept 12 |
+| M2 | Architecture diagram + video naming the existing flows (JIT pulls, permissionless settlement, auto-roll keeper, One-Click Income) in the bounty's own vocabulary | X8 | Sept 13, before noon |
+| M3 (research-gated) | A real, live EUR/USD-relevant price read from an Arc testnet oracle via `cast call` — ~30 min; decides whether M4 exists | X1 | Sept 12 |
+| M4 (only if M3 says yes) | FX vault deployed to Arc testnet with real EURC/USDC and one real FX trade | X2, X5 | Sept 13, before noon |
+| M5 | Submitted | X8 | **Sept 13, 12:00 PM** |
+| M6 (post-submission) | Deployed to Arc **mainnet** for the $2,000 bonus | X6 | Sept 16-30 |
 
-**Cut order if time compresses:** X7 (RFQ) first — it was never core scope.
-X4 (Gateway) second, if Arc availability doesn't pan out or the integration
-proves heavier than expected — fall back to "document the manual CCTP
-bridge path" instead of building a Gateway flow. Never cut: X1-X3, X5, X6 —
-that's the actual submission (a real, live, mainnet-deployed FX options
-market on Arc, proven with a real trade).
+Cut for the Sept 13 submission outright: X4 (Gateway) and X7 (RFQ).
+
+**Cut order if time compresses:** X4 (Gateway) and X7 (RFQ) are already
+cut for Sept 13. Next to go: X2/X5 (the FX deploy + trade) — but only on a
+"no feed" answer from X1, never preemptively; the 30-minute check is
+always worth doing. Never cut: X3 (the network entry — without it there's
+no UI demo) and X8 (diagram, video, submission). X6 (mainnet) is
+post-submission and can't be cut from Sept 13 because it can't happen
+before Sept 16 anyway.
 
 ## Definition of done
 
-- X1-X3, X5, X6 shipped: FX options market live on Arc **mainnet**, proven
-  with a real trade (not just a deploy), same verification bar as today's
-  testnet proof.
-- X4 either shipped or explicitly, honestly marked as cut in the submission
-  — never silently dropped.
+- **For Sept 13 (the submission):** X3 + X8 — the already-verified ETH
+  product demoable in the real UI on Arc testnet, plus diagram, video, and
+  the submission itself, with the existing flows framed in the bounty's
+  vocabulary. X2/X5 (FX) included if and only if X1's check said yes.
+- X4 (Gateway) explicitly, honestly marked as cut in the submission —
+  never silently dropped.
+- **For Sept 30 (the bonus):** X6 — the same project on Arc **mainnet**,
+  same verification bar as the testnet proof (a real trade, not just a
+  deploy).
 - X8's checklist satisfied item-for-item against the bounty's own qualification list.
 
 ## Docs to update on completion

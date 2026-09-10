@@ -33,11 +33,10 @@ MarginVault is explicitly the thing that gets cut first if the clock runs
 out, because rushing a liquidation engine is how you ship a solvency bug,
 not a demo.
 
-**Open gap still:** 1inch's and The Graph's own submission deadlines
-haven't been independently confirmed — assumed to be the same Sept 13 event
-deadline as everything else (one hackathon, one deadline, is the base
-assumption), but if either bounty has its own different date, that changes
-this page's priority math. Verify if there's a spare minute.
+**Deadline, confirmed:** September 13, 12:00 PM, for all three — one
+hackathon, one submission deadline. The only date after that is Arc's
+mainnet-bonus grace window (Sept 30), which is a post-submission follow-up
+for the extra $2,000, not a second deadline for anything else.
 
 ---
 
