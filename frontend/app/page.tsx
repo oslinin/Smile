@@ -24,6 +24,7 @@ import { SpreadDesk } from "@/components/SpreadDesk";
 import { MarginDesk } from "@/components/MarginDesk";
 import { RfqDesk } from "@/components/RfqDesk";
 import { Story } from "@/components/Story";
+import { RiskMonitor } from "@/components/RiskMonitor";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
@@ -119,7 +120,7 @@ export default function Home() {
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
-  const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
+  const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "risk" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -190,6 +191,7 @@ export default function Home() {
     { id: "lp-auth",      label: "Earn · Write a Range" },
     { id: "spreads",      label: "Spreads" },
     { id: "margin",       label: "Margin" },
+    { id: "risk",         label: "Risk Monitor" },
     { id: "rfq",          label: "RFQ" },
     { id: "lp-position",  label: "My Positions" },
     { id: "surface",      label: "Vol Surface" },
@@ -376,6 +378,12 @@ export default function Home() {
         {activeTab === "lp-auth" && (
           <section>
             <AuthorizeRange spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />
+          </section>
+        )}
+
+        {activeTab === "risk" && (
+          <section>
+            <RiskMonitor />
           </section>
         )}
 

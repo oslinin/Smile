@@ -108,6 +108,19 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, busy]);
 
+  // Other tabs can hand the copilot a question (the Risk Monitor's
+  // "Explain" button): open the panel and send it as if typed.
+  useEffect(() => {
+    const onAsk = (ev: Event) => {
+      const text = (ev as CustomEvent<string>).detail;
+      if (!text) return;
+      setOpen(true);
+      sendMessage({ text });
+    };
+    window.addEventListener("smile:ask", onAsk);
+    return () => window.removeEventListener("smile:ask", onAsk);
+  }, [sendMessage]);
+
   if (process.env.NEXT_PUBLIC_COPILOT !== "1") return null;
 
   const send = (text: string) => {
