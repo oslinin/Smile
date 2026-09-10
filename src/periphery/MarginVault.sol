@@ -14,8 +14,10 @@ import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceO
 
 import { SmileMath } from "../swapvm/SmileMath.sol";
 import { AquaOptionSettlement } from "../vaults/AquaOptionSettlement.sol";
+import { OptionToken } from "../OptionToken.sol";
 import { OptionTokenFactory } from "../OptionTokenFactory.sol";
 import { MarginBackstop } from "./MarginBackstop.sol";
+import { SmilePremiumLib } from "./SmilePremiumLib.sol";
 
 interface IBetaSource {
     function beta() external view returns (int256);
@@ -39,7 +41,9 @@ interface IBetaSource {
 ///
 /// Scope so far: B1 scaffold — ranges shipped to Aqua, own settlement and
 /// backstop wiring, the timelocked vol-buffer ratchet; B2 — the worst-of-
-/// hour Chainlink mark and the sigma-free margin rule.
+/// hour Chainlink mark and the sigma-free margin rule; B3 — buy() pulls
+/// only initial margin, under a naked-notional ceiling sized off the
+/// backstop, with pull-based fee splits.
 contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -97,6 +101,15 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         uint256 badDebt;
     }
 
+    /// @dev Premium terms snapshotted at open — the same knobs as the main
+    /// vault's AuthPricing, so a margined put quotes exactly like a fully
+    /// collateralized one. Margin never reads these.
+    struct Pricing {
+        uint16 baseSpreadBps;
+        uint16 stalenessSpreadBpsPerHour;
+        uint64 impactPerUnit;
+    }
+
     bytes32 private constant MARGIN_STRATEGY_TYPE = keccak256("SMILE-MARGIN-1");
     uint16 public constant MAX_BUFFER_STEP_BPS = 1000;
     uint256 public constant MM_BUFFER_DELAY = 24 hours;
@@ -128,9 +141,33 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
 
     uint256 public maxSpotStaleness = 1 hours;
     uint32 public protocolFeeBps;
+    uint16 public defaultBaseSpreadBps;
+    uint16 public defaultStalenessSpreadBpsPerHour;
+    uint64 public defaultImpactPerUnit;
+
+    /// @notice Fills must leave at least this long to expiry, so a margin
+    /// call has a grace period and an auction before settlement.
+    uint256 public constant MIN_TIME_TO_EXPIRY = 3 hours;
+    /// @notice Naked notional may never exceed this multiple of the backstop
+    /// pool — the Maker debt-ceiling idea: exposure is bounded by what could
+    /// actually absorb a default.
+    uint256 public constant BACKSTOP_MULTIPLE = 10;
+
+    /// @notice Owner ceiling on naked notional (USDC); the effective ceiling
+    /// is `min(notionalCeiling, backstop.totalAssets() * BACKSTOP_MULTIPLE)`.
+    uint256 public notionalCeiling;
+    /// @notice Sum over open positions of `K*units - margin locked at fill`.
+    uint256 public nakedNotional;
+    /// @notice Fee split (bps of the protocol fee): insurance, backstop, the rest to `dao`.
+    uint16 public insuranceFeeBps = 5000;
+    uint16 public backstopFeeBps = 3000;
+    address public dao;
+    uint256 public insuranceFund;
+    mapping(address => uint256) public claimable;
 
     uint256 public nextAuthId;
     mapping(uint256 => Range) public ranges;
+    mapping(uint256 => Pricing) public pricingOf;
     mapping(bytes32 => Series) public seriesOf;
     mapping(bytes32 => mapping(address => Position)) public positions;
     mapping(address => Account) public accounts;
@@ -146,6 +183,15 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     error MmAboveIm();
     error NothingPending();
     error TooEarly();
+    error RangeInactive();
+    error StrikeOutOfRange();
+    error TooCloseToExpiry();
+    error ZeroAmount();
+    error StaleMark();
+    error NakedCeiling(uint256 wouldBe, uint256 ceiling);
+    error PremiumAboveMax();
+    error SelfOnly();
+    error NothingToClaim();
 
     event RangeOpened(
         uint256 indexed authId,
@@ -159,6 +205,13 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     event RangeClosed(uint256 indexed authId);
     event VolBufferScheduled(uint16 imBufferBps, uint16 mmBufferBps, uint64 mmEffectiveAt);
     event VolBufferApplied(uint16 mmBufferBps);
+    /// @dev Same ABI as AquaCollateralVault.OptionBought so indexers and the
+    /// frontend consume every vault with one decoder. `premium` includes the fee.
+    event OptionBought(
+        uint256 indexed authId, address indexed optionToken, address indexed buyer, uint256 strike, uint256 amount, uint256 premium
+    );
+    event MarginLocked(bytes32 indexed sid, address indexed writer, uint256 pulled, uint256 fromFree, uint256 notional);
+    event InsuranceFunded(address indexed from, uint256 amount);
 
     constructor(address aqua_, address oracle_, address hook_, address owner_, address tokenFactory_, address usdc_)
         AquaApp(IAqua(aqua_))
@@ -169,6 +222,7 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         tokenFactory = OptionTokenFactory(tokenFactory_);
         usdc = usdc_;
         usdcDecimals = IERC20Metadata(usdc_).decimals();
+        dao = owner_;
     }
 
     // ── Admin ────────────────────────────────────────────────────────────────
@@ -217,6 +271,46 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         protocolFeeBps = feeBps_;
     }
 
+    /// @notice R3/R4 + R2 premium defaults snapshotted into NEW ranges.
+    function setPricingDefaults(uint16 baseSpreadBps_, uint16 stalenessSpreadBpsPerHour_, uint64 impactPerUnit_)
+        external
+        onlyOwner
+    {
+        require(baseSpreadBps_ <= 2000 && stalenessSpreadBpsPerHour_ <= 2000, "spread too wide");
+        defaultBaseSpreadBps = baseSpreadBps_;
+        defaultStalenessSpreadBpsPerHour = stalenessSpreadBpsPerHour_;
+        defaultImpactPerUnit = impactPerUnit_;
+    }
+
+    function setNotionalCeiling(uint256 ceiling) external onlyOwner {
+        notionalCeiling = ceiling;
+    }
+
+    /// @notice Split of the protocol fee; whatever is left of 10,000 bps is the DAO's.
+    function setFeeSplit(uint16 insuranceBps, uint16 backstopBps, address dao_) external onlyOwner {
+        require(uint256(insuranceBps) + backstopBps <= 1e4, "split > 100%");
+        require(dao_ != address(0), "no dao");
+        insuranceFeeBps = insuranceBps;
+        backstopFeeBps = backstopBps;
+        dao = dao_;
+    }
+
+    /// @notice Anyone can top up the insurance fund — the layer between the
+    /// backstop pool and a holder haircut.
+    function fundInsurance(uint256 amount) external {
+        IERC20(usdc).safeTransferFrom(msg.sender, address(this), amount);
+        insuranceFund += amount;
+        emit InsuranceFunded(msg.sender, amount);
+    }
+
+    /// @notice Pull-based claim of the DAO's fee share.
+    function claim() external returns (uint256 amount) {
+        amount = claimable[msg.sender];
+        require(amount > 0, NothingToClaim());
+        claimable[msg.sender] = 0;
+        IERC20(usdc).safeTransfer(msg.sender, amount);
+    }
+
     // ── Ranges ───────────────────────────────────────────────────────────────
 
     /// @notice Opens a margined put range. `maxCapacity` is the USDC margin
@@ -237,6 +331,10 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         require(sigmaMulBps == 0 || (sigmaMulBps >= 1000 && sigmaMulBps <= 30000), "sigma mult out of bounds");
 
         authId = nextAuthId++;
+        Pricing storage p = pricingOf[authId];
+        p.baseSpreadBps = defaultBaseSpreadBps;
+        p.stalenessSpreadBpsPerHour = defaultStalenessSpreadBpsPerHour;
+        p.impactPerUnit = defaultImpactPerUnit;
         Range storage r = ranges[authId];
         r.lp = msg.sender;
         r.strikeMin = strikeMin;
@@ -322,6 +420,143 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         uint256 buffer = (units * spotWad * (initial ? imBufferBps : mmBufferBps)) / 1e4 / 1e30;
         uint256 req = intrinsic + buffer;
         return req > cap ? cap : req;
+    }
+
+    // ── Quote and buy (B3) ───────────────────────────────────────────────────
+
+    /// @notice Ask-side quote for `units` of a put at `strike` from a range:
+    /// the writer's premium plus the protocol-fee gross-up, in USDC. Same
+    /// surface as the main vault (`SmilePremiumLib` is that math), so the
+    /// only thing a margined put changes is how much the writer locks.
+    function quote(uint256 authId, uint256 strike, uint256 units)
+        public
+        view
+        returns (uint256 lpPremium, uint256 fee)
+    {
+        Range storage r = ranges[authId];
+        require(r.lp != address(0), UnknownRange());
+        require(units > 0, ZeroAmount());
+        Pricing storage p = pricingOf[authId];
+        SmilePremiumLib.Terms memory t;
+        (t.spotWad, t.ageSec) = SmilePremiumLib.readSpot(oracle, r.spotStaleness);
+        t.strike = strike;
+        t.expiry = r.expiry;
+        t.sigmaSource = hook;
+        t.beta = r.beta;
+        t.sigmaMulBps = r.sigmaMulBps;
+        t.baseSpreadBps = p.baseSpreadBps;
+        t.stalenessSpreadBpsPerHour = p.stalenessSpreadBpsPerHour;
+        t.impactPerUnit = p.impactPerUnit;
+        t.isCall = false;
+        return SmilePremiumLib.quote(t, units, true, usdcDecimals, r.feeBps);
+    }
+
+    /// @notice The margin a fill of `units` at `strike` locks right now:
+    /// the vault IM off the worst-of-hour mark, raised to the range's own
+    /// `lpMarginBps` of notional if the writer chose to post more.
+    function initialMargin(uint256 authId, uint256 strike, uint256 units) public view returns (uint256 im) {
+        (uint256 spot,,) = markSpot();
+        im = marginRequirement(strike, units, spot, true);
+        uint256 lpMin = ((strike * units) / 1e30) * ranges[authId].lpMarginBps / 1e4;
+        if (lpMin > im) im = lpMin;
+    }
+
+    /// @notice Effective naked-notional ceiling right now.
+    function effectiveCeiling() public view returns (uint256) {
+        uint256 byBackstop = address(backstop) != address(0) ? backstop.totalAssets() * BACKSTOP_MULTIPLE : 0;
+        return byBackstop < notionalCeiling ? byBackstop : notionalCeiling;
+    }
+
+    /// @notice Buy `units` of a put at `strike` from a margined range. The
+    /// buyer pays premium (+ fee) in USDC; the writer locks only the
+    /// initial margin — the main vault would lock the whole strike. IM comes
+    /// from the writer's free balance first, the rest is pulled JIT through
+    /// this vault's Aqua strategy. One OptionToken series per (strike,
+    /// expiry), shared by every writer, so takeovers are fungible.
+    function buy(uint256 authId, uint256 strike, uint256 units, uint256 maxPremium)
+        external
+        nonReentrant
+        returns (address token, uint256 premiumPaid)
+    {
+        Range storage r = ranges[authId];
+        require(r.active, RangeInactive());
+        require(strike >= r.strikeMin && strike <= r.strikeMax, StrikeOutOfRange());
+        require(block.timestamp + MIN_TIME_TO_EXPIRY <= r.expiry, TooCloseToExpiry());
+        require(units > 0, ZeroAmount());
+        require(!isMarkStale(), StaleMark());
+
+        uint256 notional = (strike * units) / 1e30;
+        uint256 im = initialMargin(authId, strike, units);
+        uint256 naked = notional > im ? notional - im : 0;
+        uint256 ceiling = effectiveCeiling();
+        require(nakedNotional + naked <= ceiling, NakedCeiling(nakedNotional + naked, ceiling));
+
+        (uint256 lpPremium, uint256 fee) = quote(authId, strike, units);
+        premiumPaid = lpPremium + fee;
+        require(premiumPaid <= maxPremium, PremiumAboveMax());
+
+        // Free balance first, JIT pull for the rest.
+        Account storage acct = accounts[r.lp];
+        uint256 fromFree = acct.free < im ? acct.free : im;
+        acct.free -= fromFree;
+        this.execPull(r.lp, r.strategyHash, msg.sender, lpPremium, fee, im - fromFree);
+        _splitFee(fee);
+
+        bytes32 sid = seriesId(strike, r.expiry);
+        token = _series(sid, strike, r.expiry);
+        Series storage s = seriesOf[sid];
+        s.totalUnits += units;
+        Position storage pos = positions[sid][r.lp];
+        if (pos.units == 0) s.positionCount++;
+        pos.authId = authId;
+        pos.units += units;
+        pos.locked += im;
+        nakedNotional += naked;
+
+        OptionToken(token).mint(msg.sender, units);
+        emit MarginLocked(sid, r.lp, im - fromFree, fromFree, notional);
+        emit OptionBought(authId, token, msg.sender, strike, units, premiumPaid);
+    }
+
+    /// @dev Self-call under the official per-strategy reentrancy guard:
+    /// premium to the writer, fee here, then the JIT pull of the margin.
+    function execPull(address lp, bytes32 strategyHash, address buyer, uint256 lpPremium, uint256 fee, uint256 pull)
+        external
+        nonReentrantStrategy(lp, strategyHash)
+    {
+        require(msg.sender == address(this), SelfOnly());
+        if (lpPremium > 0) IERC20(usdc).safeTransferFrom(buyer, lp, lpPremium);
+        if (fee > 0) IERC20(usdc).safeTransferFrom(buyer, address(this), fee);
+        if (pull > 0) AQUA.pull(lp, strategyHash, usdc, pull, address(this));
+    }
+
+    function _splitFee(uint256 fee) internal {
+        if (fee == 0) return;
+        uint256 toInsurance = fee * insuranceFeeBps / 1e4;
+        uint256 toBackstop = fee * backstopFeeBps / 1e4;
+        insuranceFund += toInsurance;
+        if (toBackstop > 0 && address(backstop) != address(0)) {
+            IERC20(usdc).safeTransfer(address(backstop), toBackstop);
+        } else {
+            toBackstop = 0;
+        }
+        claimable[dao] += fee - toInsurance - toBackstop;
+    }
+
+    /// @dev Deploy the (strike, expiry) series on first fill and register it
+    /// with the settlement registry.
+    function _series(bytes32 sid, uint256 strike, uint256 expiry) internal returns (address token) {
+        Series storage s = seriesOf[sid];
+        token = s.token;
+        if (token == address(0)) {
+            token = tokenFactory.deployOption(usdc, strike, expiry, false, address(this));
+            s.token = token;
+            s.strike = strike;
+            s.expiry = expiry;
+            if (settlement != address(0)) {
+                AquaOptionSettlement(settlement).registerSeries(sid, token, expiry, strike, false);
+            }
+        }
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────

@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 
@@ -53,6 +54,10 @@ contract MarginVaultTest is Test {
         mv.setSettlement(address(settlement));
         backstop = new MarginBackstop(address(usdc), address(mv));
         mv.setBackstop(address(backstop));
+        mv.setPricingDefaults(50, 25, 0.001e18);
+        mv.setProtocolFee(0.01e9);
+        mv.setNotionalCeiling(250_000e6);
+        usdc.mint(address(backstop), 25_000e6); // ceiling = min(250k, 10 x 25k)
 
         expiry = block.timestamp + 30 days;
         usdc.mint(lp, CAPACITY);
@@ -169,6 +174,145 @@ contract MarginVaultTest is Test {
         assertEq(mv.marginRequirement(K, u, 0, false), 3000e6);
         assertEq(mv.marginRequirement(K, u, 10_000e18, true), 3000e6, "deep OTM buffer alone hits the cap");
         assertEq(mv.marginRequirement(K, 2e18, 3000e18, true), 3000e6, "linear in units");
+    }
+
+    // ── B3 ───────────────────────────────────────────────────────────────────
+
+    function test_buy_pullsOnlyInitialMargin() public {
+        uint256 authId = _openAndShip(CAPACITY, false);
+        (uint256 lpPremium, uint256 fee) = mv.quote(authId, K, 1e18);
+        assertGt(lpPremium, 0);
+        assertEq(fee, (lpPremium * 0.01e9 + (1e9 - 0.01e9) - 1) / (1e9 - 0.01e9), "1% fee gross-up");
+
+        uint256 lp0 = usdc.balanceOf(lp);
+        uint256 buyer0 = usdc.balanceOf(buyer);
+        vm.prank(buyer);
+        (address token, uint256 paid) = mv.buy(authId, K, 1e18, type(uint256).max);
+
+        assertEq(paid, lpPremium + fee);
+        assertEq(lp0 - usdc.balanceOf(lp), 1500e6 - lpPremium, "the LP wallet drops 1500 USDC of margin (net of premium), not 3000");
+        assertEq(buyer0 - usdc.balanceOf(buyer), paid);
+        assertEq(usdc.balanceOf(address(mv)), 1500e6 + fee - fee * 3000 / 1e4, "IM + the non-backstop fee share held here");
+
+        bytes32 sid = mv.seriesId(K, expiry);
+        (uint256 pAuth, uint256 pUnits, uint256 pLocked,,,) = mv.positions(sid, lp);
+        assertEq(pAuth, authId);
+        assertEq(pUnits, 1e18);
+        assertEq(pLocked, 1500e6, "locked = IM, half the strike");
+        assertEq(mv.nakedNotional(), 1500e6, "the other half is naked notional");
+        (,, address sToken, uint256 sUnits, uint256 sCount,,,,,,,) = mv.seriesOf(sid);
+        assertEq(sToken, token);
+        assertEq(sUnits, 1e18);
+        assertEq(sCount, 1);
+        assertEq(IERC20(token).balanceOf(buyer), 1e18);
+        (address regToken, uint256 regExpiry, uint256 regStrike, bool isCall,,) = settlement.series(sid);
+        assertEq(regToken, token);
+        assertEq(regExpiry, expiry);
+        assertEq(regStrike, K);
+        assertFalse(isCall);
+    }
+
+    function test_buy_feeSplit_insuranceBackstopDao() public {
+        uint256 authId = _openAndShip(CAPACITY, false);
+        (, uint256 fee) = mv.quote(authId, K, 1e18);
+        uint256 backstop0 = backstop.totalAssets();
+        vm.prank(buyer);
+        mv.buy(authId, K, 1e18, type(uint256).max);
+
+        assertEq(mv.insuranceFund(), fee * 5000 / 1e4, "50% insurance");
+        assertEq(backstop.totalAssets() - backstop0, fee * 3000 / 1e4, "30% backstop");
+        uint256 daoShare = fee - fee * 5000 / 1e4 - fee * 3000 / 1e4;
+        assertEq(mv.claimable(owner), daoShare, "20% DAO, pull-claimed");
+        uint256 o0 = usdc.balanceOf(owner);
+        mv.claim();
+        assertEq(usdc.balanceOf(owner) - o0, daoShare);
+        assertEq(mv.claimable(owner), 0);
+        vm.expectRevert(MarginVault.NothingToClaim.selector);
+        mv.claim();
+    }
+
+    function test_buy_secondWriterSharesTheSeries() public {
+        uint256 a1 = _openAndShip(CAPACITY, false);
+        address lp2 = address(0xA11CE2);
+        usdc.mint(lp2, CAPACITY);
+        vm.startPrank(lp2);
+        usdc.approve(address(aqua), type(uint256).max);
+        uint256 a2 = mv.openRange(2500e18, 3500e18, expiry, CAPACITY, 0, false, 0);
+        (address app, bytes memory strategy, address[] memory tokens, uint256[] memory amounts) = mv.getShipParams(a2);
+        aqua.ship(app, strategy, tokens, amounts);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        (address t1,) = mv.buy(a1, K, 1e18, type(uint256).max);
+        (address t2,) = mv.buy(a2, K, 2e18, type(uint256).max);
+        vm.stopPrank();
+        assertEq(t1, t2, "one OptionToken per (strike, expiry), whoever wrote it");
+        (,,, uint256 sUnits, uint256 sCount,,,,,,,) = mv.seriesOf(mv.seriesId(K, expiry));
+        assertEq(sUnits, 3e18);
+        assertEq(sCount, 2);
+        assertEq(mv.nakedNotional(), 4500e6);
+    }
+
+    function test_buy_nakedCeilingBinds() public {
+        uint256 authId = _openAndShip(CAPACITY, false);
+        mv.setNotionalCeiling(100_000e6); // the backstop-coupled one is 10 x 25k = 250k, so the owner's binds
+        // 50 ATM units = 75k naked: fine. 100 = 150k: not.
+        vm.prank(buyer);
+        mv.buy(authId, K, 50e18, type(uint256).max);
+        assertEq(mv.nakedNotional(), 75_000e6);
+
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(MarginVault.NakedCeiling.selector, 150_000e6, 100_000e6));
+        mv.buy(authId, K, 50e18, type(uint256).max);
+
+        // Shrinking the backstop shrinks the ceiling under existing exposure:
+        // nothing new fills until it is refilled.
+        vm.prank(address(mv));
+        backstop.draw(20_000e6);
+        assertLt(mv.effectiveCeiling(), mv.nakedNotional(), "ceiling now sits under existing exposure");
+        vm.prank(buyer);
+        vm.expectRevert();
+        mv.buy(authId, K, 1e18, type(uint256).max);
+    }
+
+    function test_buy_usesLpMarginBpsWhenHigher() public {
+        vm.prank(lp);
+        uint256 authId = mv.openRange(2500e18, 3500e18, expiry, CAPACITY, 8000, false, 0);
+        (address app, bytes memory strategy, address[] memory tokens, uint256[] memory amounts) = mv.getShipParams(authId);
+        vm.prank(lp);
+        aqua.ship(app, strategy, tokens, amounts);
+
+        assertEq(mv.initialMargin(authId, K, 1e18), 2400e6, "writer opted to post 80% of notional");
+        vm.prank(buyer);
+        mv.buy(authId, K, 1e18, type(uint256).max);
+        assertEq(mv.nakedNotional(), 600e6);
+    }
+
+    function test_buy_revertsOnStaleMark() public {
+        uint256 authId = _openAndShip(CAPACITY, false);
+        vm.warp(block.timestamp + 91 minutes);
+        vm.prank(buyer);
+        vm.expectRevert(MarginVault.StaleMark.selector);
+        mv.buy(authId, K, 1e18, type(uint256).max);
+    }
+
+    function test_buy_guards() public {
+        uint256 authId = _openAndShip(CAPACITY, false);
+        vm.startPrank(buyer);
+        vm.expectRevert(MarginVault.StrikeOutOfRange.selector);
+        mv.buy(authId, 4000e18, 1e18, type(uint256).max);
+        vm.expectRevert(MarginVault.PremiumAboveMax.selector);
+        mv.buy(authId, K, 1e18, 1);
+        vm.warp(expiry - 2 hours);
+        vm.expectRevert(MarginVault.TooCloseToExpiry.selector);
+        mv.buy(authId, K, 1e18, type(uint256).max);
+        vm.stopPrank();
+
+        vm.prank(lp);
+        mv.closeRange(authId);
+        vm.prank(buyer);
+        vm.expectRevert(MarginVault.RangeInactive.selector);
+        mv.buy(authId, K, 1e18, type(uint256).max);
     }
 
     function test_openRange_validation() public {
