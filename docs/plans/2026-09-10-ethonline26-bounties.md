@@ -293,9 +293,16 @@ than a slide.
 }
 ```
 
-### Circle Gateway and RFQ (R6) — cut for Sept 13
+### Circle Gateway and RFQ (R6) — Gateway cut; RFQ built after all
 
-Both explicitly out of scope for the 3-day submission — Gateway's Arc
+> **Status update, 2026-09-10 evening:** with every other track done, RFQ
+> was built on the user's call as a sibling AquaApp (`RfqVault`, not a
+> SwapVM instruction — nonces need state an instruction doesn't have and
+> the JIT custody model is the point, not the pricing path). Eight tests,
+> an RFQ tab with wallet-signed EIP-712 quotes, `script/rfq-lifecycle.sh`.
+> Not on a testnet. Gateway stays cut.
+
+Both were explicitly out of scope for the 3-day submission — Gateway's Arc
 availability isn't even confirmed yet, and RFQ was always a bigger,
 separate architectural build. Revisit only in the Sept 16-30 window if the
 mainnet bonus is being pursued with spare time. Full stories for both are

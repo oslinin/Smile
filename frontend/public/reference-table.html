@@ -434,8 +434,10 @@
         <tr class="row-R">
           <td><span class="code">R6</span></td>
           <td><span class="cat">Recommendation</span></td>
-          <td><strong>Hybrid RFQ tier</strong> — signed-quote layer on top of on-chain fallback; LPs run fast repricing off-chain; build only if Phase 1–2 markouts show persistent toxicity.</td>
-          <td><span class="status gated">Gated</span></td>
+          <td><strong>Hybrid RFQ tier</strong> — signed-quote layer on top of on-chain fallback; LPs run fast repricing off-chain; build only if Phase 1–2 markouts show persistent toxicity.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">src/periphery/RfqVault.sol</span> (EthOnline 2026) — <span class="code">openRange / quoteHash / formulaQuote / fillCost / fill / cancelQuote / redeem / reclaim</span>, EIP-712 domain "Smile RFQ" v1, own settlement, same Aqua JIT pull; <span class="code">test/RfqVault.t.sol</span>; the <strong>RFQ · Signed Quotes</strong> tab (wallet-signed quotes); <span class="code">script/rfq-lifecycle.sh</span>. Built without the markout gate; opt-in per range.</div>
+          </td>
+          <td><span class="status done">Implemented</span></td>
           <td>P3+</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L10')">L10</span><span class="ref-link" onclick="scrollTo('S8')">S8</span><span class="ref-link" onclick="scrollTo('P3')">P3</span></span></td>
         </tr>

@@ -102,6 +102,30 @@ yet), partial-unit takeover, per-range block caps, `close()` (a
 sigma-priced buyback paid from margin is exactly L7's attack), any testnet
 deployment. [L13](limitations.md) lists what the tier does not promise.
 
+## 1inch — Build an Aqua App, part three: `RfqVault`
+
+**Pitch.** Tradfi's "NBBO + price improvement" on Aqua. Tier 1 is the
+formula surface — permissionless, always live, the fallback. Tier 2: an LP
+ships the same kind of range to `RfqVault`, signs EIP-712 quotes in their
+wallet (no gas, any pricing model), and a taker fills one; the vault
+recovers the signer, checks ttl / size / nonce, and pulls the collateral
+JIT through Aqua exactly as tier 1 does — a signed quote changes the
+price, never the custody model. Quotes are single-use and cancellable;
+no `close()` so holders are never captive to a market maker's uptime.
+
+**Code.** `src/periphery/RfqVault.sol` (12.7 KB) · `test/RfqVault.t.sol`
+(8 tests: improved quote fills with 1 WETH pulled JIT, puts cash-secure the
+strike, partial fill spends the nonce, wrong signer / oversize / off-range
+/ cancelled / expired / tampered revert, ITM call settles with conservation)
+· `frontend/components/RfqDesk.tsx` (`useSignTypedData`) ·
+`script/rfq-lifecycle.sh` (`cast wallet sign --data` for the typed data).
+Commits `6e3a913`, then the wiring commit.
+
+**Demo numbers (Anvil).** Formula Ask 691.93 USDC; signed quote 685.01
+(100 bps inside); taker paid 691.93 incl. the 1% fee vs 698.92 on tier 1;
+1 WETH left the LP wallet at the fill; the second fill of the same nonce
+reverted `QuoteUsed`.
+
 ## The Graph — AI tooling / agents on live chain data: `subgraph/`
 
 **Pitch.** The LP dashboard and the AI copilot used to discover LP

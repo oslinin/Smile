@@ -417,6 +417,16 @@ flow with tighter quotes; passive LPs keep the tier-1 spread. Build this only
 if, after Phases 1–2, realized LP markouts (P&L measured a few minutes after
 each fill) show flow is still systematically toxic.
 
+> **Implemented (EthOnline 2026)** — as a sibling AquaApp rather than a
+> SwapVM instruction: `src/periphery/RfqVault.sol`. The LP ships a range,
+> signs `Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)` under
+> the EIP-712 domain "Smile RFQ", and `fill()` recovers the signer, checks
+> ttl / size / nonce, then settles like a tier-1 fill (premium + fee in,
+> collateral pulled JIT through Aqua). `formulaQuote()` is the tier-1 Ask
+> for the same range. Nonces are single-use and cancellable. The markout
+> gate above was skipped for the hackathon; the tier is opt-in per range,
+> so tier 1 is untouched for anyone who does not sign.
+
 ### Phase 4 — LP risk tooling
 
 **R7. Range-Greeks panel in the LP dashboard.** Show, per authorization:

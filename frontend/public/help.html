@@ -1207,6 +1207,58 @@ the honest scope decisions behind them:
 <a href="docs/plans/2026-09-10-arc-bounty.md">Arc</a>. The task-by-task status page is
 <strong>Help → Continuation Track</strong> in the app; the per-bounty pitch, audit trail
 and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>docs/submission-ethonline2026.md</code></a>.</p>
+<h3>Sponsor &amp; feature map</h3>
+<p>Blue is what Smile already was on September 5; green is what the event
+added. Sponsors and non-sponsor infrastructure alike.</p>
+<pre><code class="language-mermaid">flowchart TB
+  classDef old fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef new fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+  subgraph Infra[&quot;Infrastructure &amp; sponsors&quot;]
+    Aqua[&quot;1inch Aqua&lt;br/&gt;JIT-pull liquidity registry&quot;]:::old
+    SwapVM[&quot;1inch SwapVM&lt;br/&gt;custom opcode 33: OptionPremium&quot;]:::old
+    Uni[&quot;Uniswap v4 hook&lt;br/&gt;demand-driven vol surface&quot;]:::old
+    CL[&quot;Chainlink ETH/USD&lt;br/&gt;spot + permissionless settlement&quot;]:::old
+    CRE[&quot;Chainlink CRE&lt;br/&gt;scheduled settlement keeper&quot;]:::old
+    Pyth[&quot;Pyth pull oracle&lt;br/&gt;PythSpotAdapter (R5, opt-in)&quot;]:::old
+    USDC[&quot;Circle USDC&lt;br/&gt;premium · fee · put collateral&quot;]:::old
+    Graph[&quot;The Graph&lt;br/&gt;Studio subgraph smile-sepolia&quot;]:::new
+    Arc[&quot;Circle Arc testnet&lt;br/&gt;USDC as the gas + quote token&quot;]:::new
+    Sepolia[&quot;Sepolia redeploy&lt;br/&gt;full stack, real feeds&quot;]:::new
+    OR[&quot;OpenRouter&lt;br/&gt;4th copilot provider&quot;]:::new
+  end
+
+  subgraph Protocol[&quot;Smile contracts&quot;]
+    Vault[&quot;AquaCollateralVault&lt;br/&gt;single-leg calls &amp; puts&quot;]:::old
+    Settle[&quot;AquaOptionSettlement&lt;br/&gt;round-verified expiry price&quot;]:::old
+    Lens[&quot;SmileQuoteLens + FirmEscrow&lt;br/&gt;best quote, firm depth&quot;]:::old
+    Spread[&quot;SpreadVault (S12)&lt;br/&gt;defined-risk netting&quot;]:::new
+    Margin[&quot;MarginVault + Backstop (S13)&lt;br/&gt;opt-in margined puts&quot;]:::new
+    Rfq[&quot;RfqVault (R6)&lt;br/&gt;EIP-712 signed quotes&quot;]:::new
+  end
+
+  subgraph App[&quot;App &amp; tooling&quot;]
+    UI[&quot;Next.js app&lt;br/&gt;chain · LP · payoff builder&quot;]:::old
+    Copilot[&quot;AI copilot&lt;br/&gt;reads live chain state&quot;]:::old
+    Tabs[&quot;Spreads · Margin · RFQ tabs&quot;]:::new
+    Keepers[&quot;Lifecycle scripts + margin keeper&quot;]:::new
+  end
+
+  Aqua --&gt; Vault &amp; Spread &amp; Margin &amp; Rfq
+  SwapVM --&gt; Vault
+  Uni --&gt; SwapVM
+  CL --&gt; Vault &amp; Settle &amp; Margin
+  Pyth -.-&gt; Vault
+  CRE --&gt; Settle
+  USDC --&gt; Vault &amp; Spread &amp; Margin &amp; Rfq
+  Arc --&gt; Vault &amp; Spread
+  Sepolia --&gt; Vault &amp; Spread &amp; Margin
+  Graph --&gt; Copilot &amp; UI
+  OR --&gt; Copilot
+  Vault --&gt; Lens &amp; UI
+  Spread &amp; Margin &amp; Rfq --&gt; Tabs
+  Margin --&gt; Keepers
+</code></pre>
 <h3>What the event added</h3>
 <table>
 <thead>
@@ -1228,6 +1280,12 @@ and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>doc
 <td>Rung 3 of the ladder: a second sibling AquaApp where a put writer locks <strong>initial margin — 1,500 USDC for an ATM 3000 put, not 3,000</strong> — off the lowest Chainlink answer of the last hour (never the vol hook). Behind the holder, in order: the writer&#39;s margin and free balance, an opt-in Aqua credit line, a 30-min writer-takeover auction, a share-based backstop pool (naked notional capped at 7× it), the insurance fund, and only then a loud haircut. Two-step settlement; a gap-40 solvency test; <code>AquaCollateralVault</code> still untouched.</td>
 <td>1inch · Build an Aqua App</td>
 <td><code>src/periphery/MarginVault.sol</code>, <code>MarginBackstop.sol</code> · <code>test/Margin*.t.sol</code> (54 tests) · the <strong>Margin · Opt-in Puts</strong> tab · <code>script/margin-lifecycle.sh</code> · <code>keeper/margin.mjs</code></td>
+</tr>
+<tr>
+<td><strong>RfqVault — R6 hybrid RFQ</strong></td>
+<td>The &quot;NBBO + price improvement&quot; tier from the limitations doc: an LP ships a range to a third sibling AquaApp, then signs EIP-712 quotes off-chain (no gas) — <code>(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</code> — and a taker fills one; the vault recovers the signer and pulls the collateral JIT through Aqua exactly as tier 1. <code>formulaQuote()</code> shows the tier-1 Ask the quote is beating. Single-use nonces, cancellable; no <code>close()</code> (sellbacks stay on tier 1).</td>
+<td>1inch · Build an Aqua App · Arc plan X7</td>
+<td><code>src/periphery/RfqVault.sol</code> · <code>test/RfqVault.t.sol</code> (8) · the <strong>RFQ · Signed Quotes</strong> tab · <code>script/rfq-lifecycle.sh</code></td>
 </tr>
 <tr>
 <td><strong>The Graph subgraph</strong></td>
@@ -1333,6 +1391,7 @@ OTM, between the strikes, and far ITM: <code>holder payout + writer reclaim == e
 ./script/margin-lifecycle.sh        # margined put: fill (IM only) → crash → flag → auction → backstop absorbs → settle → redeem
 MODE=takeover ./script/margin-lifecycle.sh   # …or a second writer takes the position over at auction
 cd keeper &amp;&amp; npm install &amp;&amp; MARGIN_VAULT=… MARGIN_SETTLEMENT=… ORACLE=… PRIVATE_KEY=… npm run margin   # permissionless keeper
+./script/rfq-lifecycle.sh           # LP signs an EIP-712 quote 1% inside the formula (no gas) → taker fills → JIT pull → replay rejected
 
 cd subgraph &amp;&amp; pnpm install &amp;&amp; pnpm codegen &amp;&amp; pnpm build   # The Graph subgraph (see subgraph/README.md)
 
@@ -1344,6 +1403,7 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <ul>
 <li><strong>SpreadVault</strong>: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional <code>SpreadPremiumInstruction</code> SwapVM opcode for the call-credit leg was not attempted.</li>
 <li><strong>MarginVault</strong>: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range <code>maxBlockNotional</code> not ported (the global backstop-coupled ceiling bounds exposure instead); no <code>close()</code> by design (a sigma-priced buyback paid from margin is L7&#39;s attack). Runs on Anvil via <code>script/margin-lifecycle.sh</code> and the keeper; not deployed to Arc/Sepolia. <a href="docs/limitations.md">L13</a> is the honest list of what it does not promise.</li>
+<li><strong>RfqVault</strong>: built as a sibling vault rather than a SwapVM opcode — a signed quote changes the price, never the custody model, and nonces need state an instruction doesn&#39;t have. Not deployed to a testnet yet; no <code>close()</code> by design.</li>
 <li><strong>Subgraph</strong>: live on Graph Studio as <code>smile-sepolia</code> v0.0.2 (<code>https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</code>), indexing the Sepolia deployment above — Authorization #0 was queryable within a minute of <code>Aqua.ship</code>, and the <code>Fill</code> for a real 0.01-unit $2,500 call one block after the buy. The local graph-node compose is x86-64-only (no arm64 image; emulation crashes). G6/G7 stretch (long positions via dynamic data sources, a Subgraph MCP) not attempted.</li>
 <li><strong>Arc</strong>: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork&#39;s pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.</li>
 </ul>
@@ -1768,6 +1828,17 @@ Sophisticated LPs run fast repricing and toxicity models off-chain and win
 flow with tighter quotes; passive LPs keep the tier-1 spread. Build this only
 if, after Phases 1–2, realized LP markouts (P&amp;L measured a few minutes after
 each fill) show flow is still systematically toxic.</p>
+<blockquote>
+<p><strong>Implemented (EthOnline 2026)</strong> — as a sibling AquaApp rather than a
+SwapVM instruction: <code>src/periphery/RfqVault.sol</code>. The LP ships a range,
+signs <code>Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</code> under
+the EIP-712 domain &quot;Smile RFQ&quot;, and <code>fill()</code> recovers the signer, checks
+ttl / size / nonce, then settles like a tier-1 fill (premium + fee in,
+collateral pulled JIT through Aqua). <code>formulaQuote()</code> is the tier-1 Ask
+for the same range. Nonces are single-use and cancellable. The markout
+gate above was skipped for the hackathon; the tier is opt-in per range,
+so tier 1 is untouched for anyone who does not sign.</p>
+</blockquote>
 <h3>Phase 4 — LP risk tooling</h3>
 <p><strong>R7. Range-Greeks panel in the LP dashboard.</strong> Show, per authorization:
 ex-post Greeks of actually-sold series; ex-ante expected Greeks under an
