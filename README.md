@@ -17,7 +17,8 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 7. [End-to-End Demo Walkthrough](#end-to-end-demo-walkthrough)
 8. [Glossary](#-glossary)
 9. [Project Structure](#%EF%B8%8F-project-structure)
-10. [Technical Stack](#technical-stack)
+10. [EthOnline 2026 — Continuation Track](#-ethonline-2026--continuation-track)
+11. [Technical Stack](#technical-stack)
 
 More docs: [build notes & war stories](docs/build-notes.md) ·
 [verified CRE simulation transcript](docs/cre-simulation.md) ·
@@ -215,7 +216,7 @@ efficiency *without* paying for machinery the rung below didn't need:
 | Rung | Mechanism | Liquidation machinery | Who it serves |
 |---|---|---|---|
 | 1 | **Yield-bearing collateral** ([S4](docs/solutions.md)) — escrowed wstETH/sDAI keeps earning while backing quotes | None | Every LP: makes full collateral *cheap* instead of smaller |
-| 2 | **Defined-risk netting** ([S12](docs/solutions.md)) — a call spread margined at its true max loss `K₂−K₁`, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
+| 2 | **Defined-risk netting** ([S12](docs/solutions.md)) — **implemented at EthOnline 2026 as `SpreadVault`** (see the Continuation Track section below): a call spread margined at its true max loss `(K₂−K₁)/K₂` WETH, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
 | 3 | **Partial-collateral puts** — a put's worst case is bounded (strike → 0), so "80% collateral survives any 80% crash" is a coherent product | Light — bounded bad debt | Yield-focused put writers |
 | 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine | All of it | Professional delta-hedging desks |
 
@@ -856,23 +857,129 @@ so the browser can `fetch()` the JSON; the script handles that. Stop it with
 │   ├── vaults/               # AquaCollateralVault (escrow/lifecycle)
 │   │                         #   + AquaOptionSettlement (expiry-price registry)
 │   ├── hooks/                # OptionPricingHook (Uniswap v4 + the vol surface)
+│   ├── periphery/            # EthOnline 2026: SpreadVault (S12 netting AquaApp)
+│   │                         #   + SmilePremiumLib + SpreadToken
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
+├── subgraph/                 # EthOnline 2026: The Graph subgraph (authorizations + fills)
 ├── frontend/                 # Next.js app
-│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface
-│   ├── lib/                  # options engine + 20-strategy catalog
-│   └── config/               # Wagmi + contract addresses + official Aqua ABI
+│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface, SpreadDesk
+│   ├── lib/                  # options engine + 20-strategy catalog + subgraph client + AI copilot
+│   └── config/               # Wagmi + contract addresses (Anvil / Sepolia / Arc) + official Aqua ABI
 ├── volsurface/               # Python (Flask + matplotlib) 3-D vol-surface renderer
 │                             #   — evolves with each trade via the σ feedback loop
 ├── cre-workflow/             # Chainlink CRE workflow (TypeScript → WASM)
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
-├── docs/                     # grant proposal, build notes, CRE transcript
-├── test/                     # Foundry tests (82 passing)
+│                             #   + SpreadDemo.s.sol, spread-lifecycle.sh, arc-smoke.sh (EthOnline 2026)
+├── docs/                     # grant proposal, build notes, CRE transcript, docs/plans/ (bounty plans)
+├── test/                     # Foundry tests (151 passing)
 ├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
 │                             #   layers, guided tour) + viewer.html — see §7 above
 ├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
 └── foundry.toml              # solc 0.8.30, via_ir
 ```
+
+---
+
+## 🧭 EthOnline 2026 — Continuation Track
+
+Everything above this section is the pre-existing protocol. This section is
+what was built during EthOnline 2026 (September 5–13, 2026) on branch
+`EthOnline2026_continuation_track`, cut from `main` at `5b4cc63`. Plans and
+the honest scope decisions behind them:
+[bounty overview](docs/plans/2026-09-10-ethonline26-bounties.md) ·
+[SpreadVault / MarginVault](docs/plans/2026-09-05-ethonline2026-continuation-track.md) ·
+[The Graph subgraph](docs/plans/2026-09-09-theGraph.md) ·
+[Arc](docs/plans/2026-09-10-arc-bounty.md). The task-by-task status page is
+**Help → Continuation Track** in the app.
+
+### What the event added
+
+| Piece | What it is | Bounty | Where |
+|---|---|---|---|
+| **SpreadVault — S12 defined-risk netting** | Rung 2 of the V2 ladder above, now implemented: a sibling AquaApp where a credit spread escrows only its true max loss — **0.0625 WETH instead of 1 WETH** for a 3000/3200 call credit spread (16×), **200 USDC instead of 3,200** for the put-credit twin. Same JIT model (collateral stays in the writer's wallet until a buyer matches), same settlement contract, `AquaCollateralVault` untouched. | 1inch · Build an Aqua App | `src/periphery/SpreadVault.sol`, `SmilePremiumLib.sol`, `SpreadToken.sol` · `test/SpreadVault.t.sol`, `test/SpreadSettlement.t.sol` · the **Spreads · Defined Risk** tab · `script/SpreadDemo.s.sol`, `script/spread-lifecycle.sh` |
+| **The Graph subgraph** | Indexes every LP authorization and fill. Replaces the capped brute-force scan the LP Dashboard and the AI copilot used (`chain.ts` stopped seeing anything past 50 authorizations — [L12a](docs/limitations.md)) with one query, RPC path kept as the fallback. | The Graph · AI tooling / agent on live chain data | `subgraph/` · `frontend/lib/subgraph.ts` · `components/LPDashboard.tsx`, `lib/copilot/chain.ts` |
+| **Arc testnet deployment** | The whole stack (including SpreadVault) on Circle's Arc, with **Circle's real Arc USDC** as premium, fee, and put-collateral token — and gas. Real trades on it, recorded. | Arc · Best DeFi Application | [`docs/arc-testnet-deployment.md`](docs/arc-testnet-deployment.md) · `script/arc-smoke.sh` · `.env.arc.example` · Arc in the app's network picker |
+| **Copilot & docs** | OpenRouter as a fourth copilot provider; the copilot documented as a help page for the first time; reference-table rows now cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed. | — | `frontend/lib/copilot/provider.ts`, `docs/copilot.md`, `docs/reference-table.html` |
+
+```mermaid
+flowchart LR
+  subgraph Chain["EVM chain — Anvil · Sepolia · Arc testnet"]
+    Aqua["1inch Aqua registry<br/>(official, self-deployed)"]
+    Vault["AquaCollateralVault<br/>single-leg options · unchanged"]
+    Spread["SpreadVault (new)<br/>S12 netted spreads"]
+    S1["AquaOptionSettlement"]
+    S2["AquaOptionSettlement<br/>(the spread's own)"]
+    Aqua --- Vault
+    Aqua --- Spread
+    Vault --- S1
+    Spread --- S2
+  end
+  App["Next.js app<br/>Spreads tab · LP Dashboard · Copilot"]
+  Graph[("The Graph subgraph (new)<br/>Authorization · Fill")]
+  App -- "RPC / getLogs (fallback)" --> Chain
+  App -- "NEXT_PUBLIC_SUBGRAPH_URL" --> Graph
+  Graph -- "events + bound authorizations() calls" --> Vault
+```
+
+### SpreadVault in one table
+
+A taker buys the structure; the writer's escrow is the S12 true max loss,
+pulled JIT through the SpreadVault's own Aqua strategy, and settlement is
+one price through one formula per structure:
+
+| | Call credit (short K₁, long K₂) | Put credit (short K₂, long K₁) |
+|---|---|---|
+| Escrow per unit | `(K₂−K₁)/K₂` WETH — 0.0625 for 3000/3200 | `K₂−K₁` USDC — 200 for 3000/3200 |
+| vs. the main vault (naked short leg) | 1 WETH | 3,200 USDC |
+| Taker pays | Ask(K₁ call) − Bid(K₂ call), floored at 1 USDC, + fee | Ask(K₂ put) − Bid(K₁ put), same |
+| Payout at settlement price S | `units·(clamp(S,K₁,K₂)−K₁)/S` WETH | `units·(K₂−clamp(S,K₁,K₂))/1e30` USDC |
+| Max payout over S | exactly the escrow (at S = K₂) | exactly the escrow (at S ≤ K₁) |
+
+Pricing is not a new model: `SmilePremiumLib` is the vault's own put-side
+premium math lifted into a library with an `isCall` flag, and
+`test_quote_putLegMatchesVaultPutQuote` proves it reproduces
+`vault.putQuote` to the wei with the staleness spread and fee gross-up
+live. `test/SpreadSettlement.t.sol` fuzzes the settlement price across
+OTM, between the strikes, and far ITM: `holder payout + writer reclaim ==
+escrow` to the wei in either order, and the escrow cap never binds.
+
+```mermaid
+sequenceDiagram
+    participant W as Writer (LP)
+    participant SV as SpreadVault
+    participant AQ as Aqua
+    participant T as Taker
+    participant ST as AquaOptionSettlement
+    W->>SV: openStructure(CallCredit, [K1,K2], expiry, escrowCapacity)
+    W->>AQ: ship(app=SpreadVault, strategy, [WETH], [escrowCapacity])
+    Note over W,AQ: WETH stays in the writer's wallet
+    T->>SV: buy(authId, units, maxPremium)
+    SV->>SV: quote — Ask(long leg) − Bid(short leg), fee, escrow
+    SV->>AQ: pull(writer, hash, WETH, escrow) — the S12 max loss, not a full leg
+    SV->>T: mint SpreadToken
+    Note over ST: expiry — anyone supplies the first Chainlink round after it
+    T->>SV: redeem(authId, units) → net intrinsic, capped by escrow
+    W->>SV: reclaim(authId) → escrow − what outstanding holders are owed
+```
+
+### Running the new pieces
+
+```bash
+./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
+./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
+
+cd subgraph && pnpm install && pnpm codegen && pnpm build   # The Graph subgraph (see subgraph/README.md)
+
+cp .env.arc.example frontend/.env.local                      # point the app at the Arc testnet deployment
+PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills on Arc, as plain cast sends
+```
+
+### Honest status of each track
+
+- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted. **MarginVault** (rung 4, the plan's Part B) is designed, not built — an 8-task liquidation engine was judged unsafe to rush before the deadline.
+- **Subgraph**: mappings, schema, tests, and the frontend/copilot wiring are done; the local graph-node compose is x86-64-only (no arm64 image; emulation crashes) and the judged Graph Studio deployment on Sepolia is pending a funded deployer and a Studio key.
+- **Arc**: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork's pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.
 
 ---
 
