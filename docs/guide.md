@@ -37,6 +37,14 @@ transaction with explorer links.
 
 ## Buying an option (Trade tab)
 
+The tab opens on an ETH/USD candlestick chart (TradingView's open-source
+Lightweight Charts engine, fed by Coinbase's public hourly candles with
+Kraken as a fallback). The protocol's own spot is the dotted blue line;
+as you build a strategy below, each leg's strike appears on the chart —
+green for long, red for short — with breakevens dashed in yellow. The
+market data is context; every price the protocol charges comes from its
+oracle and surface.
+
 1. The option chain shows strikes around spot with the live Ask (buy) and
    Bid (sell-back) for calls and puts, quoted from the surface.
 2. Pick a strike and size; approve USDC for the premium once.

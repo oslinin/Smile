@@ -1227,6 +1227,8 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
     Arc[&quot;Circle Arc testnet&lt;br/&gt;USDC as the gas + quote token&quot;]:::new
     Sepolia[&quot;Sepolia redeploy&lt;br/&gt;full stack, real feeds&quot;]:::new
     OR[&quot;OpenRouter&lt;br/&gt;4th copilot provider&quot;]:::new
+    TV[&quot;TradingView Lightweight Charts&lt;br/&gt;open-source engine, Apache-2.0&quot;]:::new
+    MD[&quot;Coinbase / Kraken public candles&lt;br/&gt;market context for the chart&quot;]:::new
   end
 
   subgraph Protocol[&quot;Smile contracts&quot;]
@@ -1241,7 +1243,8 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
   subgraph App[&quot;App &amp; tooling&quot;]
     UI[&quot;Next.js app&lt;br/&gt;chain · LP · payoff builder&quot;]:::old
     Copilot[&quot;AI copilot&lt;br/&gt;reads live chain state&quot;]:::old
-    Tabs[&quot;Spreads · Margin · RFQ tabs&quot;]:::new
+    Tabs[&quot;Overview · Spreads · Margin · RFQ · Risk Monitor tabs&quot;]:::new
+    Chart[&quot;Price chart + OptionStrat-grade builder&quot;]:::new
     Keepers[&quot;Lifecycle scripts + margin keeper&quot;]:::new
   end
 
@@ -1259,6 +1262,8 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
   Vault --&gt; Lens &amp; UI
   Spread &amp; Margin &amp; Rfq --&gt; Tabs
   Margin --&gt; Keepers
+  TV &amp; MD --&gt; Chart
+  Chart --&gt; UI
 </code></pre>
 <h3>What the event added</h3>
 <table>
@@ -1302,9 +1307,9 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
 </tr>
 <tr>
 <td><strong>App: Overview, Risk Monitor, builder</strong></td>
-<td>A default <strong>Overview</strong> tab — the capital-efficiency ladder as live bars from the connected chain, live counters across all vaults, the recorded testnet receipts; one build serves Anvil / Sepolia / Arc (addresses follow the connected chain); a <strong>Risk Monitor</strong> with per-position health bars and the liquidation timeline rebuilt from MarginVault events (+ &quot;explain with the copilot&quot;); the strategy builder gains today/halfway/expiry curves, a price × date P&amp;L heat map, breakevens, and a per-leg &quot;what the writer locks on each vault&quot; panel; tabs in user language.</td>
+<td>A default <strong>Overview</strong> tab — the capital-efficiency ladder as live bars from the connected chain, live counters across all vaults, the recorded testnet receipts; one build serves Anvil / Sepolia / Arc (addresses follow the connected chain); a <strong>Risk Monitor</strong> with per-position health bars and the liquidation timeline rebuilt from MarginVault events (+ &quot;explain with the copilot&quot;); the strategy builder gains today/halfway/expiry curves, a price × date P&amp;L heat map, breakevens, and a per-leg &quot;what the writer locks on each vault&quot; panel; a TradingView Lightweight Charts price chart with the strategy overlaid; tabs in user language.</td>
 <td>— (UI/UX for all three)</td>
-<td><code>frontend/components/Story.tsx</code>, <code>RiskMonitor.tsx</code>, <code>PayoffBuilder.tsx</code>, <code>lib/deployments.ts</code>, <code>config/wagmi.ts</code></td>
+<td><code>frontend/components/Story.tsx</code>, <code>RiskMonitor.tsx</code>, <code>PayoffBuilder.tsx</code>, <code>PriceChart.tsx</code>, <code>lib/deployments.ts</code>, <code>config/wagmi.ts</code></td>
 </tr>
 <tr>
 <td><strong>Copilot &amp; docs</strong></td>
@@ -1397,8 +1402,10 @@ OTM, between the strikes, and far ITM: <code>holder payout + writer reclaim == e
 there, the ladder — naked put $3,000 → credit spread $200 → margined put
 $1,500 (read live from MarginVault&#39;s mark) → signed quote — with a jump
 button per rung, live counters, and on Sepolia / Arc the real receipts.
-<strong>Trade</strong> is the option chain plus the strategy builder (three P&amp;L curves,
-a price × date heat map, breakevens, greeks, and what a writer locks per
+<strong>Trade</strong> opens on a TradingView-engine ETH/USD chart with the strategy
+you are building drawn on it (strikes, breakevens, the protocol&#39;s spot),
+then the option chain and the strategy builder (three P&amp;L curves, a
+price × date heat map, breakevens, greeks, and what a writer locks per
 sell leg on each vault). <strong>Earn</strong> writes ranges (one-click or by hand);
 <strong>Spreads</strong>, <strong>Margin</strong> and <strong>RFQ</strong> are the three new vaults; <strong>Risk
 Monitor</strong> shows every margined position&#39;s health and the liquidation
@@ -1431,7 +1438,8 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <h2>Technical Stack</h2>
 <ul>
 <li><strong>Smart Contracts</strong>: Solidity 0.8.30 (Foundry, via_ir), on the <strong>official 1inch Aqua + SwapVM</strong> contracts (vendored, unmodified)</li>
-<li><strong>Frontend</strong>: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT <code>black-scholes</code> + <code>greeks</code> packages</li>
+<li><strong>Frontend</strong>: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT <code>black-scholes</code> + <code>greeks</code> packages; price chart on <strong>TradingView Lightweight Charts</strong> (TradingView&#39;s open-source engine, Apache-2.0) fed by Coinbase&#39;s public ETH-USD candles (Kraken fallback) — market context only, the protocol prices off its oracle</li>
+<li><strong>Indexing &amp; AI</strong>: The Graph (Studio subgraph <code>smile-sepolia</code>); copilot via the Vercel AI SDK with Anthropic / OpenAI / Google / OpenRouter as providers</li>
 <li><strong>Oracle/Settlement</strong>: Chainlink price feeds (permissionless round-verified settlement) + Chainlink CRE SDK (scheduled keeper)</li>
 <li><strong>DEX Infrastructure</strong>: Uniswap v4 Hooks, Uniswap Trading API</li>
 </ul>
@@ -1489,6 +1497,13 @@ how much of it is needed.</p>
 The <strong>Receipts</strong> tab lists every deployed contract and recorded demo
 transaction with explorer links.</p>
 <h2>Buying an option (Trade tab)</h2>
+<p>The tab opens on an ETH/USD candlestick chart (TradingView&#39;s open-source
+Lightweight Charts engine, fed by Coinbase&#39;s public hourly candles with
+Kraken as a fallback). The protocol&#39;s own spot is the dotted blue line;
+as you build a strategy below, each leg&#39;s strike appears on the chart —
+green for long, red for short — with breakevens dashed in yellow. The
+market data is context; every price the protocol charges comes from its
+oracle and surface.</p>
 <ol>
 <li>The option chain shows strikes around spot with the live Ask (buy) and
 Bid (sell-back) for calls and puts, quoted from the surface.</li>

@@ -198,6 +198,33 @@ blocks well-known dev keys; faucet USDC is both gas and premium balance.
 testnet (only Stork's pull oracle, which would need an adapter). Arc
 mainnet launches Sept 16, so the $2,000 mainnet bonus is a follow-up.
 
+## Third-party services and libraries, in one place
+
+| Layer | Service / library | Role | Pre-existing or event |
+|---|---|---|---|
+| Liquidity | 1inch **Aqua** (official registry, vendored) | JIT-pull collateral for every vault | pre-existing; three new apps on it |
+| Pricing | 1inch **SwapVM** (custom opcode 33) | on-chain premium instruction | pre-existing |
+| Vol surface | **Uniswap v4** hook; Uniswap Trading API for live spot in the app | demand-driven sigma; spot readout | pre-existing |
+| Oracle | **Chainlink** ETH/USD feed + **Chainlink CRE** keeper | spot, permissionless round-verified settlement, scheduled settlement | pre-existing |
+| Oracle (opt-in) | **Pyth** pull oracle (`PythSpotAdapter`) | sub-second spot for quoting | pre-existing |
+| Stablecoin | **Circle USDC** (Sepolia), **Circle Arc** testnet + faucet | premium, collateral, margin, backstop; native gas on Arc | Arc: event |
+| Indexing | **The Graph** Studio (`smile-sepolia`) | authorizations + fills for the app and the copilot | event |
+| AI | Vercel AI SDK with **Anthropic / OpenAI / Google / OpenRouter** | the copilot; OpenRouter added at the event | OpenRouter: event |
+| Charting | **TradingView Lightweight Charts** 5.2 (Apache-2.0) | ETH/USD candles with the strategy overlaid | event |
+| Market data | **Coinbase** Exchange public candles, **Kraken** OHLC fallback | context for the chart only | event |
+| Strategy math | `black-scholes`, `greeks` (MIT), recharts | builder curves, heat map, greeks | pre-existing, extended |
+
+Two things we looked for and did not find worth adopting, so the judges
+do not wonder: there is **no open-source OptionStrat** — the closest React
+project ([option-payoff](https://github.com/anshuthopsee/option-payoff))
+draws expiry payoffs only, and the capable projects
+([optionlab](https://github.com/rgaveiga/optionlab),
+[opstrat](https://github.com/hashABCD/opstrat)) are Python analytics
+without a UI — so the builder stayed in-house and was upgraded instead.
+For charting, TradingView's own open-source engine was the right answer;
+[OpenCharts](https://github.com/dylanpersonguy/OpenCharts) (MIT) is a
+full standalone terminal built on it, not a component.
+
 ## Where to look
 
 - Status page: **Help → Continuation Track** in the app
