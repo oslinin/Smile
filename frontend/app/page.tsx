@@ -28,6 +28,7 @@ import { RiskMonitor } from "@/components/RiskMonitor";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
+import { PriceChart } from "@/components/PriceChart";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { VolSurface, type SurfaceTrade } from "@/components/VolSurface";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
@@ -119,6 +120,7 @@ export default function Home() {
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
+  const [builderLegs, setBuilderLegs] = useState<Leg[]>([]);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
   const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "risk" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
   const spot = useUniswapSpot();
@@ -408,6 +410,9 @@ export default function Home() {
         {activeTab === "chain" && (
           <div className="space-y-8">
             <section>
+              <PriceChart spot={spotPrice ?? 3420} legs={builderLegs} />
+            </section>
+            <section>
               <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
                 Option Chain
               </h2>
@@ -423,7 +428,7 @@ export default function Home() {
               <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
                 Strategy Payoff Builder
               </h2>
-              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} />
+              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} onLegsChange={setBuilderLegs} />
             </section>
           </div>
         )}

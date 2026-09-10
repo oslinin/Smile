@@ -223,10 +223,13 @@ interface PayoffBuilderProps {
   confirmedLegs?: Omit<Leg, "id">[];
   /** Copilot proposal: replaces all legs (unlike append-only confirmedLegs). `key` bumps per proposal. */
   proposal?: { legs: Omit<Leg, "id">[]; key: number } | null;
+  /** Fires with the current legs whenever they change (the price chart overlays them). */
+  onLegsChange?: (legs: Leg[]) => void;
 }
 
-export function PayoffBuilder({ spot, confirmedLegs = [], proposal }: PayoffBuilderProps) {
+export function PayoffBuilder({ spot, confirmedLegs = [], proposal, onLegsChange }: PayoffBuilderProps) {
   const [legs, setLegs] = useState<Leg[]>([]);
+  useEffect(() => { onLegsChange?.(legs); }, [legs]);
   const [outlook, setOutlook] = useState<Outlook>("bullish");
   const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   const nextId = useRef(1);
