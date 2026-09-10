@@ -364,9 +364,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>MarginVault scaffold, ranges, own settlement, size gate</strong> — the v1-scoped (puts-only, USDC-only) margin tier's foundation: its own `AquaApp`, its own settlement instance, and a timelocked vol-buffer schedule (margin requirements can only ratchet up gradually, never jump).
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">src/periphery/MarginVault.sol</span> <span class="code">src/periphery/MarginBackstop.sol</span> (stub) <span class="code">test/MarginVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/MarginVault.sol</span> <span class="code">src/periphery/MarginBackstop.sol</span> (stub) <span class="code">test/MarginVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">MarginVault is AquaApp, Ownable, ReentrancyGuard</span>: <span class="code">openRange(strikeMin, strikeMax, expiry, maxCapacity, lpMarginBps, autoTopUp, sigmaMulBps)</span> ships to Aqua under this vault's own strategy hash (asserted against <span class="code">aqua.rawBalances</span>); <span class="code">setSettlement</span> / <span class="code">setBackstop</span> are one-time; <span class="code">scheduleVolBuffer(im, mm)</span> only tightens — IM raise applies at once, MM raise lands after 24 h via <span class="code">applyVolBuffer()</span>, at most +1000 bps a step, MM ≤ IM. <span class="code">MarginBackstop</span> stub: <span class="code">totalAssets()</span> and a vault-only <span class="code">draw()</span>. Runtime 4,905 bytes.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 9</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
         </tr>
@@ -375,9 +376,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Worst-of mark and margin rule</strong> — what "properly margined" actually means here: the mark price is the <em>lowest</em> Chainlink answer in the last hour (deliberately conservative, and it never reads the vault's own σ hook — margin can't be gamed by moving vol). Initial/maintenance margin are 50%/30% of that mark, capped at the strike.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">MarginVault.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.markSpot / isMarkStale / marginRequirement</span> <span class="code">test/MarginVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">markSpot()</span> walks <span class="code">getRoundData</span> back from the latest round until the first round updated before the hour (bounded at 64 rounds, never reverts on staleness); <span class="code">isMarkStale()</span> past 90 min. <span class="code">marginRequirement(K, u, S, initial) = min(K·u, intrinsic + u·S·buffer)</span> in USDC — K 3000, 1 unit: S 3000 → IM 1500 / MM 900; S 2000 → 2000 / 1600; S 0 → both capped at 3000. Tests: 3000 → 2700 → 2950 in an hour marks 2700; a 2500 two hours ago is ignored.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 9</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B1')">B1</span><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
         </tr>
@@ -386,9 +388,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>buy() locks only initial margin</strong> — the actual capital-efficiency payoff of Part B: an ATM put currently locks the full strike value; this task makes it lock only the 50% IM computed by B2, with a naked-notional ceiling tied to the backstop pool's size so total exposure can never outrun what could actually absorb a default.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">MarginVault.sol</span>; test also <span class="code">test/GasProbe.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.quote / initialMargin / effectiveCeiling / buy / execPull</span> <span class="code">test/MarginVault.t.sol</span> <span class="code">test/GasProbe.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">buy(authId, strike, units, maxPremium)</span>: the taker pays the same <span class="code">SmilePremiumLib</span> Ask the main vault charges; the writer locks only IM — free balance first, the rest pulled JIT via <span class="code">execPull</span> under <span class="code">nonReentrantStrategy</span>. <strong>An ATM 3000 put locks 1500 USDC, not 3000</strong> (asserted on the LP wallet). One OptionToken per (strike, expiry) shared by every writer; series registered with the vault's own settlement. Ceiling at fill: <span class="code">nakedNotional + (K·u − IM) ≤ min(notionalCeiling, 10 × backstop.totalAssets())</span> — shrinking the backstop stops new fills. Fee split 50 % insurance / 30 % backstop / 20 % DAO (<span class="code">claim()</span>); <span class="code">fundInsurance</span> open. Reverts on a stale mark or under 3 h to expiry. Repeat fill with a 12-round mark walk: 119,698 gas. Not done: per-range <span class="code">maxBlockNotional</span> (the global ceiling bounds exposure instead). Runtime 13,257 bytes.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 9</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B2')">B2</span><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
         </tr>
@@ -554,8 +557,10 @@
         <tr class="row-M">
           <td><span class="code">M3</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>An ATM put fills with 1500 USDC pulled, not 3000</strong> — first proof MarginVault's IM-only locking works end to end.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>An ATM put fills with 1500 USDC pulled, not 3000</strong> — first proof MarginVault's IM-only locking works end to end.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_buy_pullsOnlyInitialMargin</span>: writer wallet drops 1,500 USDC of margin (net of the premium received), <span class="code">positions[sid][lp].locked == 1500e6</span>, <span class="code">nakedNotional == 1500e6</span>, OptionToken minted, series registered. 167 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 9</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B1')">B1</span><span class="ref-link" onclick="scrollTo('B2')">B2</span><span class="ref-link" onclick="scrollTo('B3')">B3</span></span></td>
         </tr>
