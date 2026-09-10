@@ -4,13 +4,6 @@ import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadCont
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 
-export const USDC_SEPOLIA = (
-  process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
-) as `0x${string}`;
-export const WETH_SEPOLIA = (
-  process.env.NEXT_PUBLIC_WETH_ADDRESS ?? "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
-) as `0x${string}`;
-
 const VAULT_ABI = [
   {
     name: "authorizeRange",
@@ -105,7 +98,7 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
 
   // For calls: 1.0 WETH = 1e18. For puts: collateral in USDC = maxCollateral * 1e6
   const maxCollateralBig = isCall
@@ -175,7 +168,7 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
       functionName: "authorizeRange",
-      args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, USDC_SEPOLIA as `0x${string}`, isCall],
+      args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, CONTRACTS.usdc as `0x${string}`, isCall],
     });
   };
 

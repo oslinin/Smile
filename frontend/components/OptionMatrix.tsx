@@ -6,7 +6,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import type { Leg } from "@/components/PayoffBuilder";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
-import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
 import { useFirmDepth } from "@/hooks/useFirmDepth";
 
@@ -327,7 +326,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
   const firedRef = useRef(false);
   const shipFiredRef = useRef(false);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   const amountNum = Math.max(0.001, Number(amount));
 
   // Calls: collateral = amount WETH (18 dec). Puts: collateral = amount × K_max USDC (6 dec)
@@ -377,7 +376,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
         address: CONTRACTS.aquaVault as `0x${string}`,
         abi: VAULT_ABI,
         functionName: "authorizeRange",
-        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, USDC_SEPOLIA as `0x${string}`, isCall],
+        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, CONTRACTS.usdc as `0x${string}`, isCall],
       });
     }
   }, [approveSuccess]);
@@ -544,7 +543,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
     setQuoteLoading(true);
     setQuoteError(null);
     try {
-      const q = await fetchUniswapSwapQuote(totalUsdcPremium, address as `0x${string}`, USDC_SEPOLIA, apiKey);
+      const q = await fetchUniswapSwapQuote(totalUsdcPremium, address as `0x${string}`, CONTRACTS.usdc, apiKey);
       setSwapQuote(q);
     } catch (e) {
       setQuoteError((e as Error).message);
@@ -592,7 +591,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
   const handleApprove = () => {
     if (!canTrade || !totalUsdcPremium) return;
     approveUsdc({
-      address: USDC_SEPOLIA as `0x${string}`,
+      address: CONTRACTS.usdc as `0x${string}`,
       abi: ERC20_ABI,
       functionName: "approve",
       args: [CONTRACTS.aquaVault as `0x${string}`, totalUsdcPremium * BigInt(2)],

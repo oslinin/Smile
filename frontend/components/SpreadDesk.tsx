@@ -13,7 +13,6 @@
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
-import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 
 const SPREAD_ABI = [
   {
@@ -104,7 +103,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
   const shipCalledRef = useRef(false);
 
   const unitsWad = BigInt(Math.round((Number(units) || 0) * 1e18));
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   const collateralDecimals = isCall ? 18 : 6;
   const collateralSymbol = isCall ? "WETH" : "USDC";
   const escrow = escrowFor(isCall, k1, k2, unitsWad);
@@ -225,7 +224,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
     query: { enabled: !!CONTRACTS.spreadVault && viewAuthId !== null && buyUnitsWad > ZERO_BI, refetchInterval: 10_000 },
   });
   const { refetch: refetchUsdcAllowance } = useReadContract({
-    address: USDC_SEPOLIA,
+    address: CONTRACTS.usdc,
     abi: ERC20_ABI,
     functionName: "allowance",
     args: [address ?? ZERO, (CONTRACTS.spreadVault || ZERO) as `0x${string}`],
@@ -276,7 +275,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
     const { data: fresh } = await refetchUsdcAllowance();
     if (fresh !== undefined && fresh >= maxPremium) { doBuy(); return; }
     setBuyStep("approving");
-    approveUsdc({ address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.spreadVault as `0x${string}`, maxPremium] });
+    approveUsdc({ address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.spreadVault as `0x${string}`, maxPremium] });
   };
 
   const buyWorking = buyStep === "approving" ? (approveUsdcPending || approveUsdcConfirming) : buyStep === "buying" ? (buyPending || buyConfirming) : false;

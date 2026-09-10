@@ -15,7 +15,6 @@
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract, useSignTypedData, useChainId } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
-import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 
 const QUOTE_TYPES = {
   Quote: [
@@ -126,7 +125,7 @@ export function RfqDesk({ spot }: { spot: number }) {
   const openCalledRef = useRef(false);
   const shipCalledRef = useRef(false);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   const capacityRaw = BigInt(Math.round((Number(capacity) || 0) * (isCall ? 1e18 : 1e6)));
   const expiry = BigInt(Math.floor(Date.now() / 1000) + expiryOffset);
 
@@ -222,7 +221,7 @@ export function RfqDesk({ spot }: { spot: number }) {
     query: { enabled: enabled && !!taking && fillWad > ZERO_BI, refetchInterval: 10_000 },
   });
   const { data: used } = useReadContract({ address: rfq, abi: RFQ_ABI, functionName: "nonceUsed", args: [taking?.lp ?? ZERO, taking?.quote.nonce ?? ZERO_BI], query: { enabled: enabled && !!taking, refetchInterval: 5_000 } });
-  const { refetch: refetchUsdcAllowance } = useReadContract({ address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "allowance", args: [address ?? ZERO, rfq], query: { enabled: !!address && enabled } });
+  const { refetch: refetchUsdcAllowance } = useReadContract({ address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "allowance", args: [address ?? ZERO, rfq], query: { enabled: !!address && enabled } });
   const lpPremium = cost?.[0] ?? ZERO_BI;
   const fee = cost?.[1] ?? ZERO_BI;
   const total = lpPremium + fee;
@@ -247,7 +246,7 @@ export function RfqDesk({ spot }: { spot: number }) {
     const { data: fresh } = await refetchUsdcAllowance();
     if (fresh !== undefined && fresh >= total) { doFill(); return; }
     setFillStep("approving");
-    approveUsdc({ address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "approve", args: [rfq, total] });
+    approveUsdc({ address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "approve", args: [rfq, total] });
   };
   const fillWorking = fillStep === "approving" ? (approveUsdcPending || approveUsdcConfirming) : fillStep === "filling" ? (fillPending || fillConfirming) : false;
 

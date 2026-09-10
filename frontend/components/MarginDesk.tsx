@@ -13,7 +13,6 @@
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
-import { USDC_SEPOLIA } from "@/components/AuthorizeRange";
 
 const MARGIN_ABI = [
   {
@@ -139,7 +138,7 @@ export function MarginDesk({ spot }: { spot: number }) {
     query: { enabled, refetchInterval: 10_000 },
   });
   const { data: usdcAllowanceAqua, refetch: refetchAquaAllowance } = useReadContract({
-    address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "allowance",
+    address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "allowance",
     args: [address ?? ZERO, (CONTRACTS.aqua || ZERO) as `0x${string}`],
     query: { enabled: !!address && !!CONTRACTS.aqua },
   });
@@ -165,7 +164,7 @@ export function MarginDesk({ spot }: { spot: number }) {
     const { data: fresh } = await refetchAquaAllowance();
     if (fresh !== undefined && fresh >= capacityUsdc) { setStep("approved"); return; }
     setStep("approving");
-    approve({ address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.aqua as `0x${string}`, capacityUsdc] });
+    approve({ address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.aqua as `0x${string}`, capacityUsdc] });
   };
   const handleOpen = () => {
     if (openCalledRef.current) return;
@@ -219,7 +218,7 @@ export function MarginDesk({ spot }: { spot: number }) {
     query: { enabled: enabled && viewAuthId !== null && buyUnitsWad > ZERO_BI, refetchInterval: 10_000 },
   });
   const { refetch: refetchUsdcAllowance } = useReadContract({
-    address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "allowance", args: [address ?? ZERO, mv],
+    address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "allowance", args: [address ?? ZERO, mv],
     query: { enabled: !!address && enabled },
   });
   const { data: sid } = useReadContract({
@@ -263,7 +262,7 @@ export function MarginDesk({ spot }: { spot: number }) {
     const { data: fresh } = await refetchUsdcAllowance();
     if (fresh !== undefined && fresh >= maxPremium) { doBuy(); return; }
     setBuyStep("approving");
-    approveUsdc({ address: USDC_SEPOLIA, abi: ERC20_ABI, functionName: "approve", args: [mv, maxPremium] });
+    approveUsdc({ address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "approve", args: [mv, maxPremium] });
   };
   const buyWorking = buyStep === "approving" ? (approveUsdcPending || approveUsdcConfirming) : buyStep === "buying" ? (buyPending || buyConfirming) : false;
 

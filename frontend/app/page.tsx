@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract, useSwitchChain } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, setActiveChainId } from "@/config/wagmi";
 
 const VAULT_ABI_MINI = [
   { name: "nextAuthId", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
@@ -23,6 +23,7 @@ import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
 import { SpreadDesk } from "@/components/SpreadDesk";
 import { MarginDesk } from "@/components/MarginDesk";
 import { RfqDesk } from "@/components/RfqDesk";
+import { Story } from "@/components/Story";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
@@ -82,6 +83,9 @@ export default function Home() {
   const { data: balance } = useBalance({ address });
   const { switchChain, isPending: switching } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
+  // One build, every chain: point CONTRACTS at the connected chain's
+  // deployment before any child reads an address (Anvil falls back to env).
+  setActiveChainId(chainId);
   const [mounted, setMounted] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
@@ -115,7 +119,7 @@ export default function Home() {
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
-  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "spreads" | "margin" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("income");
+  const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -180,15 +184,16 @@ export default function Home() {
   }, [walletOpen]);
 
   const TABS = [
-    { id: "income",       label: "One-Click Income" },
-    { id: "lp-auth",      label: "LP — Authorize Strike Range" },
-    { id: "spreads",      label: "Spreads · Defined Risk (S12)" },
-    { id: "margin",       label: "Margin · Opt-in Puts (S13)" },
-    { id: "rfq",          label: "RFQ · Signed Quotes (R6)" },
-    { id: "chain",        label: "Option Chain + Payoff Builder" },
-    { id: "surface",      label: "Vol Surface · Python" },
-    { id: "lp-position",  label: "LP Position" },
-    { id: "proof",        label: "On-Chain Proof · Anvil" },
+    { id: "story",        label: "Overview" },
+    { id: "chain",        label: "Trade" },
+    { id: "income",       label: "Earn · One-Click" },
+    { id: "lp-auth",      label: "Earn · Write a Range" },
+    { id: "spreads",      label: "Spreads" },
+    { id: "margin",       label: "Margin" },
+    { id: "rfq",          label: "RFQ" },
+    { id: "lp-position",  label: "My Positions" },
+    { id: "surface",      label: "Vol Surface" },
+    { id: "proof",        label: "Receipts" },
   ] as const;
 
   return (
@@ -356,6 +361,12 @@ export default function Home() {
         </div>
 
         {/* Tab panels */}
+        {activeTab === "story" && (
+          <section>
+            <Story spot={spotPrice ?? 3420} onGo={setActiveTab} />
+          </section>
+        )}
+
         {activeTab === "income" && (
           <section>
             <IncomeOneClick spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />
