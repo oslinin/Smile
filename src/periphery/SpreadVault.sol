@@ -2,7 +2,9 @@
 pragma solidity 0.8.30;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -12,7 +14,9 @@ import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceO
 import { BPS } from "@1inch/swap-vm/src/instructions/Fee.sol";
 
 import { SmileMath } from "../swapvm/SmileMath.sol";
+import { AquaOptionSettlement } from "../vaults/AquaOptionSettlement.sol";
 import { SmilePremiumLib } from "./SmilePremiumLib.sol";
+import { SpreadToken } from "./SpreadToken.sol";
 
 interface IBetaSource {
     function beta() external view returns (int256);
@@ -22,16 +26,19 @@ interface IBetaSource {
 /// efficiency ladder — design: docs/plans/2026-07-12-s12-defined-risk-netting.md).
 /// A call credit spread (short K1, long K2) escrows only its true worst
 /// case, `(K2-K1)/K2` WETH, instead of a full WETH as if the short leg were
-/// naked. A separate AquaApp, same pattern as FirmEscrow/SmileQuoteLens —
+/// naked; a put credit spread escrows `K2-K1` USDC instead of `K2`. A
+/// separate AquaApp, same pattern as FirmEscrow/SmileQuoteLens —
 /// `AquaCollateralVault` is never touched.
 ///
 /// Pricing is not a new model: both legs are quoted off the identical
 /// surface the main vault uses (SmilePremiumLib is that math lifted into a
 /// library), so a spread is purely a collateral-accounting layer.
 ///
-/// Scope so far: A1 scaffold, A2 quote (call credit + put credit; iron
-/// condor is strike-validated but not priced yet).
+/// Scope so far: A1 scaffold, A2 quote, A3 buy (call credit + put credit;
+/// iron condor is strike-validated but not priced or fillable yet).
 contract SpreadVault is AquaApp, Ownable {
+    using SafeERC20 for IERC20;
+
     enum Kind { CallCredit, PutCredit, IronCondor }
 
     /// @dev strikes layout: CallCredit uses [2]=K1,[3]=K2; PutCredit uses
@@ -59,6 +66,13 @@ contract SpreadVault is AquaApp, Ownable {
         int256 beta;
     }
 
+    /// @dev Escrow held here per (series token, writer) — what settlement
+    /// pays holders from and the writer reclaims the remainder of (A4).
+    struct Position {
+        uint256 escrow;
+        address collateralToken;
+    }
+
     bytes32 private constant SPREAD_STRATEGY_TYPE = keccak256("SMILE-SPREAD-1");
     uint32 public constant MAX_PROTOCOL_FEE_BPS = 0.05e9;
     uint16 internal constant MAX_HALF_SPREAD_BPS = 2000;
@@ -80,14 +94,21 @@ contract SpreadVault is AquaApp, Ownable {
     uint256 public nextAuthId;
     mapping(uint256 => Structure) public structures;
     mapping(uint256 => Pricing) public pricingOf;
+    /// @notice One SpreadToken series per structure — the structure trades as a unit.
+    mapping(uint256 => address) public spreadTokens;
+    mapping(address => uint256) public structureOf;
+    mapping(address => mapping(address => Position)) public positions;
 
     error ExpiryInPast();
+    error Expired();
     error ZeroCapacity();
     error ZeroAmount();
     error InvalidStrikes();
     error UnknownStructure();
     error StructureInactive();
     error UnsupportedKind();
+    error PremiumAboveMax();
+    error SelfOnly();
     error NotLp();
     error AlreadySet();
 
@@ -95,6 +116,12 @@ contract SpreadVault is AquaApp, Ownable {
         uint256 indexed authId, address indexed lp, Kind kind, uint256[4] strikes, uint256 expiry, uint256 maxCollateral
     );
     event StructureRevoked(uint256 indexed authId);
+    /// @dev Same ABI as AquaCollateralVault.OptionBought so indexers and the
+    /// frontend consume both vaults with one decoder. `strike` is the leg the
+    /// taker is long; `premium` includes the protocol fee.
+    event OptionBought(
+        uint256 indexed authId, address indexed optionToken, address indexed buyer, uint256 strike, uint256 amount, uint256 premium
+    );
 
     constructor(address aqua_, address oracle_, address hook_, address owner_, address weth_, address usdc_)
         AquaApp(IAqua(aqua_))
@@ -110,6 +137,7 @@ contract SpreadVault is AquaApp, Ownable {
     // ── Admin ────────────────────────────────────────────────────────────────
 
     /// @notice One-time wiring, mirrors AquaCollateralVault.setSettlement.
+    /// The settlement's registrar must be this vault for series to register.
     function setSettlement(address settlement_) external onlyOwner {
         require(settlement == address(0), AlreadySet());
         settlement = settlement_;
@@ -139,8 +167,9 @@ contract SpreadVault is AquaApp, Ownable {
 
     /// @notice Opens a defined-risk structure. `maxCollateral` is the total
     /// escrow capacity in the structure's collateral token; per-unit escrow
-    /// is derived in {quote} from the S12 table, and `buy()` pulls exactly
-    /// that per fill (A3).
+    /// is derived in {quote} from the S12 table, and {buy} pulls exactly
+    /// that per fill. Capacity is enforced by Aqua's virtual balance, same
+    /// as the main vault.
     function openStructure(Kind kind, uint256[4] calldata strikes, uint256 expiry, uint256 maxCollateral)
         external
         returns (uint256 authId)
@@ -183,6 +212,7 @@ contract SpreadVault is AquaApp, Ownable {
     /// @notice LP revokes in this vault's registry. The Aqua allowance
     /// itself is revoked separately via `Aqua.dock()` with {getDockParams},
     /// same two-step pattern as the main vault's revokeAuthorization.
+    /// Already-filled positions (SpreadTokens in circulation) are unaffected.
     function revokeStructure(uint256 authId) external {
         require(structures[authId].lp == msg.sender, NotLp());
         structures[authId].active = false;
@@ -199,7 +229,7 @@ contract SpreadVault is AquaApp, Ownable {
     /// @return fee Protocol-fee gross-up on the net premium (same shape as
     ///         the main vault's `_putQuote` / the SwapVM fee opcode).
     /// @return escrow The S12 true max loss for `units`, in the structure's
-    ///         collateral token — what `buy()` pulls from the LP (A3).
+    ///         collateral token — exactly what {buy} pulls from the LP.
     function quote(uint256 authId, uint256 units)
         public
         view
@@ -232,6 +262,64 @@ contract SpreadVault is AquaApp, Ownable {
         uint256 minPremium = 10 ** usdcDecimals;
         if (premium < minPremium) premium = minPremium;
         fee = s.feeBps > 0 ? Math.ceilDiv(premium * s.feeBps, BPS - s.feeBps) : 0;
+    }
+
+    // ── Buy ──────────────────────────────────────────────────────────────────
+
+    /// @notice Buy `units` of a structure: the taker pays the net premium
+    /// (+ fee) in USDC, and exactly the S12 true-max-loss escrow is pulled
+    /// JIT from the LP's wallet through this vault's own Aqua strategy —
+    /// not a full leg's worth of collateral. One SpreadToken series per
+    /// structure is deployed lazily and minted to the buyer.
+    ///
+    /// No firmness bond here, so a failed pull reverts loudly instead of
+    /// returning `(0, 0)` the way the main vault's S2 path does.
+    function buy(uint256 authId, uint256 units, uint256 maxPremium)
+        external
+        returns (address token, uint256 premiumPaid)
+    {
+        Structure storage s = structures[authId];
+        require(s.active, StructureInactive());
+        require(block.timestamp < s.expiry, Expired());
+
+        (uint256 premium, uint256 fee, uint256 escrow) = quote(authId, units);
+        premiumPaid = premium + fee;
+        require(premiumPaid <= maxPremium, PremiumAboveMax());
+
+        address collateralToken = _collateralToken(s.kind);
+        this.execPull(s.lp, s.strategyHash, msg.sender, s.feeRecipient, premium, fee, collateralToken, escrow);
+
+        token = _mintSeries(authId, s, units, escrow, msg.sender, collateralToken);
+
+        bool isCall = s.kind == Kind.CallCredit;
+        emit OptionBought(authId, token, msg.sender, isCall ? s.strikes[2] : s.strikes[1], units, premiumPaid);
+    }
+
+    /// @dev Self-call wrapper under the official per-strategy reentrancy
+    /// guard (this vault is the AquaApp): premium and fee in, then the JIT
+    /// pull of exactly the netted escrow. Same shape as the main vault's
+    /// execPutLeg.
+    function execPull(
+        address lp,
+        bytes32 strategyHash,
+        address buyer,
+        address feeRecipient_,
+        uint256 premium,
+        uint256 fee,
+        address collateralToken,
+        uint256 escrow
+    ) external nonReentrantStrategy(lp, strategyHash) {
+        require(msg.sender == address(this), SelfOnly());
+        IERC20(usdc).safeTransferFrom(buyer, lp, premium);
+        if (fee > 0) {
+            IERC20(usdc).safeTransferFrom(buyer, feeRecipient_, fee);
+        }
+        AQUA.pull(lp, strategyHash, collateralToken, escrow, address(this));
+    }
+
+    /// @notice Series id for the settlement registry — one per structure.
+    function seriesId(uint256 authId) public pure returns (bytes32) {
+        return keccak256(abi.encode("SMILE-SPREAD-1", authId));
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
@@ -268,6 +356,51 @@ contract SpreadVault is AquaApp, Ownable {
 
     // ── Internals ────────────────────────────────────────────────────────────
 
+    /// @dev Deploy the structure's SpreadToken lazily, register it with the
+    /// settlement registry (nominal strike = the leg the taker is long; the
+    /// payout math in A4 uses both strikes from `structures`), book the
+    /// writer's escrow, mint.
+    function _mintSeries(
+        uint256 authId,
+        Structure storage s,
+        uint256 units,
+        uint256 escrow,
+        address buyer,
+        address collateralToken
+    ) internal returns (address token) {
+        token = spreadTokens[authId];
+        if (token == address(0)) {
+            bool isCall = s.kind == Kind.CallCredit;
+            (uint256 lo, uint256 hi) = isCall ? (s.strikes[2], s.strikes[3]) : (s.strikes[0], s.strikes[1]);
+            token = address(
+                new SpreadToken(
+                    string(
+                        abi.encodePacked(
+                            isCall ? "CALL-SPREAD-" : "PUT-SPREAD-", _uint2str(lo / 1e18), "-", _uint2str(hi / 1e18)
+                        )
+                    ),
+                    isCall ? "CSPRD" : "PSPRD",
+                    lo,
+                    hi,
+                    s.expiry,
+                    isCall,
+                    address(this)
+                )
+            );
+            spreadTokens[authId] = token;
+            structureOf[token] = authId;
+            if (settlement != address(0)) {
+                AquaOptionSettlement(settlement).registerSeries(seriesId(authId), token, s.expiry, isCall ? lo : hi, isCall);
+            }
+        }
+
+        Position storage pos = positions[token][s.lp];
+        pos.escrow += escrow;
+        pos.collateralToken = collateralToken;
+
+        SpreadToken(token).mint(buyer, units);
+    }
+
     /// @dev Call credit spreads escrow WETH (the S12 table's `(K2-K1)/K2`
     /// WETH); put credit escrows USDC. Iron condor's max-not-sum requirement
     /// isn't wired yet — it inherits the USDC slot for now.
@@ -303,5 +436,15 @@ contract SpreadVault is AquaApp, Ownable {
         return abi.encode(
             SPREAD_STRATEGY_TYPE, authId, s.lp, s.kind, s.strikes, s.expiry, s.maxCollateral, _collateralToken(s.kind)
         );
+    }
+
+    function _uint2str(uint256 v) internal pure returns (string memory) {
+        if (v == 0) return "0";
+        uint256 tmp = v;
+        uint256 digits;
+        while (tmp != 0) { digits++; tmp /= 10; }
+        bytes memory b = new bytes(digits);
+        while (v != 0) { digits--; b[digits] = bytes1(uint8(48 + v % 10)); v /= 10; }
+        return string(b);
     }
 }

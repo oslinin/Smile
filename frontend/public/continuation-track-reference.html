@@ -326,10 +326,11 @@
           <td><span class="code">A3</span></td>
           <td><span class="cat">Part A</span></td>
           <td>
-            <strong>buy() pulls exactly max loss, mints one series token</strong> — the actual capital-efficiency payoff of Part A: a call credit spread (short K1, long K2) currently would lock collateral as if K1 were naked; this task makes it pull only <code class="code">K2−K1</code>, the structure's true worst case, and mints one ERC-20 series token for the combined position instead of two.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">SpreadVault.sol</span></div>
+            <strong>buy() pulls exactly max loss, mints one series token</strong> — the actual capital-efficiency payoff of Part A: a call credit spread (short K1, long K2) currently would lock collateral as if K1 were naked; this task makes it pull only the structure's true worst case, and mints one ERC-20 series token for the combined position instead of two.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">SpreadVault.buy()</span> <span class="code">SpreadVault.execPull()</span> <span class="code">src/periphery/SpreadToken.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>a 3000/3200 call credit spread pulls <strong>0.0625 WETH</strong> from the writer, not the 1 WETH the main vault locks for a naked short leg (<span class="code">test_buy_callCreditPullsTrueMaxLossNotFullWeth</span>); a 3000/3200 put credit spread pulls <strong>200 USDC, not 3,200</strong> (<span class="code">test_buy_putCreditPulls200not3200</span>). Premium + fee in, JIT pull of exactly the netted escrow through this vault's own Aqua strategy under the official reentrancy guard, one SpreadToken series per structure registered with its own settlement. Reverts loudly on expiry, slippage, or exhausted Aqua capacity — no firmness bond, so never a silent <span class="code">(0, 0)</span>.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('A2')">A2</span><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
         </tr>
