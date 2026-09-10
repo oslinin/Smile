@@ -98,7 +98,19 @@ SwapVM opcodes and define your own instructions." Worth attempting only
 after A1-A3 are solid; a correct-but-SwapVM-free SpreadVault still
 qualifies on the base "Aqua contracts used" requirement.
 
-### Part B — MarginVault — stretch only, cut first if time runs out
+### Part B — MarginVault — built after all (2026-09-10, B1–B8 shipped)
+
+> **Status update:** SpreadVault, the subgraph code, and the Arc base
+> submission landed with runway to spare, so Part B was attempted on the
+> user's call and shipped in full the same day — `dd687dd` → `7098c17`,
+> 54 tests, MarginVault 23,463 bytes (no auctioneer split needed), the
+> gap-40 solvency test green after lowering the backstop multiple 10× → 7×
+> exactly as the source plan's B6 instructs. Demo: `./script/margin-lifecycle.sh`
+> (absorb and `MODE=takeover`), `keeper/margin.mjs`, the **Margin · Opt-in
+> Puts** tab. What was cut, per the source plan's cut order: partial-unit
+> takeover, `test/MarginDemo.t.sol` (the shell script is the demo), per-range
+> block caps. Not deployed to Arc or Sepolia. The paragraphs below are the
+> pre-build framing, kept for the record.
 
 The story doesn't need SwapVM at all, and it's genuinely the better Aqua
 narrative when there's time to build it right: Aqua's differentiator is
@@ -300,7 +312,10 @@ still in `docs/plans/2026-09-10-arc-bounty.md` for later.
   `AquaCollateralVault`-adjacent design but never the vault's own bytecode
   — every plan here shares the same ground rule: the main vault stays
   untouched.
-- **Cut order if the 3 days compress further, in order:** MarginVault
+- **Cut order if the 3 days compress further, in order** (as written before
+  the build; by 2026-09-10 evening MarginVault had shipped, the FX pivot had
+  been cut on X1's "no feed" answer, and only The Graph's Studio deployment
+  G5 remained open, blocked on a deploy key): MarginVault
   (whole thing) → Gateway, RFQ → Arc's FX pivot (only after X1's oracle
   check has actually been done — cut it on a "no feed" answer, not
   preemptively) → The Graph's G5-G7 → 1inch's A4-A5. What survives every
