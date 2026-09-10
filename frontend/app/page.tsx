@@ -34,6 +34,23 @@ function getEth() {
   return (window as unknown as { ethereum?: Eth }).ethereum ?? null;
 }
 
+// wallet_addEthereumChain payloads for networks a wallet won't have yet.
+const ADDABLE_CHAINS: Record<number, unknown> = {
+  31337: {
+    chainId: "0x7a69",
+    chainName: "Anvil",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: ["http://127.0.0.1:8545"],
+  },
+  5042002: {
+    chainId: "0x4cef52",
+    chainName: "Arc Testnet",
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+    rpcUrls: ["https://rpc.testnet.arc.network"],
+    blockExplorerUrls: ["https://testnet.arcscan.app"],
+  },
+};
+
 async function switchToNetwork(chainId: number) {
   const eth = getEth();
   if (!eth) return;
@@ -41,23 +58,17 @@ async function switchToNetwork(chainId: number) {
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
   } catch (err: unknown) {
-    if ((err as { code?: number }).code === 4902 && chainId === 31337) {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          chainId: "0x7a69",
-          chainName: "Anvil",
-          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          rpcUrls: ["http://127.0.0.1:8545"],
-        }],
-      });
+    const addable = ADDABLE_CHAINS[chainId];
+    if ((err as { code?: number }).code === 4902 && addable) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [addable] });
     }
   }
 }
 
 const NETWORKS = [
   { id: 11155111, name: "Sepolia" },
-  { id: 31337,   name: "Anvil" },
+  { id: 5042002,  name: "Arc Testnet" },
+  { id: 31337,    name: "Anvil" },
 ];
 
 export default function Home() {
@@ -93,7 +104,7 @@ export default function Home() {
     setSwitchError(null);
     if (!isConnected) { switchToNetwork(id); return; }
     switchChain(
-      { chainId: id as 1 | 11155111 | 31337 | 1337 },
+      { chainId: id as 1 | 11155111 | 5042002 | 31337 | 1337 },
       { onError: (e) => setSwitchError(e.message.split("\n")[0]) },
     );
   };
@@ -240,7 +251,7 @@ export default function Home() {
               <>
                 {balance && (
                   <span className="text-gray-400 text-sm font-mono">
-                    {(Number(balance.value) / 1e18).toFixed(4)} ETH
+                    {(Number(balance.value) / 10 ** balance.decimals).toFixed(4)} {balance.symbol}
                   </span>
                 )}
                 <span className="text-gray-500 text-sm font-mono">

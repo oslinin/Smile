@@ -27,6 +27,10 @@ contract ArcSmokeTest is Script {
 
         vm.startBroadcast(key);
 
+        // Collateral allowance for the JIT pull. Without it the buy takes the
+        // S2 firmness path and returns (address(0), 0) instead of reverting —
+        // easy to misread as success in a log.
+        ERC20(wethAddr).approve(aquaAddr, type(uint256).max);
         // This single address plays LP, buyer, AND protocol-fee recipient in
         // this smoke test, so it needs an Aqua allowance for USDC too (the
         // fee leg pulls from the fee recipient's own Aqua-registered balance).

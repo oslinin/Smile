@@ -13,10 +13,22 @@ const localhost1337 = defineChain({
   rpcUrls: { default: { http: ["http://127.0.0.1:8545"] } },
 });
 
+// Circle's Arc testnet — EVM, gas paid in USDC (18-dec native view; the
+// ERC-20 view is 6-dec). docs/plans/2026-09-10-arc-bounty.md. Mainnet
+// launches 2026-09-16; add it here once its chain id / RPC are published.
+export const arcTestnet = defineChain({
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.testnet.arc.network"] } },
+  blockExplorers: { default: { name: "Arcscan", url: "https://testnet.arcscan.app" } },
+  testnet: true,
+});
+
 const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
 
 export const config = createConfig({
-  chains: [mainnet, sepolia, hardhat, localhost1337],
+  chains: [mainnet, sepolia, arcTestnet, hardhat, localhost1337],
   connectors: [
     injected(),
     ...(projectId ? [walletConnect({ projectId })] : []),
@@ -24,6 +36,7 @@ export const config = createConfig({
   transports: {
     [mainnet.id]:        http(),
     [sepolia.id]:        http(),
+    [arcTestnet.id]:     http(),
     [hardhat.id]:        http("http://127.0.0.1:8545"),
     [localhost1337.id]:  http("http://127.0.0.1:8545"),
   },
