@@ -454,13 +454,13 @@ efficiency <em>without</em> paying for machinery the rung below didn&#39;t need:
 </tr>
 <tr>
 <td>3</td>
-<td><strong>Partial-collateral puts</strong> — a put&#39;s worst case is bounded (strike → 0), so &quot;80% collateral survives any 80% crash&quot; is a coherent product</td>
-<td>Light — bounded bad debt</td>
+<td><strong>Partial-collateral puts</strong> — <strong>implemented at EthOnline 2026 as <code>MarginVault</code></strong> (<a href="docs/solutions.md">S13</a>, opt-in, puts only): initial margin <code>min(K, intrinsic + 50% of the worst-of-hour Chainlink mark)</code>, maintenance at 30%, margin call → takeover auction → backstop pool → insurance → (haircut, loudly)</td>
+<td>Light — bounded bad debt, see <a href="docs/limitations.md">L13</a></td>
 <td>Yield-focused put writers</td>
 </tr>
 <tr>
 <td>4</td>
-<td><strong>Naked calls + cross-margin</strong> — unbounded liability, the full five-part machine</td>
+<td><strong>Naked calls + cross-margin</strong> — unbounded liability, the full five-part machine; MarginVault&#39;s waterfall is the machine, calls follow once a WETH shortfall can be paid</td>
 <td>All of it</td>
 <td>Professional delta-hedging desks</td>
 </tr>
@@ -1150,6 +1150,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 │   ├── hooks/                # OptionPricingHook (Uniswap v4 + the vol surface)
 │   ├── periphery/            # EthOnline 2026: SpreadVault (S12 netting AquaApp)
 │   │                         #   + SmilePremiumLib + SpreadToken
+│   │                         #   + MarginVault + MarginBackstop (S13 opt-in margin tier)
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
 ├── subgraph/                 # EthOnline 2026: The Graph subgraph (authorizations + fills)
@@ -1163,7 +1164,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 │                             #   + SpreadDemo.s.sol, spread-lifecycle.sh, arc-smoke.sh (EthOnline 2026)
 ├── docs/                     # grant proposal, build notes, CRE transcript, docs/plans/ (bounty plans)
-├── test/                     # Foundry tests (151 passing)
+├── test/                     # Foundry tests (192 passing)
 ├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
 │                             #   layers, guided tour) + viewer.html — see §7 above
 ├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
@@ -1196,6 +1197,12 @@ and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>doc
 <td>Rung 2 of the V2 ladder above, now implemented: a sibling AquaApp where a credit spread escrows only its true max loss — <strong>0.0625 WETH instead of 1 WETH</strong> for a 3000/3200 call credit spread (16×), <strong>200 USDC instead of 3,200</strong> for the put-credit twin. Same JIT model (collateral stays in the writer&#39;s wallet until a buyer matches), same settlement contract, <code>AquaCollateralVault</code> untouched.</td>
 <td>1inch · Build an Aqua App</td>
 <td><code>src/periphery/SpreadVault.sol</code>, <code>SmilePremiumLib.sol</code>, <code>SpreadToken.sol</code> · <code>test/SpreadVault.t.sol</code>, <code>test/SpreadSettlement.t.sol</code> · the <strong>Spreads · Defined Risk</strong> tab · <code>script/SpreadDemo.s.sol</code>, <code>script/spread-lifecycle.sh</code></td>
+</tr>
+<tr>
+<td><strong>MarginVault — S13 opt-in margin</strong></td>
+<td>Rung 3 of the ladder: a second sibling AquaApp where a put writer locks <strong>initial margin — 1,500 USDC for an ATM 3000 put, not 3,000</strong> — off the lowest Chainlink answer of the last hour (never the vol hook). Behind the holder, in order: the writer&#39;s margin and free balance, an opt-in Aqua credit line, a 30-min writer-takeover auction, a share-based backstop pool (naked notional capped at 7× it), the insurance fund, and only then a loud haircut. Two-step settlement; a gap-40 solvency test; <code>AquaCollateralVault</code> still untouched.</td>
+<td>1inch · Build an Aqua App</td>
+<td><code>src/periphery/MarginVault.sol</code>, <code>MarginBackstop.sol</code> · <code>test/Margin*.t.sol</code> (54 tests) · the <strong>Margin · Opt-in Puts</strong> tab · <code>script/margin-lifecycle.sh</code> · <code>keeper/margin.mjs</code></td>
 </tr>
 <tr>
 <td><strong>The Graph subgraph</strong></td>
@@ -1298,6 +1305,9 @@ OTM, between the strikes, and far ITM: <code>holder payout + writer reclaim == e
 <h3>Running the new pieces</h3>
 <pre><code class="language-bash">./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
 ./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
+./script/margin-lifecycle.sh        # margined put: fill (IM only) → crash → flag → auction → backstop absorbs → settle → redeem
+MODE=takeover ./script/margin-lifecycle.sh   # …or a second writer takes the position over at auction
+cd keeper &amp;&amp; npm install &amp;&amp; MARGIN_VAULT=… MARGIN_SETTLEMENT=… ORACLE=… PRIVATE_KEY=… npm run margin   # permissionless keeper
 
 cd subgraph &amp;&amp; pnpm install &amp;&amp; pnpm codegen &amp;&amp; pnpm build   # The Graph subgraph (see subgraph/README.md)
 
@@ -1306,7 +1316,8 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 </code></pre>
 <h3>Honest status of each track</h3>
 <ul>
-<li><strong>SpreadVault</strong>: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional <code>SpreadPremiumInstruction</code> SwapVM opcode for the call-credit leg was not attempted. <strong>MarginVault</strong> (rung 4, the plan&#39;s Part B) is designed, not built — an 8-task liquidation engine was judged unsafe to rush before the deadline.</li>
+<li><strong>SpreadVault</strong>: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional <code>SpreadPremiumInstruction</code> SwapVM opcode for the call-credit leg was not attempted.</li>
+<li><strong>MarginVault</strong>: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range <code>maxBlockNotional</code> not ported (the global backstop-coupled ceiling bounds exposure instead); no <code>close()</code> by design (a sigma-priced buyback paid from margin is L7&#39;s attack). Runs on Anvil via <code>script/margin-lifecycle.sh</code> and the keeper; not deployed to Arc/Sepolia. <a href="docs/limitations.md">L13</a> is the honest list of what it does not promise.</li>
 <li><strong>Subgraph</strong>: mappings, schema, tests, and the frontend/copilot wiring are done; the local graph-node compose is x86-64-only (no arm64 image; emulation crashes) and the judged Graph Studio deployment on Sepolia is pending a funded deployer and a Studio key.</li>
 <li><strong>Arc</strong>: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork&#39;s pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.</li>
 </ul>
@@ -1594,6 +1605,42 @@ is just invisible in the UI. A real fix (subgraph, or a small indexing
 service backed by the same <code>RangeAuthorized</code>/<code>AuthorizationRevoked</code> events)
 would return the LP&#39;s complete active-range list in one query and let the UI
 show — and let buyers trade against — all of them, not just the latest.</p>
+<h3>L13. Bad debt in the opt-in margin tier</h3>
+<p><code>MarginVault</code> (S13) is the one place Smile&#39;s &quot;a written option always pays&quot;
+promise can break, and it is opt-in precisely because of that. What can go
+wrong, honestly:</p>
+<ul>
+<li><strong>The haircut path exists.</strong> If a writer&#39;s margin, their free balance, the
+takeover auction, the backstop pool, and the insurance fund are <em>all</em>
+exhausted at finalization, holders of that series are paid pro rata from
+the pot (<code>payoutPerUnit</code>, <code>haircutBps</code> on the series) and <code>HolderHaircut</code>
+is emitted. The naked-notional ceiling (7× the backstop) and the gap-40
+test bound this, they do not eliminate it — a gap larger than 40% from
+the maintenance point in one heartbeat can exceed the pool.</li>
+<li><strong>Settlement is a heartbeat wide.</strong> Marks stop at expiry but the
+settlement round can land up to one Chainlink heartbeat later; the
+two-step design (per-writer waterfall, then <code>finalizeSeries</code>) is what
+keeps that gap from becoming an oracle race, and a writer who never
+settles is finalized around after 6 hours and repays the pool when they
+do.</li>
+<li><strong>The credit line is consent, not collateral.</strong> A range&#39;s <code>autoTopUp</code>
+pulls from the same Aqua allowance the fill used — bounded by what is
+still shipped, in the wallet, and approved. The writer can dock or spend
+it at any time, so a margin call may find nothing there; the vault then
+flags rather than reverts.</li>
+<li><strong>Sigma still moves the trade, not the margin.</strong> Premiums follow the vol
+hook (that is the product); margin requirements read the oracle only. A
+manipulated sigma can make a put expensive, it cannot drain margin.</li>
+<li><strong><code>SpreadVault.releaseCollateral</code>-style admin risk does not exist here</strong>,
+but the owner does set the naked-notional ceiling, the fee split, and
+the vol buffers — the buffers only ratchet up, with a 24 h delay on the
+maintenance side, so a parameter change cannot liquidate anyone who had
+no time to answer it.</li>
+<li><strong>Whole-position liquidation only.</strong> Takeover and absorb move a writer&#39;s
+entire position in a series; partial-unit takeover is on the plan&#39;s cut
+list. Per-range <code>maxBlockNotional</code> (R1) is not implemented in this vault;
+the global ceiling bounds exposure instead.</li>
+</ul>
 <h3>L12. The per-trade gas floor — and where it actually comes from</h3>
 <p>Every fill pays a fixed gas overhead, which sets a minimum economical trade
 size: below it, gas dominates the premium. Measured (<code>test/GasProbe.t.sol</code>,
@@ -2054,8 +2101,42 @@ exact collateral requirements per structure (call credit spread
 sides since one terminal price can&#39;t breach both), the dominance result
 that makes debit spreads need ZERO extra collateral, and the recommended
 architecture (a sibling <code>SpreadVault</code> AquaApp — the main vault has no
-EIP-170 room and is never touched). Implementation stays gated on spread
-demand evidence.</p>
+EIP-170 room and is never touched).</p>
+<p><strong>Implemented (EthOnline 2026)</strong> — <code>src/periphery/SpreadVault.sol</code>: call
+credit and put credit spreads, quoted off the shared surface via
+<code>SmilePremiumLib</code>, escrowing <code>(K₂−K₁)/K₂</code> WETH / <code>K₂−K₁</code> USDC through the
+vault&#39;s own Aqua strategy, settled at one price through one formula with
+wei-exact conservation (<code>test/SpreadSettlement.t.sol</code>). Iron condors are
+strike-validated but not priced or fillable.</p>
+</blockquote>
+<h3>S13. MarginVault — opt-in true margin (rung 4)</h3>
+<p>Rung 4 of the ladder is the one that can break &quot;a written option always
+pays&quot;, so it is a <strong>separate, opt-in</strong> tier — <code>src/periphery/MarginVault.sol</code>,
+puts only, USDC only, its own settlement and its own backstop pool; the main
+vault is untouched. A put writer posts <em>initial margin</em> instead of the
+strike: <code>min(K·u, intrinsic + 50% of spot per unit)</code> off a <strong>worst-of-hour
+Chainlink mark</strong> (the lowest answer in the last hour), so an ATM 3000 put
+locks 1,500 USDC, not 3,000. Margin reads the oracle only — never the vol
+hook — so trading cannot move what anyone has to post (L7), and the test
+suite proves it bit for bit after 400 sigma bumps.</p>
+<p>What stands behind the holder, in order: the writer&#39;s locked margin, the
+writer&#39;s free balance and (opt-in) an Aqua credit line swept at the margin
+call; a 30-minute writer-takeover auction with a 1→10% bonus; the backstop
+pool, which adopts unsold positions and pays the residual shortfall at
+finalization; the insurance fund (half the fee plus liquidation penalties);
+and only then a holder haircut — emitted loudly, with the IM buffer
+ratcheting up 500 bps. Exposure is capped Maker-style: naked notional can
+never exceed 7× the backstop pool, and the pool&#39;s withdrawals are delayed,
+floored, and frozen while an expired series is unfinalized.</p>
+<blockquote>
+<p><strong>Implemented (EthOnline 2026)</strong> — B1–B8 of
+<a href="./plans/2026-09-05-ethonline2026-continuation-track.md">plans/2026-09-05-ethonline2026-continuation-track.md</a>:
+<code>MarginVault.sol</code> (23.5 KB, under EIP-170 without a split),
+<code>MarginBackstop.sol</code>, 54 tests across <code>test/Margin*.t.sol</code> including the
+gap-40 solvency test and a book-balance invariant, <code>script/margin-lifecycle.sh</code>
+(fill → crash → flag → auction → absorb/takeover → settle → finalize →
+redeem, on Anvil) and <code>keeper/margin.mjs</code>. See L13 for what it deliberately
+does not promise.</p>
 </blockquote>
 <hr>
 <h2>The plan</h2>

@@ -61,8 +61,46 @@ the escrow, vault balance 0, spread-token supply 0.
 
 **Not done, on purpose.** Iron condors are strike-validated but not priced
 or fillable; the optional SwapVM opcode for the call-credit leg was not
-attempted; `MarginVault` (the plan's Part B, cross-margin with liquidation)
-was designed and deliberately not rushed.
+attempted.
+
+## 1inch — Build an Aqua App, part two: `MarginVault`
+
+**Pitch.** The other half of the capital-efficiency ladder — the half that
+*can* break "a written option always pays", so it is a separate opt-in
+Aqua app. A put writer ships a margined range; a fill pulls **initial
+margin — 1,500 USDC for an ATM 3000 put, not 3,000** — off the lowest
+Chainlink answer in the last hour, never the vol hook (400 sigma bumps
+leave margin bit-identical). Below maintenance: the vault sweeps free
+balance and an opt-in Aqua credit line before flagging; then a 1 h grace,
+a 30-min writer-takeover auction (1→10% bonus, collateral travels with the
+position, holder untouched), the backstop pool absorbing what nobody bought,
+and at expiry a per-writer waterfall then a series finalization that draws
+backstop, then insurance, then — loudly — a haircut with the IM buffer
+ratcheting up. Naked notional is capped at 7× the backstop, Maker-style.
+
+**Git history.** `dd687dd` scaffold + vol-buffer ratchet → `69b182e`
+worst-of-hour mark + margin rule → `e3254c6` buy pulls only IM →
+`927da8e` margin calls → `8e1b413` auction + backstop pool → `0b4508e`
+settlement waterfall + haircut → `2de57dc` invariants → deploy/UI/keeper.
+
+**Code.** `src/periphery/MarginVault.sol` (23.5 KB, under EIP-170 without
+a split), `MarginBackstop.sol` · `test/MarginVault.t.sol`,
+`MarginCall.t.sol`, `MarginAuction.t.sol`, `MarginSettlement.t.sol`
+(gap-40: a writer exactly at MM who gaps 40% before settlement — holders
+whole from a pool of naked/7, insurance untouched), `MarginInvariants.t.sol`
+· `frontend/components/MarginDesk.tsx` · `script/margin-lifecycle.sh` ·
+`keeper/margin.mjs`.
+
+**Demo numbers (Anvil, `./script/margin-lifecycle.sh`).** Fill locks
+1,500 USDC; crash to $2,000 → MM 1,600 > 1,500 → flag → grace → auction →
+backstop absorbs drawing only 175 USDC (MM − what travelled) → settles at
+$2,000 → holder redeems exactly 1,000 USDC of intrinsic. `MODE=takeover`:
+the bidder posts 725 and holds the position at IM 2,000.
+
+**Not done, on purpose.** Calls (a WETH shortfall has no USDC waterfall
+yet), partial-unit takeover, per-range block caps, `close()` (a
+sigma-priced buyback paid from margin is exactly L7's attack), any testnet
+deployment. [L13](limitations.md) lists what the tier does not promise.
 
 ## The Graph — AI tooling / agents on live chain data: `subgraph/`
 

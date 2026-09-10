@@ -424,9 +424,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Settlement waterfall, haircut, ratchet</strong> — the actual solvency guarantee gets proven here: at expiry, each writer settles (locked margin → free balance → penalty, in that order), the series finalizes by drawing backstop then insurance for any remaining shortfall, and only as an explicit last resort do holders take a haircut (paid less than owed). A test in this task fuzzes a 40% crash and asserts holders stay whole.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">MarginVault.sol</span>; test <span class="code">test/MarginSettlement.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.intrinsicPerUnit / settlePosition / finalizeSeries / redeem</span> <span class="code">test/MarginSettlement.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">settlePosition</span>: locked, then free; what is still short is bad debt plus the 2 % penalty, junior to the holder; a backstop-held position draws the rest from the pool; a late settler (after finalization) repays the backstop first, then insurance, then keeps the rest. <span class="code">finalizeSeries</span> once every writer settled or 6 h after expiry: remaining shortfall from the backstop, then insurance, only then a haircut — <span class="code">HolderHaircut</span> emitted, IM buffer +500 bps. <span class="code">redeem</span> needs finalization. <strong>Gap-40 holds</strong> after lowering the backstop multiple 10 → 7 (a writer exactly at MM gapping 40 % leaves a 0.1·S shortfall against 0.7·S naked): holders get 1,714.285714 USDC to the unit with insurance untouched. Conservation: two writers, crash to $1,200, every USDC booked, total supply unchanged. 5 tests.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 13</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B5')">B5</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
         </tr>
@@ -435,9 +436,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Invariants</strong> — no new production code; a pure test task asserting margin math is completely independent of σ (bump the demand-feedback hook 400 times, margin numbers must stay bit-identical) and that the main vault's bytecode is provably untouched by this whole plan (`git diff main -- AquaCollateralVault.sol` empty).
-            <div class="impl"><span class="impl-label">Planned files</span> test <span class="code">test/MarginInvariants.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">test/MarginInvariants.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>400 <span class="code">bumpSigma</span> calls through the hook, exactly as fills do: the premium rises, <span class="code">marginRequirement</span> / <span class="code">initialMargin</span> / <span class="code">health</span> / <span class="code">markSpot</span> stay bit-identical. Bytecode guards: <span class="code">AquaCollateralVault</span> runtime still 24,364 bytes; <span class="code">MarginVault</span> 23,463 and <span class="code">MarginBackstop</span> 3,148 — under EIP-170 without the auctioneer split. No production code changed.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 13</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B6')">B6</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
         </tr>
@@ -446,9 +448,10 @@
           <td><span class="cat">Part B</span></td>
           <td>
             <strong>Deploy, keeper, demo, docs</strong> — makes the whole thing runnable: deploy wiring (seeded backstop + insurance on Anvil so the first buy doesn't immediately hit the notional ceiling), a keeper script that polls positions and drives the margin-call → auction → settle → finalize lifecycle, and an end-to-end demo test that walks and logs the entire flow.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">keeper/margin.mjs</span> <span class="code">script/DemoMargin.s.sol</span> <span class="code">test/MarginDemo.t.sol</span>; modifies <span class="code">script/Deploy.s.sol</span>, <span class="code">local.sh</span>, <span class="code">frontend/config/wagmi.ts</span>, <span class="code">.env.example</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">script/Deploy.s.sol</span> (<span class="code">_deployMargin</span>) <span class="code">local.sh</span> <span class="code">frontend/config/wagmi.ts</span> <span class="code">frontend/components/MarginDesk.tsx</span> <span class="code">script/margin-lifecycle.sh</span> <span class="code">keeper/margin.mjs</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Deploy wires <span class="code">MarginVault</span> + its own <span class="code">AquaOptionSettlement</span> + <span class="code">MarginBackstop</span>, 1 % fee split 50/30/20, 250k ceiling; on a blank Anvil the backstop is seeded with 25k and insurance with 5k so the first fill clears the ceiling (175k). <span class="code">./local.sh</span> prints <span class="code">NEXT_PUBLIC_MARGIN_VAULT / _BACKSTOP / _SETTLEMENT</span>. The app gets a <strong>Margin · Opt-in Puts (S13)</strong> tab: write a margined range, buy a put with "writer locks IM vs the 3,000 the main vault would" shown live, and a health card (mark, locked vs MM/IM, state, naked notional vs ceiling, backstop and insurance). <span class="code">script/margin-lifecycle.sh</span> replays fill → crash → flag → grace → auction → absorb (or <span class="code">MODE=takeover</span>) → expiry → permissionless settle → settlePosition → finalize → redeem as real cast transactions: holder receives exactly 1,000 USDC of intrinsic, backstop drew 175. <span class="code">keeper/margin.mjs</span> (viem) discovers every series from events and drives flag / startAuction / absorb / settle / finalize permissionlessly. Cut per the plan: <span class="code">test/MarginDemo.t.sol</span> (the shell script is the demo), <span class="code">.env.example</span> (never had a SpreadVault line either).</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 13</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B7')">B7</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
         </tr>
@@ -579,8 +582,10 @@
         <tr class="row-M">
           <td><span class="code">M5</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Holders whole after a 40% gap; keeper demo; docs updated</strong> — the plan's actual definition of done: solvency proven under stress, the whole lifecycle runnable by a keeper, not just by a human calling functions by hand.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Holders whole after a 40% gap; keeper demo; docs updated</strong> — the plan's actual definition of done: solvency proven under stress, the whole lifecycle runnable by a keeper, not just by a human calling functions by hand.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_gap40_holdersWhole</span> green (backstop multiple 7); <span class="code">keeper/margin.mjs</span> ran one pass against the Anvil stack and settled + finalized the open series on its own; README ladder rung 3, <span class="code">docs/solutions.md</span> S13, <span class="code">docs/limitations.md</span> L13, the reference table's S12/S13/L13 rows, the copilot's doc ranges, and the help site all updated. 192 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 13</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('B6')">B6</span><span class="ref-link" onclick="scrollTo('B7')">B7</span><span class="ref-link" onclick="scrollTo('B8')">B8</span></span></td>
         </tr>

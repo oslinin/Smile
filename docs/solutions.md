@@ -254,8 +254,45 @@ before.
 > sides since one terminal price can't breach both), the dominance result
 > that makes debit spreads need ZERO extra collateral, and the recommended
 > architecture (a sibling `SpreadVault` AquaApp — the main vault has no
-> EIP-170 room and is never touched). Implementation stays gated on spread
-> demand evidence.
+> EIP-170 room and is never touched).
+>
+> **Implemented (EthOnline 2026)** — `src/periphery/SpreadVault.sol`: call
+> credit and put credit spreads, quoted off the shared surface via
+> `SmilePremiumLib`, escrowing `(K₂−K₁)/K₂` WETH / `K₂−K₁` USDC through the
+> vault's own Aqua strategy, settled at one price through one formula with
+> wei-exact conservation (`test/SpreadSettlement.t.sol`). Iron condors are
+> strike-validated but not priced or fillable.
+
+### S13. MarginVault — opt-in true margin (rung 4)
+
+Rung 4 of the ladder is the one that can break "a written option always
+pays", so it is a **separate, opt-in** tier — `src/periphery/MarginVault.sol`,
+puts only, USDC only, its own settlement and its own backstop pool; the main
+vault is untouched. A put writer posts *initial margin* instead of the
+strike: `min(K·u, intrinsic + 50% of spot per unit)` off a **worst-of-hour
+Chainlink mark** (the lowest answer in the last hour), so an ATM 3000 put
+locks 1,500 USDC, not 3,000. Margin reads the oracle only — never the vol
+hook — so trading cannot move what anyone has to post (L7), and the test
+suite proves it bit for bit after 400 sigma bumps.
+
+What stands behind the holder, in order: the writer's locked margin, the
+writer's free balance and (opt-in) an Aqua credit line swept at the margin
+call; a 30-minute writer-takeover auction with a 1→10% bonus; the backstop
+pool, which adopts unsold positions and pays the residual shortfall at
+finalization; the insurance fund (half the fee plus liquidation penalties);
+and only then a holder haircut — emitted loudly, with the IM buffer
+ratcheting up 500 bps. Exposure is capped Maker-style: naked notional can
+never exceed 7× the backstop pool, and the pool's withdrawals are delayed,
+floored, and frozen while an expired series is unfinalized.
+
+> **Implemented (EthOnline 2026)** — B1–B8 of
+> [plans/2026-09-05-ethonline2026-continuation-track.md](./plans/2026-09-05-ethonline2026-continuation-track.md):
+> `MarginVault.sol` (23.5 KB, under EIP-170 without a split),
+> `MarginBackstop.sol`, 54 tests across `test/Margin*.t.sol` including the
+> gap-40 solvency test and a book-balance invariant, `script/margin-lifecycle.sh`
+> (fill → crash → flag → auction → absorb/takeover → settle → finalize →
+> redeem, on Anvil) and `keeper/margin.mjs`. See L13 for what it deliberately
+> does not promise.
 
 ---
 

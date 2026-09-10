@@ -379,6 +379,16 @@
           <td>Open</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L10')">L10 (why not off-chain)</span></span></td>
         </tr>
+        <tr class="row-L">
+          <td><span class="code">L13</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Bad debt in the opt-in margin tier</strong> — <code class="code">MarginVault</code> (S13) is the one place "a written option always pays" can break: if writer margin, free balance, the takeover auction, the backstop pool and the insurance fund are all empty at finalization, holders are paid pro rata (<code class="code">HolderHaircut</code>). Bounded by the 7× backstop ceiling and the gap-40 test, not eliminated. Also: settlement is one Chainlink heartbeat wide (hence the two-step finalize), the Aqua credit line is revocable consent not collateral, sigma still moves the premium (never the margin), takeover is whole-position only, and there is no <code class="code">close()</code> by design.
+            <div class="impl"><span class="impl-label">Where</span><span class="code">MarginVault.finalizeSeries</span> (haircut path + IM ratchet), <span class="code">MarginVault.flag / _creditLine</span>, <span class="code">MarginBackstop.withdraw</span> guards; <span class="code">docs/limitations.md#L13</span></div>
+          </td>
+          <td><span class="status implemented">Documented</span></td>
+          <td>Open · opt-in</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('S13')">S13</span><span class="ref-link" onclick="scrollTo('L7')">L7</span><span class="ref-link" onclick="scrollTo('L8')">L8</span></span></td>
+        </tr>
 
         <!-- RECOMMENDATIONS -->
         <tr class="row-R">
@@ -557,11 +567,22 @@
           <td><span class="cat">Solution</span></td>
           <td>
             <strong>Defined-risk netting</strong> — today a call spread (long a far strike, short a near one) locks collateral for the short leg as if it were naked, even though the structure's true worst case is capped at the strike gap. Fix: vault-level netting so a recognized two-leg structure only locks its actual max loss — credit spreads end up roughly 16× tighter, an iron condor locks the max of its two sides (never the sum, since one settlement price can't breach both), and a debit spread needs zero extra collateral beyond the long leg it already owns. Designed as a separate sibling `SpreadVault` app so the main vault's bytecode is never touched; implementation stays gated on evidence of actual spread demand.
-            <div class="impl"><span class="impl-label">Implements</span> design-only — <span class="code">docs/plans/2026-07-12-s12-defined-risk-netting.md</span>; no <span class="code">SpreadVault.sol</span> exists yet</div>
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">src/periphery/SpreadVault.sol</span> (EthOnline 2026) — <span class="code">openStructure / quote / buy / redeem / reclaim</span>, own Aqua strategy + own <span class="code">AquaOptionSettlement</span>; <span class="code">SmilePremiumLib.sol</span> (the vault's premium math as a library); <span class="code">test/SpreadVault.t.sol</span>, <span class="code">test/SpreadSettlement.t.sol</span>; the <strong>Spreads · Defined Risk</strong> tab; <span class="code">script/spread-lifecycle.sh</span>. Call credit + put credit; iron condor strike-validated only.</div>
           </td>
-          <td><span class="status planned">Designed</span></td>
+          <td><span class="status done">Implemented</span></td>
           <td>P5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L8')">L8</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
+        </tr>
+        <tr class="row-S">
+          <td><span class="code">S13</span></td>
+          <td><span class="cat">Solution</span></td>
+          <td>
+            <strong>MarginVault — opt-in true margin</strong> — rung 4 of the capital-efficiency ladder, the one that can break "a written option always pays", so it lives in a separate opt-in vault (puts, USDC) with its own settlement and backstop pool. A put writer locks initial margin — <code class="code">min(K·u, intrinsic + 50% of spot)</code> off the lowest Chainlink answer of the last hour — so an ATM 3000 put locks 1,500 USDC, not 3,000. Below the 30% maintenance floor: free-balance sweep → opt-in Aqua credit line → flag → 1 h grace → 30 min takeover auction (1→10% bonus) → backstop absorbs → at expiry a per-writer waterfall, then the series finalizes drawing backstop, then insurance, then — loudly — a haircut with the IM buffer ratcheting up. Naked notional is capped at 7× the backstop pool. Margin never reads the vol hook.
+            <div class="impl"><span class="impl-label">Implements</span><span class="code">src/periphery/MarginVault.sol</span> — <span class="code">openRange / markSpot / marginRequirement / buy / flag / topUp / startAuction / takeOver / absorb / settlePosition / finalizeSeries / redeem</span>; <span class="code">src/periphery/MarginBackstop.sol</span> — share pool, 24 h withdraw, floor <span class="code">max(poolRequirement, naked/7)</span>; <span class="code">test/MarginVault.t.sol</span>, <span class="code">MarginCall.t.sol</span>, <span class="code">MarginAuction.t.sol</span>, <span class="code">MarginSettlement.t.sol</span> (gap-40 solvency), <span class="code">MarginInvariants.t.sol</span> (sigma-independence, EIP-170); the <strong>Margin · Opt-in Puts</strong> tab; <span class="code">script/margin-lifecycle.sh</span>; <span class="code">keeper/margin.mjs</span></div>
+          </td>
+          <td><span class="status done">Implemented</span></td>
+          <td>P5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L13')">L13</span><span class="ref-link" onclick="scrollTo('L7')">L7</span><span class="ref-link" onclick="scrollTo('S12')">S12</span><span class="ref-link" onclick="scrollTo('P5')">P5</span></span></td>
         </tr>
 
         <!-- PHASES -->

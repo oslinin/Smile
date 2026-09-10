@@ -281,6 +281,43 @@ service backed by the same `RangeAuthorized`/`AuthorizationRevoked` events)
 would return the LP's complete active-range list in one query and let the UI
 show — and let buyers trade against — all of them, not just the latest.
 
+### L13. Bad debt in the opt-in margin tier
+
+`MarginVault` (S13) is the one place Smile's "a written option always pays"
+promise can break, and it is opt-in precisely because of that. What can go
+wrong, honestly:
+
+- **The haircut path exists.** If a writer's margin, their free balance, the
+  takeover auction, the backstop pool, and the insurance fund are *all*
+  exhausted at finalization, holders of that series are paid pro rata from
+  the pot (`payoutPerUnit`, `haircutBps` on the series) and `HolderHaircut`
+  is emitted. The naked-notional ceiling (7× the backstop) and the gap-40
+  test bound this, they do not eliminate it — a gap larger than 40% from
+  the maintenance point in one heartbeat can exceed the pool.
+- **Settlement is a heartbeat wide.** Marks stop at expiry but the
+  settlement round can land up to one Chainlink heartbeat later; the
+  two-step design (per-writer waterfall, then `finalizeSeries`) is what
+  keeps that gap from becoming an oracle race, and a writer who never
+  settles is finalized around after 6 hours and repays the pool when they
+  do.
+- **The credit line is consent, not collateral.** A range's `autoTopUp`
+  pulls from the same Aqua allowance the fill used — bounded by what is
+  still shipped, in the wallet, and approved. The writer can dock or spend
+  it at any time, so a margin call may find nothing there; the vault then
+  flags rather than reverts.
+- **Sigma still moves the trade, not the margin.** Premiums follow the vol
+  hook (that is the product); margin requirements read the oracle only. A
+  manipulated sigma can make a put expensive, it cannot drain margin.
+- **`SpreadVault.releaseCollateral`-style admin risk does not exist here**,
+  but the owner does set the naked-notional ceiling, the fee split, and
+  the vol buffers — the buffers only ratchet up, with a 24 h delay on the
+  maintenance side, so a parameter change cannot liquidate anyone who had
+  no time to answer it.
+- **Whole-position liquidation only.** Takeover and absorb move a writer's
+  entire position in a series; partial-unit takeover is on the plan's cut
+  list. Per-range `maxBlockNotional` (R1) is not implemented in this vault;
+  the global ceiling bounds exposure instead.
+
 ### L12. The per-trade gas floor — and where it actually comes from
 
 Every fill pays a fixed gas overhead, which sets a minimum economical trade

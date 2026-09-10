@@ -217,8 +217,8 @@ efficiency *without* paying for machinery the rung below didn't need:
 |---|---|---|---|
 | 1 | **Yield-bearing collateral** ([S4](docs/solutions.md)) — escrowed wstETH/sDAI keeps earning while backing quotes | None | Every LP: makes full collateral *cheap* instead of smaller |
 | 2 | **Defined-risk netting** ([S12](docs/solutions.md)) — **implemented at EthOnline 2026 as `SpreadVault`** (see the Continuation Track section below): a call spread margined at its true max loss `(K₂−K₁)/K₂` WETH, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
-| 3 | **Partial-collateral puts** — a put's worst case is bounded (strike → 0), so "80% collateral survives any 80% crash" is a coherent product | Light — bounded bad debt | Yield-focused put writers |
-| 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine | All of it | Professional delta-hedging desks |
+| 3 | **Partial-collateral puts** — **implemented at EthOnline 2026 as `MarginVault`** ([S13](docs/solutions.md), opt-in, puts only): initial margin `min(K, intrinsic + 50% of the worst-of-hour Chainlink mark)`, maintenance at 30%, margin call → takeover auction → backstop pool → insurance → (haircut, loudly) | Light — bounded bad debt, see [L13](docs/limitations.md) | Yield-focused put writers |
+| 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine; MarginVault's waterfall is the machine, calls follow once a WETH shortfall can be paid | All of it | Professional delta-hedging desks |
 
 Rungs 1–3 preserve the property that is Smile's one absolute differentiator
 against Derive, Panoptic, and Deribit alike: **an option, once written, can
@@ -859,6 +859,7 @@ so the browser can `fetch()` the JSON; the script handles that. Stop it with
 │   ├── hooks/                # OptionPricingHook (Uniswap v4 + the vol surface)
 │   ├── periphery/            # EthOnline 2026: SpreadVault (S12 netting AquaApp)
 │   │                         #   + SmilePremiumLib + SpreadToken
+│   │                         #   + MarginVault + MarginBackstop (S13 opt-in margin tier)
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
 ├── subgraph/                 # EthOnline 2026: The Graph subgraph (authorizations + fills)
@@ -872,7 +873,7 @@ so the browser can `fetch()` the JSON; the script handles that. Stop it with
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
 │                             #   + SpreadDemo.s.sol, spread-lifecycle.sh, arc-smoke.sh (EthOnline 2026)
 ├── docs/                     # grant proposal, build notes, CRE transcript, docs/plans/ (bounty plans)
-├── test/                     # Foundry tests (151 passing)
+├── test/                     # Foundry tests (192 passing)
 ├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
 │                             #   layers, guided tour) + viewer.html — see §7 above
 ├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
@@ -899,6 +900,7 @@ and video storyboard are in [`docs/submission-ethonline2026.md`](docs/submission
 | Piece | What it is | Bounty | Where |
 |---|---|---|---|
 | **SpreadVault — S12 defined-risk netting** | Rung 2 of the V2 ladder above, now implemented: a sibling AquaApp where a credit spread escrows only its true max loss — **0.0625 WETH instead of 1 WETH** for a 3000/3200 call credit spread (16×), **200 USDC instead of 3,200** for the put-credit twin. Same JIT model (collateral stays in the writer's wallet until a buyer matches), same settlement contract, `AquaCollateralVault` untouched. | 1inch · Build an Aqua App | `src/periphery/SpreadVault.sol`, `SmilePremiumLib.sol`, `SpreadToken.sol` · `test/SpreadVault.t.sol`, `test/SpreadSettlement.t.sol` · the **Spreads · Defined Risk** tab · `script/SpreadDemo.s.sol`, `script/spread-lifecycle.sh` |
+| **MarginVault — S13 opt-in margin** | Rung 3 of the ladder: a second sibling AquaApp where a put writer locks **initial margin — 1,500 USDC for an ATM 3000 put, not 3,000** — off the lowest Chainlink answer of the last hour (never the vol hook). Behind the holder, in order: the writer's margin and free balance, an opt-in Aqua credit line, a 30-min writer-takeover auction, a share-based backstop pool (naked notional capped at 7× it), the insurance fund, and only then a loud haircut. Two-step settlement; a gap-40 solvency test; `AquaCollateralVault` still untouched. | 1inch · Build an Aqua App | `src/periphery/MarginVault.sol`, `MarginBackstop.sol` · `test/Margin*.t.sol` (54 tests) · the **Margin · Opt-in Puts** tab · `script/margin-lifecycle.sh` · `keeper/margin.mjs` |
 | **The Graph subgraph** | Indexes every LP authorization and fill. Replaces the capped brute-force scan the LP Dashboard and the AI copilot used (`chain.ts` stopped seeing anything past 50 authorizations — [L12a](docs/limitations.md)) with one query, RPC path kept as the fallback. | The Graph · AI tooling / agent on live chain data | `subgraph/` · `frontend/lib/subgraph.ts` · `components/LPDashboard.tsx`, `lib/copilot/chain.ts` |
 | **Arc testnet deployment** | The whole stack (including SpreadVault) on Circle's Arc, with **Circle's real Arc USDC** as premium, fee, and put-collateral token — and gas. Real trades on it, recorded. | Arc · Best DeFi Application | [`docs/arc-testnet-deployment.md`](docs/arc-testnet-deployment.md) · `script/arc-smoke.sh` · `.env.arc.example` · Arc in the app's network picker |
 | **Copilot & docs** | OpenRouter as a fourth copilot provider; the copilot documented as a help page for the first time; reference-table rows now cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed. | — | `frontend/lib/copilot/provider.ts`, `docs/copilot.md`, `docs/reference-table.html` |
@@ -969,6 +971,9 @@ sequenceDiagram
 ```bash
 ./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
 ./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
+./script/margin-lifecycle.sh        # margined put: fill (IM only) → crash → flag → auction → backstop absorbs → settle → redeem
+MODE=takeover ./script/margin-lifecycle.sh   # …or a second writer takes the position over at auction
+cd keeper && npm install && MARGIN_VAULT=… MARGIN_SETTLEMENT=… ORACLE=… PRIVATE_KEY=… npm run margin   # permissionless keeper
 
 cd subgraph && pnpm install && pnpm codegen && pnpm build   # The Graph subgraph (see subgraph/README.md)
 
@@ -978,7 +983,8 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 
 ### Honest status of each track
 
-- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted. **MarginVault** (rung 4, the plan's Part B) is designed, not built — an 8-task liquidation engine was judged unsafe to rush before the deadline.
+- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted.
+- **MarginVault**: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range `maxBlockNotional` not ported (the global backstop-coupled ceiling bounds exposure instead); no `close()` by design (a sigma-priced buyback paid from margin is L7's attack). Runs on Anvil via `script/margin-lifecycle.sh` and the keeper; not deployed to Arc/Sepolia. [L13](docs/limitations.md) is the honest list of what it does not promise.
 - **Subgraph**: mappings, schema, tests, and the frontend/copilot wiring are done; the local graph-node compose is x86-64-only (no arm64 image; emulation crashes) and the judged Graph Studio deployment on Sepolia is pending a funded deployer and a Studio key.
 - **Arc**: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork's pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.
 
