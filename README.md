@@ -966,7 +966,8 @@ flowchart TB
 | **RfqVault — R6 hybrid RFQ** | The "NBBO + price improvement" tier from the limitations doc: an LP ships a range to a third sibling AquaApp, then signs EIP-712 quotes off-chain (no gas) — `(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)` — and a taker fills one; the vault recovers the signer and pulls the collateral JIT through Aqua exactly as tier 1. `formulaQuote()` shows the tier-1 Ask the quote is beating. Single-use nonces, cancellable; no `close()` (sellbacks stay on tier 1). | 1inch · Build an Aqua App | `src/periphery/RfqVault.sol` · `test/RfqVault.t.sol` (8) · the **RFQ · Signed Quotes** tab · `script/rfq-lifecycle.sh` |
 | **The Graph subgraph** | Indexes every LP authorization and fill. Replaces the capped brute-force scan the LP Dashboard and the AI copilot used (`chain.ts` stopped seeing anything past 50 authorizations — [L12a](docs/limitations.md)) with one query, RPC path kept as the fallback. | The Graph · AI tooling / agent on live chain data | `subgraph/` · [Studio: `smile-sepolia`](https://thegraph.com/studio/subgraph/smile-sepolia) · `frontend/lib/subgraph.ts` · `components/LPDashboard.tsx`, `lib/copilot/chain.ts` |
 | **Arc testnet deployment** | The whole stack — main vault, SpreadVault, MarginVault + backstop, RfqVault — on Circle's Arc, with **Circle's real Arc USDC** as premium, fee, put collateral, margin, backstop pool, insurance fund — and gas. Real fills on every vault, recorded: a USDC-margined put locking 1.50 instead of 3.00, an RFQ quote filled inside the formula. | Arc · Best DeFi Application | [`docs/arc-testnet-deployment.md`](docs/arc-testnet-deployment.md) · `script/arc-smoke.sh`, `script/arc-siblings-smoke.sh` · `.env.arc.example` · Arc in the app's network picker |
-| **Copilot & docs** | OpenRouter as a fourth copilot provider; the copilot documented as a help page for the first time; reference-table rows now cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed. | — | `frontend/lib/copilot/provider.ts`, `docs/copilot.md`, `docs/reference-table.html` |
+| **App: Overview, Risk Monitor, builder** | A default **Overview** tab — the capital-efficiency ladder as live bars from the connected chain, live counters across all vaults, the recorded testnet receipts; one build serves Anvil / Sepolia / Arc (addresses follow the connected chain); a **Risk Monitor** with per-position health bars and the liquidation timeline rebuilt from MarginVault events (+ "explain with the copilot"); the strategy builder gains today/halfway/expiry curves, a price × date P&L heat map, breakevens, and a per-leg "what the writer locks on each vault" panel; tabs in user language. | — (UI/UX for all three) | `frontend/components/Story.tsx`, `RiskMonitor.tsx`, `PayoffBuilder.tsx`, `lib/deployments.ts`, `config/wagmi.ts` |
+| **Copilot & docs** | OpenRouter as a fourth copilot provider; the copilot documented as a help page; a **User Guide** (`docs/guide.md`, in the help sidebar and in the copilot's knowledge) so the copilot walks people through buying, building strategies and providing liquidity step by step; reference-table rows cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed. | The Graph · AI tooling | `frontend/lib/copilot/provider.ts`, `docs/copilot.md`, `docs/guide.md`, `docs/reference-table.html` |
 
 ```mermaid
 flowchart LR
@@ -1028,6 +1029,21 @@ sequenceDiagram
     T->>SV: redeem(authId, units) → net intrinsic, capped by escrow
     W->>SV: reclaim(authId) → escrow − what outstanding holders are owed
 ```
+
+### The app, as a judge sees it
+
+`./local.sh` opens on **Overview**: which chain you are on and what is real
+there, the ladder — naked put $3,000 → credit spread $200 → margined put
+$1,500 (read live from MarginVault's mark) → signed quote — with a jump
+button per rung, live counters, and on Sepolia / Arc the real receipts.
+**Trade** is the option chain plus the strategy builder (three P&L curves,
+a price × date heat map, breakevens, greeks, and what a writer locks per
+sell leg on each vault). **Earn** writes ranges (one-click or by hand);
+**Spreads**, **Margin** and **RFQ** are the three new vaults; **Risk
+Monitor** shows every margined position's health and the liquidation
+timeline as it happens; **My Positions** reads The Graph where it exists;
+**Receipts** lists every deployment. The copilot (bottom-right) has read
+the [User Guide](docs/guide.md) and can drive any of it.
 
 ### Running the new pieces
 

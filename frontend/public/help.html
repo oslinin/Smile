@@ -1301,10 +1301,16 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
 <td><a href="docs/arc-testnet-deployment.md"><code>docs/arc-testnet-deployment.md</code></a> · <code>script/arc-smoke.sh</code>, <code>script/arc-siblings-smoke.sh</code> · <code>.env.arc.example</code> · Arc in the app&#39;s network picker</td>
 </tr>
 <tr>
+<td><strong>App: Overview, Risk Monitor, builder</strong></td>
+<td>A default <strong>Overview</strong> tab — the capital-efficiency ladder as live bars from the connected chain, live counters across all vaults, the recorded testnet receipts; one build serves Anvil / Sepolia / Arc (addresses follow the connected chain); a <strong>Risk Monitor</strong> with per-position health bars and the liquidation timeline rebuilt from MarginVault events (+ &quot;explain with the copilot&quot;); the strategy builder gains today/halfway/expiry curves, a price × date P&amp;L heat map, breakevens, and a per-leg &quot;what the writer locks on each vault&quot; panel; tabs in user language.</td>
+<td>— (UI/UX for all three)</td>
+<td><code>frontend/components/Story.tsx</code>, <code>RiskMonitor.tsx</code>, <code>PayoffBuilder.tsx</code>, <code>lib/deployments.ts</code>, <code>config/wagmi.ts</code></td>
+</tr>
+<tr>
 <td><strong>Copilot &amp; docs</strong></td>
-<td>OpenRouter as a fourth copilot provider; the copilot documented as a help page for the first time; reference-table rows now cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed.</td>
-<td>—</td>
-<td><code>frontend/lib/copilot/provider.ts</code>, <code>docs/copilot.md</code>, <code>docs/reference-table.html</code></td>
+<td>OpenRouter as a fourth copilot provider; the copilot documented as a help page; a <strong>User Guide</strong> (<code>docs/guide.md</code>, in the help sidebar and in the copilot&#39;s knowledge) so the copilot walks people through buying, building strategies and providing liquidity step by step; reference-table rows cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed.</td>
+<td>The Graph · AI tooling</td>
+<td><code>frontend/lib/copilot/provider.ts</code>, <code>docs/copilot.md</code>, <code>docs/guide.md</code>, <code>docs/reference-table.html</code></td>
 </tr>
 </tbody></table>
 <pre><code class="language-mermaid">flowchart LR
@@ -1386,6 +1392,19 @@ OTM, between the strikes, and far ITM: <code>holder payout + writer reclaim == e
     T-&gt;&gt;SV: redeem(authId, units) → net intrinsic, capped by escrow
     W-&gt;&gt;SV: reclaim(authId) → escrow − what outstanding holders are owed
 </code></pre>
+<h3>The app, as a judge sees it</h3>
+<p><code>./local.sh</code> opens on <strong>Overview</strong>: which chain you are on and what is real
+there, the ladder — naked put $3,000 → credit spread $200 → margined put
+$1,500 (read live from MarginVault&#39;s mark) → signed quote — with a jump
+button per rung, live counters, and on Sepolia / Arc the real receipts.
+<strong>Trade</strong> is the option chain plus the strategy builder (three P&amp;L curves,
+a price × date heat map, breakevens, greeks, and what a writer locks per
+sell leg on each vault). <strong>Earn</strong> writes ranges (one-click or by hand);
+<strong>Spreads</strong>, <strong>Margin</strong> and <strong>RFQ</strong> are the three new vaults; <strong>Risk
+Monitor</strong> shows every margined position&#39;s health and the liquidation
+timeline as it happens; <strong>My Positions</strong> reads The Graph where it exists;
+<strong>Receipts</strong> lists every deployment. The copilot (bottom-right) has read
+the <a href="docs/guide.md">User Guide</a> and can drive any of it.</p>
 <h3>Running the new pieces</h3>
 <pre><code class="language-bash">./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
 ./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
