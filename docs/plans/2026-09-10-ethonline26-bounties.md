@@ -207,14 +207,49 @@ alongside everything else is the same zero-effort broadcast script, and it
 makes the Arc submission's actual on-chain surface area look more
 substantial. Doesn't replace anything on the must-have list.
 
-### FX options — same engine, new market (bonus, not required)
+### The story is mostly already built — it needs to run on Arc and be framed
+
+An earlier draft of this section read as "just a port," which contradicts
+the point this page makes elsewhere: a bare deploy qualifies but doesn't
+compete. The reconciliation is that the bounty's own judging language —
+"advanced programmable money flows such as conditional payments, onchain
+automation or multi-step settlement," plus "yield" and "treasury" as named
+categories — is largely satisfied by features that *already exist* and
+just need to be deployed on Arc and put on screen in the video/diagram:
+
+- **Conditional payments / programmable money:** Aqua's JIT pull —
+  collateral leaves the LP's wallet only at the moment a buyer matches,
+  never before. An option itself is a conditional payment instrument
+  (premium now, payout contingent on price at expiry).
+- **Multi-step settlement:** the README's own six-step walkthrough — buy →
+  expiry → permissionless `settleWithChainlinkRound` → `redeem` →
+  `reclaimCollateral` — all as real Arc transactions, gas paid in USDC.
+- **Onchain automation:** `keeper/roll.mjs`, already built — settle,
+  reclaim, revoke, re-ship at the new spot, no human in the loop.
+- **Yield / treasury:** One-Click Income (covered-call / cash-secured-put
+  presets with estimated APR) is literally the bounty's listed "yield"
+  category, already built.
+- **Stablecoin-native flows:** puts, premiums, and protocol fees are
+  already 100% USDC; on Arc, gas is USDC too — one asset end to end on the
+  put side. Plus SpreadVault's defined-risk netting once it lands.
+
+None of that is new code. What it needs is the Arc network entry so it
+can be demoed in the real UI, and a video/diagram that names these flows
+in the bounty's own vocabulary instead of leaving the judge to infer them.
+
+### FX options — research-gated, not cut
 
 Mechanically the *exact* same architecture as today's ETH options, just
 pointed at a EUR/USD feed instead of ETH/USD, with USDC/EURC instead of
 WETH/USDC — proof the engine is asset-agnostic, aimed at a market (FX
-options) that's nearly nonexistent in DeFi. Only attempt if oracle research
-(confirming a live Pyth/RedStone feed on Arc) goes fast; the base ETH
-product is already a complete, working submission without it.
+options) that's nearly nonexistent in DeFi, and the single most
+Arc-specific story available. An earlier draft listed it as a preemptive
+cut; that was wrong. **Its cost is decided by a ~30-minute check, not by
+effort:** whether a live Pyth/RedStone EUR/USD feed exists on Arc testnet
+(X1 in the Arc plan) is quick to verify. If yes, the deploy is genuinely
+small (a `Deploy.s.sol` branch + one real trade); if no, it's dead and 30
+minutes were spent finding out. Do the check before deciding. The base
+ETH product remains a complete, working submission either way.
 
 ```solidity
 // script/Deploy.s.sol — the whole "port," once a live oracle feed is confirmed
@@ -245,6 +280,9 @@ still in `docs/plans/2026-09-10-arc-bounty.md` for later.
   — every plan here shares the same ground rule: the main vault stays
   untouched.
 - **Cut order if the 3 days compress further, in order:** MarginVault
-  (whole thing) → Arc's FX pivot, Gateway, RFQ → The Graph's G5-G7 → 1inch's
-  A4-A5. What survives every cut: SpreadVault A1-A3, The Graph G1-G4, and
-  Arc's already-verified base submission plus its frontend entry.
+  (whole thing) → Gateway, RFQ → Arc's FX pivot (only after X1's oracle
+  check has actually been done — cut it on a "no feed" answer, not
+  preemptively) → The Graph's G5-G7 → 1inch's A4-A5. What survives every
+  cut: SpreadVault A1-A3, The Graph G1-G4, and Arc's already-verified base
+  submission plus its frontend entry and the video/diagram that frame the
+  existing flows.
