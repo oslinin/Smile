@@ -167,6 +167,17 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
 
     /// @notice A flagged writer gets this long to cure before an auction can start.
     uint256 public constant GRACE = 1 hours;
+    /// @notice Takeover window; the bidder bonus rises linearly across it.
+    uint256 public constant AUCTION_LENGTH = 30 minutes;
+    uint16 public constant BONUS_START_BPS = 100;
+    uint16 public constant BONUS_END_BPS = 1000;
+    /// @notice Liquidated writer's penalty (of notional); a slice goes to the flagger.
+    uint16 public constant PENALTY_BPS = 200;
+    uint16 public constant FLAGGER_BPS = 25;
+    /// @notice Keeper tip (of notional) for pushing an unsold position into the backstop.
+    uint16 public constant KEEPER_TIP_BPS = 50;
+    /// @dev Position `authId` for a short acquired at auction — no range, no credit line.
+    uint256 internal constant NO_RANGE = type(uint256).max;
 
     uint256 public nextAuthId;
     mapping(uint256 => Range) public ranges;
@@ -178,6 +189,7 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     // ponytail: O(open series) loop; a writer with hundreds of series pays for it in gas.
     mapping(address => bytes32[]) internal _openSeries;
     mapping(address => uint256) public flaggedCount;
+    bytes32[] internal _allSeries;
 
     error ExpiryInPast();
     error ZeroCapacity();
@@ -211,6 +223,11 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     error WhileFlagged();
     error InsufficientFree();
     error WithdrawBelowIM(uint256 have, uint256 need);
+    error AuctionNotStarted();
+    error AuctionOver();
+    error AuctionNotOver();
+    error SelfTakeover();
+    error Expired();
 
     event RangeOpened(
         uint256 indexed authId,
@@ -238,6 +255,10 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     event FlagCleared(bytes32 indexed sid, address indexed writer);
     event AuctionStarted(bytes32 indexed sid, address indexed writer, uint256 locked, uint256 maintenance);
     event ShortCovered(bytes32 indexed sid, address indexed writer, uint256 units, uint256 released);
+    event TakenOver(
+        bytes32 indexed sid, address indexed writer, address indexed bidder, uint256 units, uint256 moved, uint256 bonus, uint256 penalty, uint256 posted
+    );
+    event Absorbed(bytes32 indexed sid, address indexed writer, uint256 units, uint256 moved, uint256 drawn, uint256 tip, uint256 penalty);
 
     constructor(address aqua_, address oracle_, address hook_, address owner_, address tokenFactory_, address usdc_)
         AquaApp(IAqua(aqua_))
@@ -586,6 +607,7 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
             s.token = token;
             s.strike = strike;
             s.expiry = expiry;
+            _allSeries.push(sid);
             if (settlement != address(0)) {
                 AquaOptionSettlement(settlement).registerSeries(sid, token, expiry, strike, false);
             }
@@ -790,6 +812,145 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         pos.flagger = address(0);
         flaggedCount[writer]--;
         emit FlagCleared(sid, writer);
+    }
+
+    // ── Takeover auction and backstop absorb (B5) ───────────────────────────
+
+    /// @notice Bidder bonus right now, bps of notional: 1% at the auction's
+    /// open rising to 10% at its close.
+    function takeoverBonusBps(bytes32 sid, address writer) public view returns (uint256) {
+        uint64 start = positions[sid][writer].auctionStart;
+        if (start == 0) return 0;
+        uint256 elapsed = block.timestamp - start;
+        if (elapsed > AUCTION_LENGTH) elapsed = AUCTION_LENGTH;
+        return BONUS_START_BPS + ((BONUS_END_BPS - BONUS_START_BPS) * elapsed) / AUCTION_LENGTH;
+    }
+
+    /// @notice Another writer takes over a position in auction. The holder's
+    /// token is untouched — only who stands behind it changes. Collateral
+    /// travels with the position: `min(locked, MM + bonus + penalty)` moves;
+    /// the bonus goes to the bidder, the penalty to insurance (a slice to
+    /// the flagger), the rest seeds the bidder's margin and the bidder posts
+    /// only `IM − that`. Whatever exceeded the liability is the old
+    /// writer's again as free balance. The forfeit is taken from the old
+    /// writer's excess, never from the liability itself, so a losing writer
+    /// cannot self-liquidate at a discount — and cannot bid on themselves.
+    function takeOver(bytes32 sid, address writer) external nonReentrant returns (uint256 posted) {
+        Position storage pos = positions[sid][writer];
+        require(pos.auctionStart != 0, AuctionNotStarted());
+        require(block.timestamp < pos.auctionStart + AUCTION_LENGTH, AuctionOver());
+        require(msg.sender != writer, SelfTakeover());
+        Series storage s = seriesOf[sid];
+        require(block.timestamp < s.expiry, Expired());
+
+        uint256 notional = (s.strike * pos.units) / 1e30;
+        (uint256 spot,,) = markSpot();
+        uint256 mm = marginRequirement(s.strike, pos.units, spot, false);
+        uint256 im = marginRequirement(s.strike, pos.units, spot, true);
+        uint256 bonus = (notional * takeoverBonusBps(sid, writer)) / 1e4;
+        uint256 penalty = (notional * PENALTY_BPS) / 1e4;
+
+        (uint256 moved, uint256 seed) = _detach(writer, pos, mm + bonus + penalty, bonus, penalty, msg.sender);
+
+        // Bidder brings the position to IM: free balance first, then wallet.
+        uint256 units = pos.units;
+        posted = im > seed ? im - seed : 0;
+        uint256 fromFree = accounts[msg.sender].free < posted ? accounts[msg.sender].free : posted;
+        accounts[msg.sender].free -= fromFree;
+        if (posted > fromFree) IERC20(usdc).safeTransferFrom(msg.sender, address(this), posted - fromFree);
+        accounts[msg.sender].free += bonus > moved ? moved : bonus;
+
+        _attach(sid, msg.sender, units, seed + posted);
+        _closeOut(sid, writer, pos);
+        emit TakenOver(sid, writer, msg.sender, units, moved, bonus, penalty, posted);
+    }
+
+    /// @notice Nobody bid: the backstop pool adopts the position. It draws
+    /// only the shortfall to MM after what travelled with the position; the
+    /// keeper who pushed it gets a tip from the old writer's margin.
+    function absorb(bytes32 sid, address writer) external nonReentrant returns (uint256 drawn) {
+        Position storage pos = positions[sid][writer];
+        require(pos.auctionStart != 0, AuctionNotStarted());
+        require(block.timestamp >= pos.auctionStart + AUCTION_LENGTH, AuctionNotOver());
+        Series storage s = seriesOf[sid];
+        require(block.timestamp < s.expiry, Expired());
+
+        uint256 notional = (s.strike * pos.units) / 1e30;
+        (uint256 spot,,) = markSpot();
+        uint256 mm = marginRequirement(s.strike, pos.units, spot, false);
+        uint256 tip = (notional * KEEPER_TIP_BPS) / 1e4;
+        uint256 penalty = (notional * PENALTY_BPS) / 1e4;
+
+        (uint256 moved, uint256 seed) = _detach(writer, pos, mm + tip + penalty, tip, penalty, msg.sender);
+        accounts[msg.sender].free += tip > moved ? moved : tip;
+
+        if (seed < mm) {
+            drawn = backstop.draw(mm - seed);
+            s.backstopDrawn += drawn;
+        }
+        uint256 units = pos.units;
+        _attach(sid, address(backstop), units, seed + drawn);
+        backstop.noteRequirement(notional, true);
+        _closeOut(sid, writer, pos);
+        emit Absorbed(sid, writer, units, moved, drawn, tip, penalty);
+    }
+
+    /// @notice True while some series has expired and not been finalized —
+    /// the backstop freezes withdrawals until every claim on it is known.
+    function hasExpiredUnfinalized() external view returns (bool) {
+        for (uint256 i = 0; i < _allSeries.length; i++) {
+            Series storage s = seriesOf[_allSeries[i]];
+            if (block.timestamp >= s.expiry && !s.finalized && s.totalUnits > 0) return true;
+        }
+        return false;
+    }
+
+    /// @dev Take `min(locked, liability)` off the old writer: pay `reward`
+    /// (bonus or tip) and `penalty` out of it in that order, credit the
+    /// remainder of `locked` back to the writer as free, and return what
+    /// moved and what is left to seed the new holder's margin.
+    function _detach(
+        address writer,
+        Position storage pos,
+        uint256 liability,
+        uint256 reward,
+        uint256 penalty,
+        address caller
+    ) internal returns (uint256 moved, uint256 seed) {
+        uint256 locked = pos.locked;
+        moved = locked < liability ? locked : liability;
+        accounts[writer].free += locked - moved;
+
+        uint256 rewardPaid = reward < moved ? reward : moved;
+        uint256 penaltyPaid = penalty < moved - rewardPaid ? penalty : moved - rewardPaid;
+        seed = moved - rewardPaid - penaltyPaid;
+
+        uint256 toFlagger = (penaltyPaid * FLAGGER_BPS) / PENALTY_BPS;
+        address flagger = pos.flagger == address(0) ? caller : pos.flagger;
+        accounts[flagger].free += toFlagger;
+        insuranceFund += penaltyPaid - toFlagger;
+    }
+
+    /// @dev Give `units` with `locked` margin to `to` in a series.
+    function _attach(bytes32 sid, address to, uint256 units, uint256 locked) internal {
+        Position storage np = positions[sid][to];
+        if (np.units == 0) {
+            seriesOf[sid].positionCount++;
+            _openSeries[to].push(sid);
+            np.authId = NO_RANGE;
+        }
+        np.units += units;
+        np.locked += locked;
+        nakedNotional += (seriesOf[sid].strike * units) / 1e30 - locked;
+    }
+
+    /// @dev Zero out the liquidated writer's position and its naked share.
+    function _closeOut(bytes32 sid, address writer, Position storage pos) internal {
+        nakedNotional -= (seriesOf[sid].strike * pos.units) / 1e30 - pos.locked;
+        seriesOf[sid].positionCount--;
+        _clearFlag(sid, writer, pos);
+        pos.units = 0;
+        pos.locked = 0;
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
