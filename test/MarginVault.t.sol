@@ -124,6 +124,53 @@ contract MarginVaultTest is Test {
         mv.scheduleVolBuffer(6000, 4000);
     }
 
+    // ── B2 ───────────────────────────────────────────────────────────────────
+
+    function test_markSpot_isWorstOfHour() public {
+        // 3000 at setUp; then 2700 and 2950 within the hour → mark 2700.
+        vm.warp(block.timestamp + 20 minutes);
+        oracle.setAnswer(2700e8);
+        vm.warp(block.timestamp + 20 minutes);
+        oracle.setAnswer(2950e8);
+
+        (uint256 spot, uint256 latestAt, uint256 rounds) = mv.markSpot();
+        assertEq(spot, 2700e18, "lowest answer in the window");
+        assertEq(latestAt, block.timestamp);
+        assertEq(rounds, 3);
+        assertFalse(mv.isMarkStale());
+    }
+
+    function test_markSpot_ignoresRoundsOlderThanTheWindow() public {
+        oracle.setAnswer(2500e8);                    // now
+        vm.warp(block.timestamp + 2 hours);          // ...falls out of the window
+        oracle.setAnswer(3100e8);
+        vm.warp(block.timestamp + 10 minutes);
+        oracle.setAnswer(3050e8);
+
+        (uint256 spot,, uint256 rounds) = mv.markSpot();
+        assertEq(spot, 3050e18, "the 2500 two hours ago does not drag the mark");
+        assertEq(rounds, 2);
+    }
+
+    function test_markSpot_staleFlagButNoRevert() public {
+        vm.warp(block.timestamp + 91 minutes);
+        (uint256 spot,,) = mv.markSpot();
+        assertEq(spot, 3000e18, "still returns the last known price");
+        assertTrue(mv.isMarkStale(), "...and says so");
+    }
+
+    function test_marginRequirement_numbers() public view {
+        uint256 u = 1e18;
+        assertEq(mv.marginRequirement(K, u, 3000e18, true), 1500e6, "ATM IM = 50% of spot");
+        assertEq(mv.marginRequirement(K, u, 3000e18, false), 900e6, "ATM MM = 30% of spot");
+        assertEq(mv.marginRequirement(K, u, 2000e18, true), 2000e6, "ITM IM = intrinsic 1000 + 50% of 2000");
+        assertEq(mv.marginRequirement(K, u, 2000e18, false), 1600e6, "ITM MM = intrinsic 1000 + 30% of 2000");
+        assertEq(mv.marginRequirement(K, u, 0, true), 3000e6, "capped at the strike");
+        assertEq(mv.marginRequirement(K, u, 0, false), 3000e6);
+        assertEq(mv.marginRequirement(K, u, 10_000e18, true), 3000e6, "deep OTM buffer alone hits the cap");
+        assertEq(mv.marginRequirement(K, 2e18, 3000e18, true), 3000e6, "linear in units");
+    }
+
     function test_openRange_validation() public {
         vm.startPrank(lp);
         vm.expectRevert(MarginVault.InvalidRange.selector);

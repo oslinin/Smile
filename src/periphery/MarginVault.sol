@@ -12,6 +12,7 @@ import { AquaApp } from "@1inch/aqua/src/AquaApp.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 import { IPriceOracle } from "@1inch/swap-vm/src/instructions/interfaces/IPriceOracle.sol";
 
+import { SmileMath } from "../swapvm/SmileMath.sol";
 import { AquaOptionSettlement } from "../vaults/AquaOptionSettlement.sol";
 import { OptionTokenFactory } from "../OptionTokenFactory.sol";
 import { MarginBackstop } from "./MarginBackstop.sol";
@@ -37,7 +38,8 @@ interface IBetaSource {
 /// `AquaCollateralVault` is never touched.
 ///
 /// Scope so far: B1 scaffold — ranges shipped to Aqua, own settlement and
-/// backstop wiring, and the timelocked vol-buffer ratchet.
+/// backstop wiring, the timelocked vol-buffer ratchet; B2 — the worst-of-
+/// hour Chainlink mark and the sigma-free margin rule.
 contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -98,6 +100,15 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     bytes32 private constant MARGIN_STRATEGY_TYPE = keccak256("SMILE-MARGIN-1");
     uint16 public constant MAX_BUFFER_STEP_BPS = 1000;
     uint256 public constant MM_BUFFER_DELAY = 24 hours;
+    /// @notice The mark is the lowest answer posted in this window (one
+    /// mainnet heartbeat), so a single spike can't liquidate anyone and a
+    /// single dip can't be hidden by a later round.
+    uint256 public constant MARK_WINDOW = 1 hours;
+    /// @notice Past this, fills and withdrawals stop; liquidation keeps working.
+    uint256 public constant MARK_STALE_AFTER = 90 minutes;
+    // ponytail: bounded round walk — a feed posting >64 rounds/hour makes the
+    // mark see less than the full hour, never revert.
+    uint256 internal constant MAX_MARK_ROUNDS = 64;
 
     address public immutable usdc;
     uint8 public immutable usdcDecimals;
@@ -256,6 +267,61 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     /// @notice Series id for the settlement registry — pooled per (strike, expiry).
     function seriesId(uint256 strike, uint256 expiry) public pure returns (bytes32) {
         return keccak256(abi.encode("SMILE-MARGIN-1", strike, expiry));
+    }
+
+    // ── Mark and margin rule (B2) ────────────────────────────────────────────
+
+    /// @notice The margin mark: the LOWEST Chainlink answer in the last
+    /// {MARK_WINDOW}, walking `getRoundData` back from the latest round and
+    /// stopping at the first round updated before the window (the same stop
+    /// rule `settleWithChainlinkRound` uses around expiry). Reads the oracle
+    /// only — never `hook.sigmaFor` — so margin cannot be moved by trading.
+    /// Never reverts on staleness; callers that must not act on a stale
+    /// mark check `latestUpdatedAt` themselves ({isMarkStale}).
+    /// @return spotWad     worst-of-window price, WAD USD (0 if the feed is broken)
+    /// @return latestUpdatedAt  timestamp of the newest round
+    /// @return roundsUsed  how many rounds fed the minimum
+    function markSpot() public view returns (uint256 spotWad, uint256 latestUpdatedAt, uint256 roundsUsed) {
+        (uint80 roundId, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
+        if (answer <= 0) return (0, updatedAt, 0);
+        latestUpdatedAt = updatedAt;
+        uint256 lowest = uint256(answer);
+        roundsUsed = 1;
+        uint256 cutoff = block.timestamp > MARK_WINDOW ? block.timestamp - MARK_WINDOW : 0;
+        while (roundId > 0 && roundsUsed < MAX_MARK_ROUNDS) {
+            roundId--;
+            try oracle.getRoundData(roundId) returns (uint80, int256 a, uint256, uint256 u, uint80) {
+                if (u == 0 || u < cutoff) break;
+                if (a > 0 && uint256(a) < lowest) lowest = uint256(a);
+                roundsUsed++;
+            } catch {
+                break; // phase boundary / missing predecessor — the window ends here
+            }
+        }
+        spotWad = SmileMath.scaleToWad(lowest, oracle.decimals());
+    }
+
+    /// @notice True when the newest round is older than {MARK_STALE_AFTER}.
+    function isMarkStale() public view returns (bool) {
+        (, uint256 latestUpdatedAt,) = markSpot();
+        return block.timestamp > latestUpdatedAt + MARK_STALE_AFTER;
+    }
+
+    /// @notice Margin for a short put of `units` at `strike` against mark
+    /// `spotWad`, in USDC: intrinsic plus a buffer of `bufferBps` of spot per
+    /// unit, never more than the strike itself (a put's max loss).
+    ///   IM (initial = true)  uses {imBufferBps}, MM uses {mmBufferBps}.
+    ///   K 3000, 1 unit: S 3000 → IM 1500, MM 900; S 2000 → 2000, 1600; S 0 → 3000, 3000.
+    function marginRequirement(uint256 strike, uint256 units, uint256 spotWad, bool initial)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 cap = (strike * units) / 1e30;
+        uint256 intrinsic = spotWad < strike ? ((strike - spotWad) * units) / 1e30 : 0;
+        uint256 buffer = (units * spotWad * (initial ? imBufferBps : mmBufferBps)) / 1e4 / 1e30;
+        uint256 req = intrinsic + buffer;
+        return req > cap ? cap : req;
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
