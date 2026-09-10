@@ -40,6 +40,23 @@ the full stack cost ~0.46 USDC in gas.
 
 Transaction hashes are in `broadcast/Deploy.s.sol/5042002/run-latest.json`.
 
+### Added 2026-09-10 evening — MarginVault and RfqVault (`script/DeployArcSiblings.s.sol`)
+
+Deployed against the existing Aqua / oracle / hook / token factory above,
+≈0.58 USDC of gas:
+
+| Contract | Address |
+|---|---|
+| MarginVault (S13) | `0x98AE8EA40e1DB38360a7DE4e547F1Ccb516415Ce` |
+| MarginBackstop | `0x65e3aeDD095b5735C5eeF046AFe107B3552f19a6` |
+| MarginVault's AquaOptionSettlement | `0x92e66758Fdd79A592aF2443e7A9Ce299743419aD` |
+| RfqVault (R6) | `0x269E7008951A01C38FF46e38f2f51009AC4e1879` |
+| RfqVault's AquaOptionSettlement | `0x5a9bA09D24cE39B97B036e5526340a2A66209Ba9` |
+
+With these, the whole capital-efficiency ladder settles in Circle's native
+dollar: single-leg puts cash-secured in USDC, spreads, USDC-margined puts
+with a USDC backstop pool and insurance fund, and USDC-priced signed quotes.
+
 ## Running the app against it
 
 Copy `.env.arc.example` (repo root) to `frontend/.env.local` (keeping your
@@ -76,6 +93,27 @@ below it), fee 0.010102 USDC. The whole run cost about 0.07 USDC net
 because premium and fee circle back to the same address; only gas is
 consumed.
 
+### Margin + RFQ demo (`script/arc-siblings-smoke.sh`, 2026-09-10, `UNITS=1e15`)
+
+Deployer as LP, taker, keeper and fee recipient; every amount is real USDC.
+
+| Step | Tx |
+|---|---|
+| Mock oracle fresh round at $3,000 (both vaults refuse a stale mark) | `0x626d16fa6e537090b1744f818fd5da21cf5cd780078494a780298e74855601a1` |
+| `MarginBackstop.deposit` 15 USDC (×2 — a retry seeded it twice, pool holds 30) | `0x03325072c0bc846c608ca350ece1d23a783f2b994cdc54b0e757e6f4e609921a` |
+| `MarginVault.fundInsurance` 2 USDC (×2, fund holds 4) | `0x7f7078ca5d93c4e2b45bc6f7bb7cf3c78e917c373e071b5c4dbcde0bd51ce351` |
+| `MarginVault.openRange` #2 (puts $2,500–$3,500, 20 USDC margin capacity, credit line on) | `0xee51f3ef1c3c4b8dca4dd14fcd8ec276d2eefa15fd9cd917ddf1a02996266b51` |
+| `Aqua.ship` (margin) | `0x5c7f04b85b088439cb2c438ca0f8759208c843a68bb272715e6d9cd900562910` |
+| `MarginVault.buy` 0.001 units of the $3,000 put → **1.50 USDC of initial margin pulled, not the 3.00 USDC strike** | `0x0938c5be639e8daf30b88d15b82d5ec80dd5d3a68096e5b796051f00791a4d02` |
+| `RfqVault.openRange` #2 (calls $2,500–$3,500, 0.001 WETH) | `0x5530984206e05c0941ded25090cbe9b583f0bcd350c746771c6b170b085b79cb` |
+| `Aqua.ship` (RFQ) | `0xbbc25b0de20abcfb74af777749a5f0f96a87be3d2b5eff2fb682dac675f2f9c0` |
+| `RfqVault.fill` — LP-signed EIP-712 quote 0.688860 USDC vs formula Ask 0.695819; 0.001 WETH pulled JIT → OptionToken `0xff01Be9ff3255d46D2A097E375D5F64469cDB155` | `0x257a8fd1c638dc8590dac048abc12ef85ce78249a3f3df7a6a36d725b89bad29` |
+
+The naked-notional ceiling is `7 × backstop` = 210 USDC; the fill's 1.50 USDC
+of naked notional sits well under it. Sizes are faucet-sized: the deployer
+had 39 USDC at the start (half of it the first, mis-routed faucet drop) and
+3.17 after seeding, gas and fills.
+
 ## Gotchas learned here
 
 - Arc's RPC returns `"Blocked address"` for at least one well-known
@@ -84,3 +122,6 @@ consumed.
   fails in local simulation for anything that does — use `cast send`.
 - The faucet's 20 USDC is the native balance *and* the ERC-20 balance;
   spending premium reduces the gas balance and vice versa.
+- The mock ETH/USD feed does not tick: `MarginVault.buy` (90-minute mark
+  staleness) and `RfqVault.formulaQuote` (1-hour spot staleness) both revert
+  a few hours after the last `setAnswer`. Post a round first — anyone can.

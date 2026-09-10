@@ -1295,9 +1295,9 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
 </tr>
 <tr>
 <td><strong>Arc testnet deployment</strong></td>
-<td>The whole stack (including SpreadVault) on Circle&#39;s Arc, with <strong>Circle&#39;s real Arc USDC</strong> as premium, fee, and put-collateral token — and gas. Real trades on it, recorded.</td>
+<td>The whole stack — main vault, SpreadVault, MarginVault + backstop, RfqVault — on Circle&#39;s Arc, with <strong>Circle&#39;s real Arc USDC</strong> as premium, fee, put collateral, margin, backstop pool, insurance fund — and gas. Real fills on every vault, recorded: a USDC-margined put locking 1.50 instead of 3.00, an RFQ quote filled inside the formula.</td>
 <td>Arc · Best DeFi Application</td>
-<td><a href="docs/arc-testnet-deployment.md"><code>docs/arc-testnet-deployment.md</code></a> · <code>script/arc-smoke.sh</code> · <code>.env.arc.example</code> · Arc in the app&#39;s network picker</td>
+<td><a href="docs/arc-testnet-deployment.md"><code>docs/arc-testnet-deployment.md</code></a> · <code>script/arc-smoke.sh</code>, <code>script/arc-siblings-smoke.sh</code> · <code>.env.arc.example</code> · Arc in the app&#39;s network picker</td>
 </tr>
 <tr>
 <td><strong>Copilot &amp; docs</strong></td>
@@ -1405,7 +1405,7 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <li><strong>MarginVault</strong>: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range <code>maxBlockNotional</code> not ported (the global backstop-coupled ceiling bounds exposure instead); no <code>close()</code> by design (a sigma-priced buyback paid from margin is L7&#39;s attack). Runs on Anvil via <code>script/margin-lifecycle.sh</code> and the keeper; not deployed to Arc/Sepolia. <a href="docs/limitations.md">L13</a> is the honest list of what it does not promise.</li>
 <li><strong>RfqVault</strong>: built as a sibling vault rather than a SwapVM opcode — a signed quote changes the price, never the custody model, and nonces need state an instruction doesn&#39;t have. Not deployed to a testnet yet; no <code>close()</code> by design.</li>
 <li><strong>Subgraph</strong>: live on Graph Studio as <code>smile-sepolia</code> v0.0.2 (<code>https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</code>), indexing the Sepolia deployment above — Authorization #0 was queryable within a minute of <code>Aqua.ship</code>, and the <code>Fill</code> for a real 0.01-unit $2,500 call one block after the buy. The local graph-node compose is x86-64-only (no arm64 image; emulation crashes). G6/G7 stretch (long positions via dynamic data sources, a Subgraph MCP) not attempted.</li>
-<li><strong>Arc</strong>: deployed with real USDC and traded. FX options (USDC/EURC) were cut after the oracle check found no Chainlink-compatible feed on Arc (Stork&#39;s pull-model contract is the lead); Gateway and RFQ were never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.</li>
+<li><strong>Arc</strong>: every vault deployed with real USDC and traded (main, Spread, Margin + backstop, RFQ). FX options (USDC/EURC) were cut after the oracle check found no EUR/USD feed on Arc testnet at all (Stork&#39;s pull contract has none and its ETH/USD is stale); Gateway was never in the Sept 13 scope. Arc mainnet launches Sept 16; the $2,000 mainnet portion is a follow-up.</li>
 </ul>
 <hr>
 <h2>Technical Stack</h2>

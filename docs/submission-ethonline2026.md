@@ -180,6 +180,14 @@ lists every address (Aqua `0x6419…bb7d`, vault `0xE37E…C789`, SpreadVault
 Full hashes in `arc-testnet-deployment.md`. The spread fill pulled 0.000625
 WETH where a naked leg would have locked 0.01 — the same 16× on Arc.
 
+**Added the same evening — MarginVault + RfqVault on Arc** (`0x98AE8EA4…`,
+`0x269E7008…`, backstop `0x65e3aeDD…`): the backstop pool and insurance
+fund seeded in real USDC, a USDC-margined put fill locking **1.50 USDC
+instead of the 3.00 USDC strike** (`0x0938c5be…`), and an LP-signed RFQ
+quote filled at 0.688860 vs a 0.695819 formula Ask with 0.001 WETH pulled
+JIT (`0x257a8fd1…`). The whole capital-efficiency ladder now settles in
+Circle's native dollar on Arc.
+
 **Gotchas that became docs.** `forge script` cannot simulate calls to Arc's
 native-asset USDC (`StackUnderflow` in revm) → `cast send` only; Arc's RPC
 blocks well-known dev keys; faucet USDC is both gas and premium balance.
