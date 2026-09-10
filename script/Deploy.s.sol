@@ -77,6 +77,20 @@ contract Deploy is Script, StdCheats {
             usdcAddr   = USDC_SEPOLIA;
             wethAddr   = WETH_SEPOLIA;
             oracleAddr = ETH_USD_FEED_SEPOLIA;
+        } else if (block.chainid == 5042002) {
+            // ── Arc testnet: Circle's REAL USDC — the chain's native asset,
+            //    6-dec ERC-20 view — for premiums, fees, and put collateral.
+            //    No canonical WETH on Arc and no Chainlink-style ETH/USD feed
+            //    documented there yet (docs/plans/2026-09-10-arc-bounty.md X1),
+            //    so the call-side collateral and the spot oracle stay mock. ──
+            vm.startBroadcast(deployerKey);
+            MockERC20 arcWeth = new MockERC20("Wrapped Ether", "WETH", 18);
+            arcWeth.mint(deployer, 100e18);
+            MockV3Aggregator arcOracle = new MockV3Aggregator(8, 3000e8);
+            vm.stopBroadcast();
+            usdcAddr   = 0x3600000000000000000000000000000000000000; // Arc USDC (docs.arc.io contract addresses)
+            wethAddr   = address(arcWeth);
+            oracleAddr = address(arcOracle);
         } else if (forkMainnet) {
             // ── Mainnet fork: real tokens, real Chainlink feed, and the
             //    OFFICIAL production Aqua deployment ─────────────────────────

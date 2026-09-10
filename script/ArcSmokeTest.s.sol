@@ -51,7 +51,10 @@ contract ArcSmokeTest is Script {
         console.log("shipped ok");
 
         usdc.approve(vaultAddr, type(uint256).max);
-        (address optionToken, uint256 premiumPaid) = vault.buy(authId, 3000e18, 1e18, type(uint256).max);
+        // UNITS lets a real-USDC chain (Arc) buy a fraction of a contract from
+        // a faucet-sized balance; defaults to one whole unit.
+        uint256 units = vm.envOr("UNITS", uint256(1e18));
+        (address optionToken, uint256 premiumPaid) = vault.buy(authId, 3000e18, units, type(uint256).max);
         console.log("bought ok, optionToken:", optionToken);
         console.log("premiumPaid:", premiumPaid);
 

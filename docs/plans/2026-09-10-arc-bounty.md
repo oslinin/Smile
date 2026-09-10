@@ -117,6 +117,23 @@ equivalent) against the live Arc testnet feed returns a sane, recent EUR/USD
 price — same bar as the Aqua compatibility check, a real call, not docs.
 **Commit:** none (research task); note the chosen feed address in X2.
 
+**Result, 2026-09-10 — no Chainlink-compatible feed; FX cut for Sept 13.**
+Pyth's EVM address list does not include Arc at all. Chainlink's and
+RedStone's published feed lists show nothing for Arc, and Arc's own
+contract-address page lists no oracle contracts. The one oracle with a
+documented Arc testnet deployment is **Stork**
+(`0xacC0a0cF13571d30B4b8637996F5D6D774d4fd62`, per docs.stork.network) —
+a pull model like Pyth: values land on-chain only when someone posts a
+signed update, so quoting off it needs an adapter contract (the
+`PythSpotAdapter` shape), an update-posting flow, and a Stork API key.
+That is not the "one `Deploy.s.sol` branch" pivot this task was gating,
+so per the rule above the FX product is out of the Sept 13 submission.
+Recorded as the lead for the Sept 16–30 window. What shipped instead is
+X2's real-USDC variant: Arc's actual USDC (`0x3600…0000`) as the
+premium / fee / put-collateral token, with WETH and the ETH/USD spot
+oracle mocked and stated as such — the stablecoin-native flows become
+literal on-chain without depending on a feed that isn't there.
+
 ## X2: Arc deploy branch — FX vault, EURC/USDC, chosen oracle
 
 **Files:** modify `script/Deploy.s.sol`.

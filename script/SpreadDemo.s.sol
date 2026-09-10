@@ -21,13 +21,14 @@ import { SpreadToken } from "../src/periphery/SpreadToken.sol";
 contract SpreadDemo is Script {
     uint256 constant K1 = 3000e18;
     uint256 constant K2 = 3200e18;
-    uint256 constant CAPACITY_UNITS = 2e18;
-
     function run() external {
         uint256 lpKey = vm.envUint("PRIVATE_KEY");
         uint256 buyerKey = vm.envUint("BUYER_KEY");
         address lp = vm.addr(lpKey);
         address buyer = vm.addr(buyerKey);
+        // UNITS lets a real-USDC chain (Arc) buy a fraction of a contract from
+        // a faucet-sized balance; defaults to one whole unit, capacity for two.
+        uint256 units = vm.envOr("UNITS", uint256(1e18));
 
         SpreadVault spread = SpreadVault(vm.envAddress("SPREAD_VAULT"));
         Aqua aqua = Aqua(vm.envAddress("AQUA"));
@@ -35,7 +36,7 @@ contract SpreadDemo is Script {
         IERC20 usdc = IERC20(vm.envAddress("USDC"));
 
         // S12 table: (K2-K1)/K2 WETH per unit, ceil — same math as SpreadVault.quote().
-        uint256 capacity = Math.mulDiv(CAPACITY_UNITS, K2 - K1, K2, Math.Rounding.Ceil);
+        uint256 capacity = Math.mulDiv(2 * units, K2 - K1, K2, Math.Rounding.Ceil);
 
         // ── LP: open + ship. Collateral stays in the LP wallet. ──────────
         vm.startBroadcast(lpKey);
@@ -52,13 +53,13 @@ contract SpreadDemo is Script {
         console.log("  capacity shipped to Aqua (WETH wei):", capacity);
 
         // ── Taker: quote + buy one unit ───────────────────────────────────
-        (uint256 premium, uint256 fee, uint256 escrow) = spread.quote(authId, 1e18);
+        (uint256 premium, uint256 fee, uint256 escrow) = spread.quote(authId, units);
         uint256 lpWethBefore = weth.balanceOf(lp);
         uint256 lpUsdcBefore = usdc.balanceOf(lp);
 
         vm.startBroadcast(buyerKey);
         usdc.approve(address(spread), premium + fee);
-        (address token, uint256 paid) = spread.buy(authId, 1e18, premium + fee);
+        (address token, uint256 paid) = spread.buy(authId, units, premium + fee);
         vm.stopBroadcast();
 
         console.log("bought 1 unit, SpreadToken:", token);

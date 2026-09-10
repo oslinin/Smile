@@ -236,19 +236,41 @@ None of that is new code. What it needs is the Arc network entry so it
 can be demoed in the real UI, and a video/diagram that names these flows
 in the bounty's own vocabulary instead of leaving the judge to infer them.
 
-### FX options — research-gated, not cut
+### FX options — checked 2026-09-10, cut for Sept 13
 
 Mechanically the *exact* same architecture as today's ETH options, just
 pointed at a EUR/USD feed instead of ETH/USD, with USDC/EURC instead of
 WETH/USDC — proof the engine is asset-agnostic, aimed at a market (FX
 options) that's nearly nonexistent in DeFi, and the single most
-Arc-specific story available. An earlier draft listed it as a preemptive
-cut; that was wrong. **Its cost is decided by a ~30-minute check, not by
-effort:** whether a live Pyth/RedStone EUR/USD feed exists on Arc testnet
-(X1 in the Arc plan) is quick to verify. If yes, the deploy is genuinely
-small (a `Deploy.s.sol` branch + one real trade); if no, it's dead and 30
-minutes were spent finding out. Do the check before deciding. The base
-ETH product remains a complete, working submission either way.
+Arc-specific story available. Its cost was always decided by one
+~30-minute check — does a Chainlink-compatible EUR/USD feed exist on Arc
+testnet — and the check came back **no**: Pyth doesn't list Arc,
+Chainlink/RedStone show nothing for it, Arc's docs list no oracles. The
+only oracle actually deployed there is Stork (pull model: adapter +
+update-posting flow + API key needed), which is not a one-branch pivot.
+So FX is out of the Sept 13 submission by the plan's own rule, with Stork
+recorded as the lead for the Sept 16–30 window (details: the Arc plan's
+X1 result). What shipped instead is the real-USDC deploy below.
+
+### Real Arc USDC, not a mock — the stablecoin-native story made literal
+
+The Arc deploy branch uses Circle's actual USDC on Arc (`0x3600…0000`,
+the 6-decimal ERC-20 view of the chain's native asset) for premiums,
+protocol fees, and put collateral — while gas is the same USDC. WETH and
+the ETH/USD spot oracle stay mock on Arc (no canonical WETH, no confirmed
+feed), and the submission says so plainly. That keeps the demo honest and
+still makes "one asset end to end on the put side" an on-chain fact rather
+than a slide.
+
+```solidity
+// script/Deploy.s.sol — the Arc branch as actually shipped
+} else if (block.chainid == 5042002) {
+    // real Circle USDC; mock WETH + mock ETH/USD feed, stated as such
+    usdcAddr   = 0x3600000000000000000000000000000000000000;
+    wethAddr   = address(new MockERC20("Wrapped Ether", "WETH", 18));
+    oracleAddr = address(new MockV3Aggregator(8, 3000e8));
+}
+```
 
 ```solidity
 // script/Deploy.s.sol — the whole "port," once a live oracle feed is confirmed
