@@ -1,7 +1,7 @@
 "use client";
 
-import { useAccount, useReadContract, useBalance } from "wagmi";
-import { useState, useEffect } from "react";
+import { useAccount, useReadContract, useBalance, usePublicClient } from "wagmi";
+import { useState, useEffect, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 
@@ -23,17 +23,77 @@ const VAULT_ABI = [
       { name: "active", type: "bool" },
     ],
   },
+  {
+    name: "RangeAuthorized",
+    type: "event",
+    inputs: [
+      { name: "authId", type: "uint256", indexed: true },
+      { name: "lp", type: "address", indexed: true },
+      { name: "strikeMin", type: "uint256", indexed: false },
+      { name: "strikeMax", type: "uint256", indexed: false },
+      { name: "expiry", type: "uint256", indexed: false },
+      { name: "isCall", type: "bool", indexed: false },
+      { name: "maxCollateral", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
-interface LPDashboardProps {
-  activeAuth?: ActiveAuth | null;
-}
-
-export function LPDashboard({ activeAuth }: LPDashboardProps) {
+export function LPDashboard() {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
   const [mounted, setMounted] = useState(false);
+  // The connected wallet's own most-recently-authorized *active* range —
+  // found via getLogs on `RangeAuthorized`'s indexed `lp` topic, since there
+  // is no indexer to ask "list this LP's authorizations" directly. Distinct
+  // from app/page.tsx's `activeAuth`, which tracks the market-wide latest
+  // authorization (any LP) for the buyer-facing option chain — see
+  // docs/limitations.md "LP Dashboard identity" for why these can't share
+  // one piece of state.
+  const [myAuth, setMyAuth] = useState<ActiveAuth | null>(null);
   useEffect(() => { setMounted(true); }, []);
 
+  const refreshMyAuth = useCallback(async () => {
+    if (!publicClient || !address || !CONTRACTS.aquaVault) { setMyAuth(null); return; }
+    const logs = await publicClient.getLogs({
+      address: CONTRACTS.aquaVault as `0x${string}`,
+      event: VAULT_ABI[1],
+      args: { lp: address },
+      fromBlock: BigInt(0),
+      toBlock: "latest",
+    });
+    const authIds = Array.from(new Set(logs.map((l) => l.args.authId as bigint)))
+      .sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+    for (const authId of authIds) {
+      const auth = await publicClient.readContract({
+        address: CONTRACTS.aquaVault as `0x${string}`,
+        abi: VAULT_ABI,
+        functionName: "authorizations",
+        args: [authId],
+      });
+      const [lp, strikeMinWAD, strikeMaxWAD, expiry, , , collateralToken, isCall, active] = auth;
+      if (active) {
+        setMyAuth({
+          authId,
+          strikeMin: Number(strikeMinWAD) / 1e18,
+          strikeMax: Number(strikeMaxWAD) / 1e18,
+          expiry: Number(expiry),
+          isCall,
+          lp,
+          collateralToken,
+        });
+        return;
+      }
+    }
+    setMyAuth(null);
+  }, [publicClient, address]);
+
+  useEffect(() => {
+    refreshMyAuth();
+    const id = setInterval(refreshMyAuth, 8000);
+    return () => clearInterval(id);
+  }, [refreshMyAuth]);
+
+  const activeAuth = myAuth;
   const { data: ethBalance } = useBalance({ address });
 
   const { data: auth } = useReadContract({

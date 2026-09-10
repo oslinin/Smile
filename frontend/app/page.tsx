@@ -385,7 +385,7 @@ export default function Home() {
 
         {activeTab === "lp-position" && (
           <section>
-            <LPDashboard activeAuth={activeAuth} />
+            <LPDashboard />
           </section>
         )}
 

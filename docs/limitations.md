@@ -259,6 +259,28 @@ slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 [solutions.md](./solutions.md) (S1–S4).
 
+### L12a. No indexer — "my authorizations" is a linear on-chain scan
+
+There is no subgraph or indexing service. `LPDashboard` finds "the connected
+wallet's own active authorization" (`components/LPDashboard.tsx`) by calling
+`eth_getLogs` for `RangeAuthorized` filtered on the indexed `lp` topic, then
+reading `authorizations(authId)` for each match, newest-first, until it finds
+one still `active`. This is correct — unlike the earlier version, which
+displayed whichever authorization was *globally* most recent (any LP), so one
+LP's `authorizeRange` could silently evict a different LP's still-active range
+from the dashboard's — and buyer-facing option chain's — single-slot state —
+but it does not scale: cost grows linearly with how many ranges that address
+has ever authorized, and `getLogs` against `fromBlock: 0` gets slow or
+rate-limited on a real RPC provider once history is long. It also still only
+surfaces **one** authorization: if the same LP has multiple simultaneously
+active ranges (this can happen — nothing stops an LP from authorizing a
+second range before closing the first), only the most-recently-created one is
+shown or tradable; the older one stays fully active and fillable on-chain, it
+is just invisible in the UI. A real fix (subgraph, or a small indexing
+service backed by the same `RangeAuthorized`/`AuthorizationRevoked` events)
+would return the LP's complete active-range list in one query and let the UI
+show — and let buyers trade against — all of them, not just the latest.
+
 ### L12. The per-trade gas floor — and where it actually comes from
 
 Every fill pays a fixed gas overhead, which sets a minimum economical trade
