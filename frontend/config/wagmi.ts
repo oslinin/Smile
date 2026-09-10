@@ -51,6 +51,10 @@ export const CONTRACTS = {
   swapvmRouter:  process.env.NEXT_PUBLIC_SWAPVM_ROUTER   ?? "",
   // S12 defined-risk netting sibling vault (docs/plans/2026-07-12-s12-defined-risk-netting.md)
   spreadVault:   process.env.NEXT_PUBLIC_SPREAD_VAULT    ?? "",
+  // S13 opt-in margin tier (Part B of docs/plans/2026-09-05-ethonline2026-continuation-track.md)
+  marginVault:      process.env.NEXT_PUBLIC_MARGIN_VAULT      ?? "",
+  marginBackstop:   process.env.NEXT_PUBLIC_MARGIN_BACKSTOP   ?? "",
+  marginSettlement: process.env.NEXT_PUBLIC_MARGIN_SETTLEMENT ?? "",
 };
 
 // Minimal ABI of the official 1inch Aqua registry (ship/dock). LPs call it

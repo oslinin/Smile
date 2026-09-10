@@ -18,6 +18,8 @@ import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
 import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
 import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
 import { SpreadVault } from "../src/periphery/SpreadVault.sol";
+import { MarginVault } from "../src/periphery/MarginVault.sol";
+import { MarginBackstop } from "../src/periphery/MarginBackstop.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -58,6 +60,41 @@ contract Deploy is Script, StdCheats {
         spread.setPricingDefaults(50, 25, 0.001e18);
         spread.setProtocolFee(0.01e9, dao);
         return address(spread);
+    }
+
+    /// @dev S13 MarginVault: opt-in margined puts, own settlement, own
+    /// backstop pool. On Anvil the backstop and insurance are seeded from
+    /// the deployer's mock USDC, otherwise the first fill would hit the
+    /// backstop-coupled naked-notional ceiling at zero.
+    function _deployMargin(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address tokenFactory,
+        address dao,
+        address deployer,
+        bool seed
+    ) internal returns (address, address, address) {
+        MarginVault mv = new MarginVault(aquaAddr, oracleAddr, hookAddr, deployer, tokenFactory, usdcAddr);
+        AquaOptionSettlement marginSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        marginSettlement.setRegistrar(address(mv));
+        mv.setSettlement(address(marginSettlement));
+        MarginBackstop backstop = new MarginBackstop(usdcAddr, address(mv));
+        mv.setBackstop(address(backstop));
+        mv.setPricingDefaults(50, 25, 0.001e18);
+        mv.setProtocolFee(0.01e9);
+        mv.setFeeSplit(5000, 3000, dao);
+        mv.setNotionalCeiling(250_000e6);
+        if (seed) {
+            MockERC20(usdcAddr).mint(deployer, 30_000e6);
+            MockERC20(usdcAddr).approve(address(backstop), 25_000e6);
+            backstop.deposit(25_000e6);
+            MockERC20(usdcAddr).approve(address(mv), 5_000e6);
+            mv.fundInsurance(5_000e6);
+        }
+        return (address(mv), address(backstop), address(marginSettlement));
     }
 
     function run() external {
@@ -205,6 +242,12 @@ contract Deploy is Script, StdCheats {
             aquaAddr, oracleAddr, address(hook), wethAddr, usdcAddr, chainlinkFeed, dao, deployer
         );
 
+        // ── S13 MarginVault: opt-in margin tier, own settlement + backstop ─
+        (address marginAddr, address backstopAddr, address marginSettlementAddr) = _deployMargin(
+            aquaAddr, oracleAddr, address(hook), usdcAddr, chainlinkFeed, address(tokenFactory), dao, deployer,
+            block.chainid == 31337 && !forkMainnet // mock USDC only: seed the backstop + insurance
+        );
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
@@ -220,6 +263,9 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
         console.log("NEXT_PUBLIC_FIRM_ESCROW_FACTORY=%s", address(firmFactory));
         console.log("NEXT_PUBLIC_SPREAD_VAULT=%s",    spreadAddr);
+        console.log("NEXT_PUBLIC_MARGIN_VAULT=%s",    marginAddr);
+        console.log("NEXT_PUBLIC_MARGIN_BACKSTOP=%s", backstopAddr);
+        console.log("NEXT_PUBLIC_MARGIN_SETTLEMENT=%s", marginSettlementAddr);
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }
