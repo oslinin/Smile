@@ -318,6 +318,45 @@ In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, 
 
 > **Design note.** Because both paths resolve to the on-chain Chainlink feed, the DON's role is a *scheduled, trust-minimized keeper* (deterministic read + signed write) rather than novel off-chain data sourcing.
 
+### 6. Quoting Oracle — Chainlink Data Feeds, with an Optional Pyth Pull-Oracle
+
+Settlement (§5 above) always resolves through Chainlink's on-chain round
+history — that's what makes permissionless expiry-bracketing verifiable, and
+it never changes. **Quoting** (pricing a live `buy()`/`close()`) is a
+separate concern and reads whatever `IPriceOracle` the vault was deployed
+with:
+
+- **Default — Chainlink Data Feeds.** `OptionPremiumInstruction` and the
+  vault's put-pricing path call `latestRoundData()` directly, gated by a
+  `maxStalenessSec` freshness check. This is a **push** oracle: the price is
+  only as fresh as Chainlink's last heartbeat/deviation-triggered update,
+  which is the root cause of the oracle-latency gap documented as
+  [L1/L2 in docs/limitations.md](docs/limitations.md) (stale-quote sniping,
+  and an "invisible window" of sub-threshold drift with no on-chain signal
+  at all).
+- **Optional — `PythSpotAdapter` pull-oracle.** [Pyth](https://pyth.network)
+  is a first-party oracle: 100+ trading firms and exchanges submit price +
+  confidence directly, aggregated into an update roughly every 400ms. It's a
+  **pull** oracle — the taker fetches a signed update off-chain and posts it
+  in their own transaction (`PythSpotAdapter.refresh()`), so the very next
+  read in that transaction prices against a near-live spot instead of
+  Chainlink's last published round. `PythSpotAdapter.sol` wraps this behind
+  the same `latestRoundData()` shape the pricing path already expects (round
+  ids are meaningless for a pull oracle and returned as zero;
+  `updatedAt` maps to Pyth's `publishTime`), so swapping it in requires no
+  changes to `OptionPremiumInstruction` or the vault. Scope is **quoting
+  only** — settlement is untouched and still reads Chainlink rounds. See
+  [R5 in docs/solutions.md](docs/solutions.md) for the full design rationale
+  and [docs/limitations.md](docs/limitations.md) for what it does and
+  doesn't fix.
+
+To enable it at deploy time, set `PYTH` (the Pyth contract address on your
+target chain) and `PYTH_PRICE_ID` (the feed id, e.g. ETH/USD) in `.env` —
+`script/Deploy.s.sol` then deploys `PythSpotAdapter` and wires it in as the
+quoting oracle in place of the raw Chainlink feed. Leave both unset to use
+Chainlink Data Feeds for quoting (the default, and what the Sepolia
+addresses above run).
+
 ---
 
 ## 🔄 Flow Diagrams
