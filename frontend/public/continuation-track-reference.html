@@ -580,8 +580,10 @@
         <tr class="row-M">
           <td><span class="code">M2</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Pin settlement conserves escrow to the wei; Deploy prints the SpreadVault address</strong> — Part A is demoable end to end on a fresh <code class="code">./local.sh</code>.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Pin settlement conserves escrow to the wei; Deploy prints the SpreadVault address</strong> — Part A is demoable end to end on a fresh <code class="code">./local.sh</code>.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_redeem_pinAtK2_holderGetsExactlyTheEscrow</span> + the fuzz; <span class="code">./local.sh</span> prints <span class="code">NEXT_PUBLIC_SPREAD_VAULT</span>; <span class="code">script/spread-lifecycle.sh</span> checks payout + reclaim == escrow on real Anvil transactions. A5 (debit-spread collateral) was optional and not built.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 6</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('A4')">A4</span><span class="ref-link" onclick="scrollTo('A5')">A5</span></span></td>
         </tr>
@@ -618,24 +620,30 @@
         <tr class="row-M">
           <td><span class="code">M6</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Local subgraph answers "LP X's active ranges" against Anvil, matches cast call</strong> — first proof the indexer's data is actually correct, not just running.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Local subgraph answers "LP X's active ranges" against Anvil, matches cast call</strong> — first proof the indexer's data is actually correct, not just running.
+            <div class="impl"><span class="impl-label">Gated: arm64 host</span>Needs a local graph-node, which has no arm64 image and crashes under emulation (C3). The correctness proof happened on Sepolia instead: v0.0.2's Authorization #0 and its Fill match the vault's <span class="code">authorizations(0)</span> (<span class="code">usedCollateral</span> 0.01 WETH, <span class="code">fillCount</span> 1) — see M8.</div>
+          </td>
+          <td><span class="status gated">Gated</span></td>
           <td>Day 2</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C1')">C1</span><span class="ref-link" onclick="scrollTo('C2')">C2</span><span class="ref-link" onclick="scrollTo('C3')">C3</span></span></td>
         </tr>
         <tr class="row-M">
           <td><span class="code">M7</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>LPDashboard + copilot get_positions read from the local subgraph, getLogs still works with it stopped</strong> — proves the fallback path is real, not just a plan-doc promise.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>LPDashboard + copilot get_positions read from the local subgraph, getLogs still works with it stopped</strong> — proves the fallback path is real, not just a plan-doc promise.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Both readers take <span class="code">NEXT_PUBLIC_SUBGRAPH_URL</span> when set (the Studio URL, since no local node runs here) and fall through to <span class="code">getLogs</span> / per-id RPC calls when it is unset or the query fails — <span class="code">frontend/lib/subgraph.ts</span>, <span class="code">LPDashboard.tsx</span>, <span class="code">lib/copilot/chain.ts</span> (C4).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C4')">C4</span></span></td>
         </tr>
         <tr class="row-M">
           <td><span class="code">M8</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Same data, live on Sepolia via Graph Studio</strong> — the actual judged artifact for the bounty submission.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Same data, live on Sepolia via Graph Studio</strong> — the actual judged artifact for the bounty submission.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">smile-sepolia</span> v0.0.2 — <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span> — indexing the fresh Sepolia deployment: Authorization #0 within a minute of <span class="code">Aqua.ship</span>, the Fill one block after the buy, <span class="code">hasIndexingErrors: false</span> (C5).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 4</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span></span></td>
         </tr>
