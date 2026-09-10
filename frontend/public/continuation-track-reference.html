@@ -453,9 +453,10 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Local subgraph scaffold — Authorization entity</strong> — the foundation of the indexer: a schema + AssemblyScript mappings turning `RangeAuthorized`/`AuthorizationRevoked` events into a queryable `Authorization` entity, replacing the capped, brute-force `eth_getLogs`/RPC scans currently backing `LPDashboard.tsx` and the copilot's `chain.ts`.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/subgraph.yaml</span> <span class="code">subgraph/schema.graphql</span> <span class="code">subgraph/src/vault.ts</span> <span class="code">subgraph/tests/vault.test.ts</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/subgraph.yaml</span> <span class="code">subgraph/schema.graphql</span> <span class="code">subgraph/src/vault.ts</span> <span class="code">subgraph/tests/vault.test.ts</span> <span class="code">subgraph/README.md</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">Authorization</span> (keyed by authId, LP indexed) and <span class="code">Fill</span> (one per <span class="code">OptionBought</span>) entities; handlers for <span class="code">RangeAuthorized</span>, <span class="code">AuthorizationRevoked</span>, <span class="code">OptionBought</span>, <span class="code">OptionClosed</span>, <span class="code">CollateralReleased</span>, <span class="code">PullFailed</span>. <span class="code">graph codegen</span> + <span class="code">graph build</span> clean. Four matchstick tests written, including "an older authorization stays visible after a newer one appears" — the LPDashboard bug this replaces; matchstick has no arm64 binary, so they run via <span class="code">graph test -d</span> (Docker + qemu) or on x86 CI. Package joined the pnpm workspace.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 2</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
         </tr>
@@ -464,9 +465,10 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Keep usedCollateral in sync via bound contract calls</strong> — rather than reimplementing the vault's JIT-pull collateral accounting in AssemblyScript (drift risk), the mappings for `OptionBought`/`CollateralReleased`/`PullFailed` each make one bound `authorizations(authId)` contract call and overwrite `usedCollateral`/`active` directly from the live value.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">subgraph/src/vault.ts</span>, <span class="code">subgraph/subgraph.yaml</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/src/vault.ts</span> (<span class="code">refreshFromChain</span>, <span class="code">refreshBySeries</span>)</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>one bound <span class="code">authorizations(authId)</span> call per fill / sellback / reclaim / pull failure overwrites <span class="code">maxCollateral</span>, <span class="code">usedCollateral</span>, <span class="code">collateralToken</span>, <span class="code">active</span> from chain state; sellbacks and reclaims resolve the series token back to its authorization through the vault's <span class="code">seriesOf(token)</span> getter. The matchstick fill test asserts <span class="code">usedCollateral</span> comes from the mocked call, not from arithmetic in the mapping.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 2</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C1')">C1</span><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
         </tr>

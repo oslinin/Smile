@@ -1,0 +1,40 @@
+# One row per LP range authorization on AquaCollateralVault. `lp` is indexed
+# on the RangeAuthorized event, so "every range this wallet ever wrote" is a
+# single filtered query — the thing frontend/lib/copilot/chain.ts currently
+# approximates with a MAX_AUTHS=50 brute-force loop.
+type Authorization @entity(immutable: false) {
+  id: ID!                      # authId as a decimal string
+  authId: BigInt!
+  lp: Bytes!
+  strikeMin: BigInt!           # WAD USD
+  strikeMax: BigInt!
+  expiry: BigInt!              # unix seconds
+  isCall: Boolean!
+  collateralToken: Bytes!      # WETH for calls, USDC for puts (read via a bound call)
+  maxCollateral: BigInt!
+  usedCollateral: BigInt!      # refreshed via a bound call on every fill/close/release
+  active: Boolean!
+  fillCount: Int!
+  fills: [Fill!]! @derivedFrom(field: "authorization")
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  revokedAtBlock: BigInt
+}
+
+# One row per OptionBought — the buyer, the series token, the strike, size,
+# and premium. Enough for "open interest by strike" and per-wallet position
+# lists without walking a strike grid on-chain.
+type Fill @entity(immutable: true) {
+  id: ID!                      # txHash-logIndex
+  authorization: Authorization!
+  lp: Bytes!
+  buyer: Bytes!
+  optionToken: Bytes!
+  strike: BigInt!
+  amount: BigInt!              # WAD option units
+  premium: BigInt!             # premium-token units, fee included
+  isCall: Boolean!
+  expiry: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
