@@ -165,12 +165,19 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     uint256 public insuranceFund;
     mapping(address => uint256) public claimable;
 
+    /// @notice A flagged writer gets this long to cure before an auction can start.
+    uint256 public constant GRACE = 1 hours;
+
     uint256 public nextAuthId;
     mapping(uint256 => Range) public ranges;
     mapping(uint256 => Pricing) public pricingOf;
     mapping(bytes32 => Series) public seriesOf;
     mapping(bytes32 => mapping(address => Position)) public positions;
     mapping(address => Account) public accounts;
+    /// @dev Series a writer has an open short in — walked by {withdraw}.
+    // ponytail: O(open series) loop; a writer with hundreds of series pays for it in gas.
+    mapping(address => bytes32[]) internal _openSeries;
+    mapping(address => uint256) public flaggedCount;
 
     error ExpiryInPast();
     error ZeroCapacity();
@@ -192,6 +199,18 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     error PremiumAboveMax();
     error SelfOnly();
     error NothingToClaim();
+    error NoPosition();
+    error Covered();
+    error Healthy();
+    error AlreadyFlagged();
+    error NotFlagged();
+    error GraceNotOver();
+    error NoRoundSinceFlag();
+    error AuctionAlreadyStarted();
+    error InDebt();
+    error WhileFlagged();
+    error InsufficientFree();
+    error WithdrawBelowIM(uint256 have, uint256 need);
 
     event RangeOpened(
         uint256 indexed authId,
@@ -212,6 +231,13 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     );
     event MarginLocked(bytes32 indexed sid, address indexed writer, uint256 pulled, uint256 fromFree, uint256 notional);
     event InsuranceFunded(address indexed from, uint256 amount);
+    event Deposited(address indexed writer, uint256 amount, uint256 debtRepaid);
+    event Withdrawn(address indexed writer, uint256 amount);
+    event ToppedUp(bytes32 indexed sid, address indexed writer, uint256 fromFree, uint256 fromCreditLine, uint256 fromCaller);
+    event Flagged(bytes32 indexed sid, address indexed writer, address indexed flagger, uint256 locked, uint256 maintenance);
+    event FlagCleared(bytes32 indexed sid, address indexed writer);
+    event AuctionStarted(bytes32 indexed sid, address indexed writer, uint256 locked, uint256 maintenance);
+    event ShortCovered(bytes32 indexed sid, address indexed writer, uint256 units, uint256 released);
 
     constructor(address aqua_, address oracle_, address hook_, address owner_, address tokenFactory_, address usdc_)
         AquaApp(IAqua(aqua_))
@@ -380,12 +406,16 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     /// @return latestUpdatedAt  timestamp of the newest round
     /// @return roundsUsed  how many rounds fed the minimum
     function markSpot() public view returns (uint256 spotWad, uint256 latestUpdatedAt, uint256 roundsUsed) {
+        return _worstOf(block.timestamp > MARK_WINDOW ? block.timestamp - MARK_WINDOW : 0);
+    }
+
+    /// @dev Lowest answer among rounds updated at/after `cutoff`, newest first.
+    function _worstOf(uint256 cutoff) internal view returns (uint256 spotWad, uint256 latestUpdatedAt, uint256 roundsUsed) {
         (uint80 roundId, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
         if (answer <= 0) return (0, updatedAt, 0);
         latestUpdatedAt = updatedAt;
         uint256 lowest = uint256(answer);
         roundsUsed = 1;
-        uint256 cutoff = block.timestamp > MARK_WINDOW ? block.timestamp - MARK_WINDOW : 0;
         while (roundId > 0 && roundsUsed < MAX_MARK_ROUNDS) {
             roundId--;
             try oracle.getRoundData(roundId) returns (uint80, int256 a, uint256, uint256 u, uint80) {
@@ -507,7 +537,10 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         Series storage s = seriesOf[sid];
         s.totalUnits += units;
         Position storage pos = positions[sid][r.lp];
-        if (pos.units == 0) s.positionCount++;
+        if (pos.units == 0) {
+            s.positionCount++;
+            _openSeries[r.lp].push(sid);
+        }
         pos.authId = authId;
         pos.units += units;
         pos.locked += im;
@@ -557,6 +590,206 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
                 AquaOptionSettlement(settlement).registerSeries(sid, token, expiry, strike, false);
             }
         }
+    }
+
+    // ── Margin calls, covered immunity, withdrawals (B4) ────────────────────
+
+    /// @notice A writer's free USDC here — swept into margin calls first,
+    /// withdrawable while every open position stays at IM. Repays bad debt
+    /// (to the insurance fund that covered it) before anything is credited.
+    function deposit(uint256 amount) external nonReentrant {
+        IERC20(usdc).safeTransferFrom(msg.sender, address(this), amount);
+        Account storage a = accounts[msg.sender];
+        uint256 repaid = a.badDebt < amount ? a.badDebt : amount;
+        a.badDebt -= repaid;
+        insuranceFund += repaid;
+        a.free += amount - repaid;
+        emit Deposited(msg.sender, amount, repaid);
+    }
+
+    /// @notice Withdraw free USDC. Refused while flagged, in debt, or on a
+    /// stale mark, and never below IM across every open position at the
+    /// current mark — free balance counts toward that requirement.
+    function withdraw(uint256 amount) external nonReentrant {
+        Account storage a = accounts[msg.sender];
+        require(a.badDebt == 0, InDebt());
+        require(flaggedCount[msg.sender] == 0, WhileFlagged());
+        require(!isMarkStale(), StaleMark());
+        require(amount <= a.free, InsufficientFree());
+        a.free -= amount;
+
+        (uint256 spot,,) = markSpot();
+        uint256 have = a.free;
+        uint256 need;
+        bytes32[] storage open = _openSeries[msg.sender];
+        for (uint256 i = 0; i < open.length; i++) {
+            Position storage pos = positions[open[i]][msg.sender];
+            if (pos.units == 0) continue;
+            have += pos.locked;
+            need += marginRequirement(seriesOf[open[i]].strike, pos.units, spot, true);
+        }
+        require(have >= need, WithdrawBelowIM(have, need));
+
+        IERC20(usdc).safeTransfer(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);
+    }
+
+    /// @notice Locked margin against the maintenance and initial requirements
+    /// at the current mark.
+    function health(bytes32 sid, address writer) public view returns (uint256 locked, uint256 mm, uint256 im) {
+        Position storage pos = positions[sid][writer];
+        (uint256 spot,,) = markSpot();
+        locked = pos.locked;
+        mm = marginRequirement(seriesOf[sid].strike, pos.units, spot, false);
+        im = marginRequirement(seriesOf[sid].strike, pos.units, spot, true);
+    }
+
+    /// @notice A position whose locked margin is the full strike value is a
+    /// cash-secured put — it cannot be flagged. Wallet and Aqua balances
+    /// never count; only what is locked here.
+    function isCovered(bytes32 sid, address writer) public view returns (bool) {
+        Position storage pos = positions[sid][writer];
+        return pos.units > 0 && pos.locked >= (seriesOf[sid].strike * pos.units) / 1e30;
+    }
+
+    /// @notice Margin call. Anyone may call. Below MM at the worst-of-hour
+    /// mark, the vault first tries to cure to IM on the writer's behalf —
+    /// free balance, then (if the range opted in) a bounded pull from the
+    /// same Aqua allowance the fill used — and flags only if the position is
+    /// still under MM afterwards. Covered positions cannot be flagged.
+    function flag(bytes32 sid, address writer) external nonReentrant {
+        Position storage pos = positions[sid][writer];
+        require(pos.units > 0, NoPosition());
+        require(pos.flaggedAt == 0, AlreadyFlagged());
+        require(!isCovered(sid, writer), Covered());
+
+        (uint256 locked, uint256 mm, uint256 im) = health(sid, writer);
+        require(locked < mm, Healthy());
+
+        uint256 deficit = im - locked;
+        uint256 fromFree = _sweepFree(sid, writer, deficit);
+        uint256 fromLine;
+        if (deficit > fromFree) fromLine = _creditLine(writer, pos, deficit - fromFree);
+        if (fromFree + fromLine > 0) emit ToppedUp(sid, writer, fromFree, fromLine, 0);
+
+        if (pos.locked >= mm) return;
+        pos.flaggedAt = uint64(block.timestamp);
+        pos.flagger = msg.sender;
+        flaggedCount[writer]++;
+        emit Flagged(sid, writer, msg.sender, pos.locked, mm);
+    }
+
+    /// @notice Anyone adds margin to a position. Clears the flag once the
+    /// position is back at IM. Whatever exceeds the strike value (full
+    /// cover) lands in the writer's free balance instead.
+    function topUp(bytes32 sid, address writer, uint256 amount) external nonReentrant {
+        Position storage pos = positions[sid][writer];
+        require(pos.units > 0, NoPosition());
+        IERC20(usdc).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 room = (seriesOf[sid].strike * pos.units) / 1e30 - pos.locked;
+        uint256 toLock = amount < room ? amount : room;
+        _lock(pos, toLock);
+        accounts[writer].free += amount - toLock;
+        emit ToppedUp(sid, writer, 0, 0, amount);
+        _maybeClearFlag(sid, writer, pos);
+    }
+
+    /// @notice After the grace period, open the takeover window — but judge
+    /// health on rounds posted AFTER the flag only, so a dip that already
+    /// recovered cannot be used to liquidate. A position back above MM is
+    /// unflagged instead.
+    function startAuction(bytes32 sid, address writer) external nonReentrant {
+        Position storage pos = positions[sid][writer];
+        require(pos.flaggedAt != 0, NotFlagged());
+        require(pos.auctionStart == 0, AuctionAlreadyStarted());
+        require(block.timestamp >= pos.flaggedAt + GRACE, GraceNotOver());
+
+        uint256 windowCutoff = block.timestamp > MARK_WINDOW ? block.timestamp - MARK_WINDOW : 0;
+        uint256 cutoff = pos.flaggedAt + 1 > windowCutoff ? pos.flaggedAt + 1 : windowCutoff;
+        (uint256 spot, uint256 latestAt,) = _worstOf(cutoff);
+        require(latestAt > pos.flaggedAt, NoRoundSinceFlag());
+
+        uint256 mm = marginRequirement(seriesOf[sid].strike, pos.units, spot, false);
+        if (pos.locked >= mm) {
+            _clearFlag(sid, writer, pos);
+            return;
+        }
+        pos.auctionStart = uint64(block.timestamp);
+        emit AuctionStarted(sid, writer, pos.locked, mm);
+    }
+
+    /// @notice A writer who also holds the series burns their own long
+    /// tokens against the short. The units net out; the margin they backed
+    /// is released to the writer's free balance pro rata.
+    function coverShort(bytes32 sid, uint256 units) external nonReentrant {
+        Position storage pos = positions[sid][msg.sender];
+        require(pos.units > 0 && units > 0 && units <= pos.units, NoPosition());
+        Series storage s = seriesOf[sid];
+        OptionToken(s.token).burn(msg.sender, units);
+
+        uint256 released = (pos.locked * units) / pos.units;
+        uint256 notionalOff = (s.strike * units) / 1e30;
+        pos.units -= units;
+        pos.locked -= released;
+        s.totalUnits -= units;
+        nakedNotional -= notionalOff - released;
+        accounts[msg.sender].free += released;
+
+        if (pos.units == 0) {
+            s.positionCount--;
+            if (pos.flaggedAt != 0) _clearFlag(sid, msg.sender, pos);
+        } else {
+            _maybeClearFlag(sid, msg.sender, pos);
+        }
+        emit ShortCovered(sid, msg.sender, units, released);
+    }
+
+    /// @dev Move `amount` into a position's margin and take it off naked notional.
+    function _lock(Position storage pos, uint256 amount) internal {
+        pos.locked += amount;
+        nakedNotional -= amount;
+    }
+
+    function _sweepFree(bytes32 sid, address writer, uint256 deficit) internal returns (uint256 taken) {
+        Account storage a = accounts[writer];
+        taken = a.free < deficit ? a.free : deficit;
+        if (taken == 0) return 0;
+        a.free -= taken;
+        _lock(positions[sid][writer], taken);
+    }
+
+    /// @dev Opt-in Aqua credit line: the range's shipped allowance, bounded
+    /// by what is still shipped, what the wallet holds, and what it has
+    /// approved. Best effort — a failed pull is not a revert, the flag is.
+    function _creditLine(address writer, Position storage pos, uint256 want) internal returns (uint256 pulled) {
+        Range storage r = ranges[pos.authId];
+        if (!r.autoTopUp) return 0;
+        (uint248 shipped,) = AQUA.rawBalances(writer, address(this), r.strategyHash, usdc);
+        uint256 amt = want;
+        if (shipped < amt) amt = shipped;
+        uint256 wallet = IERC20(usdc).balanceOf(writer);
+        if (wallet < amt) amt = wallet;
+        uint256 allowance = IERC20(usdc).allowance(writer, address(AQUA));
+        if (allowance < amt) amt = allowance;
+        if (amt == 0) return 0;
+        try this.execPull(writer, r.strategyHash, address(0), 0, 0, amt) {
+            _lock(pos, amt);
+            pulled = amt;
+        } catch {}
+    }
+
+    function _maybeClearFlag(bytes32 sid, address writer, Position storage pos) internal {
+        if (pos.flaggedAt == 0) return;
+        (uint256 spot,,) = markSpot();
+        if (pos.locked >= marginRequirement(seriesOf[sid].strike, pos.units, spot, true)) _clearFlag(sid, writer, pos);
+    }
+
+    function _clearFlag(bytes32 sid, address writer, Position storage pos) internal {
+        pos.flaggedAt = 0;
+        pos.auctionStart = 0;
+        pos.flagger = address(0);
+        flaggedCount[writer]--;
+        emit FlagCleared(sid, writer);
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
