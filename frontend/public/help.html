@@ -1208,6 +1208,61 @@ the honest scope decisions behind them:
 <a href="docs/plans/2026-09-10-arc-bounty.md">Arc</a>. The task-by-task status page is
 <strong>Help → Continuation Track</strong> in the app; the per-bounty pitch, audit trail
 and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>docs/submission-ethonline2026.md</code></a>.</p>
+<h3>Feature · reason · sponsor</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Reason it exists</th>
+<th>Sponsor / bounty</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SpreadVault</strong> — credit spreads escrow their true max loss (0.0625 WETH not 1; 200 USDC not 3,200)</td>
+<td>Smile&#39;s core user sells spreads; margining each leg as naked wasted 16× the capital. Netting is a collateral-accounting problem, not a liquidation problem, so it was the safest efficiency win</td>
+<td><strong>1inch</strong> · Build an Aqua App</td>
+</tr>
+<tr>
+<td><strong>MarginVault + Backstop</strong> — opt-in margined puts (IM 1,500 not 3,000), margin calls, takeover auction, backstop pool, insurance, haircut-as-last-resort</td>
+<td>Rung 3 of the ladder: yield writers want to post a fraction of the strike. Aqua&#39;s JIT pull applied to margin itself — collateral stays in the wallet until a real margin call — which no other margin system does</td>
+<td><strong>1inch</strong> · Build an Aqua App</td>
+</tr>
+<tr>
+<td><strong>RfqVault</strong> — LP-signed EIP-712 quotes over the formula floor, same Aqua pull</td>
+<td>Tradfi&#39;s NBBO + price improvement: sophisticated makers bring their own models and win flow with tighter quotes while the formula tier stays the public fallback</td>
+<td><strong>1inch</strong> · Build an Aqua App</td>
+</tr>
+<tr>
+<td><strong>The Graph subgraph</strong> <code>smile-sepolia</code> + copilot/dashboard readers</td>
+<td>The LP dashboard and the copilot were brute-force-scanning logs and went blind past 50 ranges (L12a); an indexer answers &quot;which ranges are live and how full&quot; in one query</td>
+<td><strong>The Graph</strong> · AI tooling / agents on live chain data</td>
+</tr>
+<tr>
+<td><strong>Arc testnet deployment</strong> — every vault on Circle&#39;s native USDC, real fills</td>
+<td>An options venue whose premium, collateral, margin, backstop and gas are all the chain&#39;s native dollar is the cleanest stablecoin-native DeFi story</td>
+<td><strong>Circle</strong> · Arc, Best DeFi Application</td>
+</tr>
+<tr>
+<td><strong>Sepolia redeploy</strong> on Circle USDC, canonical WETH, Chainlink ETH/USD</td>
+<td>The pre-event Sepolia contracts were a stale v1; the judged subgraph needed the current stack with real feeds</td>
+<td>The Graph (prerequisite) · Circle USDC</td>
+</tr>
+<tr>
+<td><strong>Overview, Risk Monitor, TradingView chart, OptionStrat-grade builder, User Guide</strong></td>
+<td>Judges see three minutes; the numbers that matter (16×, 1,500 vs 3,000, holders whole after a crash) had to be on screen, live, not in a README</td>
+<td>UI/UX for all three bounties</td>
+</tr>
+<tr>
+<td><strong>OpenRouter copilot provider</strong>, copilot help page</td>
+<td>Free-model access for judges without an API key; the AI surface was undocumented</td>
+<td>The Graph · AI tooling (supporting)</td>
+</tr>
+<tr>
+<td>Chainlink feed + CRE, Pyth adapter, Uniswap v4 hook, SwapVM opcode (pre-existing, blue in the map)</td>
+<td>The oracle, settlement, vol surface and pricing engine every new vault reuses</td>
+<td>not sponsors here — infrastructure</td>
+</tr>
+</tbody></table>
 <h3>Sponsor &amp; feature map</h3>
 <p>Blue is what Smile already was on September 5; green is what the event
 added. Sponsors and non-sponsor infrastructure alike.</p>

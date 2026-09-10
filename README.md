@@ -901,6 +901,20 @@ the honest scope decisions behind them:
 **Help → Continuation Track** in the app; the per-bounty pitch, audit trail
 and video storyboard are in [`docs/submission-ethonline2026.md`](docs/submission-ethonline2026.md).
 
+### Feature · reason · sponsor
+
+| Feature | Reason it exists | Sponsor / bounty |
+|---|---|---|
+| **SpreadVault** — credit spreads escrow their true max loss (0.0625 WETH not 1; 200 USDC not 3,200) | Smile's core user sells spreads; margining each leg as naked wasted 16× the capital. Netting is a collateral-accounting problem, not a liquidation problem, so it was the safest efficiency win | **1inch** · Build an Aqua App |
+| **MarginVault + Backstop** — opt-in margined puts (IM 1,500 not 3,000), margin calls, takeover auction, backstop pool, insurance, haircut-as-last-resort | Rung 3 of the ladder: yield writers want to post a fraction of the strike. Aqua's JIT pull applied to margin itself — collateral stays in the wallet until a real margin call — which no other margin system does | **1inch** · Build an Aqua App |
+| **RfqVault** — LP-signed EIP-712 quotes over the formula floor, same Aqua pull | Tradfi's NBBO + price improvement: sophisticated makers bring their own models and win flow with tighter quotes while the formula tier stays the public fallback | **1inch** · Build an Aqua App |
+| **The Graph subgraph** `smile-sepolia` + copilot/dashboard readers | The LP dashboard and the copilot were brute-force-scanning logs and went blind past 50 ranges (L12a); an indexer answers "which ranges are live and how full" in one query | **The Graph** · AI tooling / agents on live chain data |
+| **Arc testnet deployment** — every vault on Circle's native USDC, real fills | An options venue whose premium, collateral, margin, backstop and gas are all the chain's native dollar is the cleanest stablecoin-native DeFi story | **Circle** · Arc, Best DeFi Application |
+| **Sepolia redeploy** on Circle USDC, canonical WETH, Chainlink ETH/USD | The pre-event Sepolia contracts were a stale v1; the judged subgraph needed the current stack with real feeds | The Graph (prerequisite) · Circle USDC |
+| **Overview, Risk Monitor, TradingView chart, OptionStrat-grade builder, User Guide** | Judges see three minutes; the numbers that matter (16×, 1,500 vs 3,000, holders whole after a crash) had to be on screen, live, not in a README | UI/UX for all three bounties |
+| **OpenRouter copilot provider**, copilot help page | Free-model access for judges without an API key; the AI surface was undocumented | The Graph · AI tooling (supporting) |
+| Chainlink feed + CRE, Pyth adapter, Uniswap v4 hook, SwapVM opcode (pre-existing, blue in the map) | The oracle, settlement, vol surface and pricing engine every new vault reuses | not sponsors here — infrastructure |
+
 ### Sponsor & feature map
 
 Blue is what Smile already was on September 5; green is what the event
