@@ -155,6 +155,16 @@ literal on-chain without depending on a feed that isn't there.
 --broadcast` succeeds, prints real (non-mock) EURC/USDC addresses.
 **Commit:** `feat(arc): deploy branch for Arc testnet with EURC/USDC and FX oracle`
 
+**Result, 2026-09-10 — shipped as the real-USDC variant (`7d409bc`).**
+Since X1 found no usable FX oracle, the Arc branch uses Circle's real
+USDC (`0x3600…0000`) with a mock WETH and a mock ETH/USD feed, documented
+in `docs/arc-testnet-deployment.md` with every address. Deploy cost ~0.46
+USDC. EURC (`0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` on testnet, from
+Arc's docs) is recorded for the FX follow-up. Gotcha: `forge script`'s
+local simulation cannot execute Arc's native-asset USDC contract, so
+anything that *calls* USDC must go through `cast send` —
+`script/arc-smoke.sh` — while deploys that only store the address work.
+
 ## X3: Frontend — Arc network entry + FX product surface
 
 **Files:** modify `frontend/config/wagmi.ts`, `frontend/app/page.tsx`,
