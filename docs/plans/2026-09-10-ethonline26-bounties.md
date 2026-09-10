@@ -46,9 +46,13 @@ this page's priority math. Verify if there's a spare minute.
 **Full plan:** [`2026-09-05-ethonline2026-continuation-track.md`](./2026-09-05-ethonline2026-continuation-track.md)
 — two opt-in sibling vaults, Part A (SpreadVault) and Part B (MarginVault).
 Both are real product work independent of this bounty; submitting them here
-is free reuse, not extra scope. **Given 3 days, Part A is the actual
-target; Part B is explicitly stretch** (see "Realistic scope" below) —
-this reverses earlier framing that treated MarginVault as the stronger
+is free reuse, not extra scope. **SpreadVault alone is a complete,
+standalone submission** — checked against 1inch's actual qualification
+list (official Aqua contracts, onchain execution in the demo, proper git
+history), it satisfies all of it without MarginVault as a companion. Given
+3 days, Part A is the actual target; Part B is explicitly stretch (see
+"Realistic scope" below) — this reverses earlier framing that treated
+MarginVault as the stronger
 story. It *is* the stronger story; SpreadVault is what's actually
 finishable correctly in the time available.
 
@@ -197,7 +201,11 @@ everything below is about making it *competitive*, not making it *exist*.
 A frontend network entry for Arc (so the demo is a real UI, not `cast`
 calls) plus the architecture diagram and video — that's the must-have list,
 and it's small because the hard part (proving the stack works on Arc at
-all) is already done.
+all) is already done. Free bonus if there's time: SpreadVault (built for
+the 1inch bounty) is chain-agnostic Solidity — deploying it to Arc
+alongside everything else is the same zero-effort broadcast script, and it
+makes the Arc submission's actual on-chain surface area look more
+substantial. Doesn't replace anything on the must-have list.
 
 ### FX options — same engine, new market (bonus, not required)
 
