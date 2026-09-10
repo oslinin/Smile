@@ -158,6 +158,17 @@
       }
     }
 
+    .status.done {
+      background: #d4edda;
+      color: #155724;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.done {
+        background: #1e4620;
+        color: #4caf50;
+      }
+    }
+
     .status.gated {
       background: #fff3cd;
       color: #856404;
@@ -253,10 +264,14 @@
       (two opt-in sibling vaults) and Part C from
       <code class="code">docs/plans/2026-09-09-theGraph.md</code> (a subgraph indexer +
       Copilot integration, targeting EthOnline2026's The Graph Continuity-track bounty).
-      Nothing on this page is built yet: no file below exists in the repo today; this is a
-      task tracker for unstarted work, not a record of what's shipped (contrast the main
-      <a href="reference-table.html">Reference Table</a>, which only lists implemented/designed items).
-      The MarginVault plan defines a <strong>v1</strong> scope only (puts only, no
+      <strong>Deadline: September 13, 12:00 PM.</strong> Execution order, as decided on
+      Sept 10: Part A (SpreadVault) → Part C (subgraph) → Arc (tracked in
+      <code class="code">docs/plans/2026-09-10-arc-bounty.md</code>) → Part B (MarginVault, stretch —
+      cut first if the clock runs out). Rows flip from "Not started" to "Done" as each task's
+      commit lands; the overview of all three bounties is
+      <code class="code">docs/plans/2026-09-10-ethonline26-bounties.md</code>. The main
+      <a href="reference-table.html">Reference Table</a> still lists only implemented/designed
+      protocol items. The MarginVault plan defines a <strong>v1</strong> scope only (puts only, no
       <code class="code">close()</code>); there is no v2 — calls are mentioned only as a later
       follow-on, not a scoped phase.
     </div>
@@ -288,9 +303,10 @@
           <td><span class="cat">Part A</span></td>
           <td>
             <strong>SpreadVault scaffold, ranges, own settlement</strong> — the foundation everything else in Part A builds on: a new `AquaApp` (`SpreadVault`) that opens two/three-leg structures (call credit, put credit, iron condor) as its own authorization type, with its own `AquaOptionSettlement` instance so the main vault's settlement is never touched.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">src/periphery/SpreadVault.sol</span> <span class="code">src/periphery/SpreadToken.sol</span> <span class="code">test/SpreadVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/SpreadVault.sol</span> <span class="code">src/periphery/SpreadToken.sol</span> <span class="code">test/SpreadVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>commit <span class="code">2b060d2</span> — a $3,000/$3,200 call credit spread ships exactly 0.0625 WETH to Aqua (the S12 true max loss, not a full WETH), the vault's own balance stays 0 until a real pull, and <span class="code">setSettlement</span> is one-time. Self-hosted AquaApp, same pattern as the main vault's put leg — no SwapVM dispatch (that's the optional call-credit opcode, later).</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
         </tr>
@@ -299,9 +315,10 @@
           <td><span class="cat">Part A</span></td>
           <td>
             <strong>Shared premium library, two-leg quote</strong> — a spread's price is just its long leg's Ask minus its short leg's Bid; this task ports the vault's existing per-unit premium math into a standalone library both legs can call, so a spread quote provably agrees with the main vault's own quote to the wei.
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">src/periphery/SmilePremiumLib.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/SmilePremiumLib.sol</span> <span class="code">SpreadVault.quote()</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>the library reproduces <span class="code">vault.putQuote</span> to the wei with the R3 staleness slope and the fee gross-up both live (<span class="code">test_quote_putLegMatchesVaultPutQuote</span>); <span class="code">SpreadVault.quote</span> returns Ask(long leg) − Bid(short leg), the fee grossed up on that net, and the S12 escrow for the size (<span class="code">test_quote_spreadIsAskMinusBid</span>). Call credit and put credit both priced; iron condor still reverts <span class="code">UnsupportedKind</span>. Adds <span class="code">MIN_QUOTE_SIGMA</span> (0.2), inert at the default σ.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('A1')">A1</span><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
         </tr>
