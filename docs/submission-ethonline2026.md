@@ -236,7 +236,7 @@ full standalone terminal built on it, not a component.
 - Run it: `./local.sh` then `./script/spread-lifecycle.sh`; Arc:
   `cp .env.arc.example frontend/.env.local`, `PRIVATE_KEY=… ./script/arc-smoke.sh`.
 
-## Video storyboard (≈3 min)
+## Video storyboard (≈3 min) — superseded by [video-walkthrough-instructions.md](video-walkthrough-instructions.md)
 
 1. **0:00 — the problem (20 s).** README's ladder table: a credit spread
    margined per leg locks 1 WETH for a 0.0625 WETH max loss.
