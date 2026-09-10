@@ -20,6 +20,7 @@ const VAULT_ABI_MINI = [
 ] as const;
 import { LPDashboard } from "@/components/LPDashboard";
 import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
+import { SpreadDesk } from "@/components/SpreadDesk";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
@@ -101,7 +102,7 @@ export default function Home() {
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
-  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "surface" | "lp-position" | "proof">("income");
+  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "spreads" | "chain" | "surface" | "lp-position" | "proof">("income");
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
@@ -168,6 +169,7 @@ export default function Home() {
   const TABS = [
     { id: "income",       label: "One-Click Income" },
     { id: "lp-auth",      label: "LP — Authorize Strike Range" },
+    { id: "spreads",      label: "Spreads · Defined Risk (S12)" },
     { id: "chain",        label: "Option Chain + Payoff Builder" },
     { id: "surface",      label: "Vol Surface · Python" },
     { id: "lp-position",  label: "LP Position" },
@@ -348,6 +350,12 @@ export default function Home() {
         {activeTab === "lp-auth" && (
           <section>
             <AuthorizeRange spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />
+          </section>
+        )}
+
+        {activeTab === "spreads" && (
+          <section>
+            <SpreadDesk spot={spotPrice ?? 3420} />
           </section>
         )}
 

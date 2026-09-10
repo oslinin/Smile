@@ -36,6 +36,8 @@ export const CONTRACTS = {
   // Official 1inch Aqua registry + custom SwapVM router (the Aqua app)
   aqua:          process.env.NEXT_PUBLIC_AQUA            ?? "",
   swapvmRouter:  process.env.NEXT_PUBLIC_SWAPVM_ROUTER   ?? "",
+  // S12 defined-risk netting sibling vault (docs/plans/2026-07-12-s12-defined-risk-netting.md)
+  spreadVault:   process.env.NEXT_PUBLIC_SPREAD_VAULT    ?? "",
 };
 
 // Minimal ABI of the official 1inch Aqua registry (ship/dock). LPs call it

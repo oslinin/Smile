@@ -322,6 +322,12 @@ contract SpreadVault is AquaApp, Ownable {
         return keccak256(abi.encode("SMILE-SPREAD-1", authId));
     }
 
+    /// @notice The four strike slots of a structure. Struct getters omit
+    /// array members, so the frontend and any indexer read them here.
+    function strikesOf(uint256 authId) external view returns (uint256[4] memory) {
+        return structures[authId].strikes;
+    }
+
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
 
     /// @notice Everything needed for `Aqua.ship(app, strategy, tokens, amounts)`.

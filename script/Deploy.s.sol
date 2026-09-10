@@ -17,6 +17,7 @@ import { PythSpotAdapter } from "../src/oracles/PythSpotAdapter.sol";
 import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
 import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
 import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
+import { SpreadVault } from "../src/periphery/SpreadVault.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -36,6 +37,28 @@ contract Deploy is Script, StdCheats {
     // Circle USDC + canonical WETH on Sepolia testnet
     address constant USDC_SEPOLIA = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
     address constant WETH_SEPOLIA = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
+
+    /// @dev S12 SpreadVault: sibling AquaApp with its own settlement (the
+    /// main settlement's registrar is one-time and already the vault).
+    /// Split out of run() to keep that function's stack shallow.
+    function _deploySpread(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address wethAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address dao,
+        address deployer
+    ) internal returns (address) {
+        SpreadVault spread = new SpreadVault(aquaAddr, oracleAddr, hookAddr, deployer, wethAddr, usdcAddr);
+        AquaOptionSettlement spreadSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        spreadSettlement.setRegistrar(address(spread));
+        spread.setSettlement(address(spreadSettlement));
+        spread.setPricingDefaults(50, 25, 0.001e18);
+        spread.setProtocolFee(0.01e9, dao);
+        return address(spread);
+    }
 
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
@@ -163,6 +186,11 @@ contract Deploy is Script, StdCheats {
         uint16 bondBps = uint16(vm.envOr("FIRMNESS_BOND_BPS", uint256(0)));
         if (bondBps > 0) vault.setFirmnessBondBps(bondBps);
 
+        // ── S12 SpreadVault: sibling AquaApp, own settlement ─────────────
+        address spreadAddr = _deploySpread(
+            aquaAddr, oracleAddr, address(hook), wethAddr, usdcAddr, chainlinkFeed, dao, deployer
+        );
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
@@ -177,6 +205,7 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
         console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
         console.log("NEXT_PUBLIC_FIRM_ESCROW_FACTORY=%s", address(firmFactory));
+        console.log("NEXT_PUBLIC_SPREAD_VAULT=%s",    spreadAddr);
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }

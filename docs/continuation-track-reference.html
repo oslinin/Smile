@@ -530,8 +530,11 @@
         <tr class="row-M">
           <td><span class="code">M1</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>A call credit spread pulls 200 USDC, not 3200</strong> — first proof the netting math actually works end to end, on Anvil.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td>
+            <strong>A call credit spread pulls 200 USDC, not 3200</strong> — first proof the netting math actually works end to end, on Anvil.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>real broadcast transactions on the local Anvil via <span class="code">script/SpreadDemo.s.sol</span>: a 3000/3200 call credit spread opened and shipped, one unit bought, <strong>0.0625 WETH pulled from the writer</strong> where the main vault would lock 1 WETH; taker paid 45.50 USDC; SpreadToken minted. The put-credit twin (200 USDC, not 3,200) is asserted in the test suite. A "Spreads · Defined Risk (S12)" tab in the app writes and buys spreads with the netted-vs-naked escrow shown live.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
           <td>Day 3</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('A1')">A1</span><span class="ref-link" onclick="scrollTo('A2')">A2</span><span class="ref-link" onclick="scrollTo('A3')">A3</span></span></td>
         </tr>
