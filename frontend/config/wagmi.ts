@@ -55,6 +55,8 @@ export const CONTRACTS = {
   marginVault:      process.env.NEXT_PUBLIC_MARGIN_VAULT      ?? "",
   marginBackstop:   process.env.NEXT_PUBLIC_MARGIN_BACKSTOP   ?? "",
   marginSettlement: process.env.NEXT_PUBLIC_MARGIN_SETTLEMENT ?? "",
+  // R6 hybrid RFQ tier: LP-signed EIP-712 quotes over the formula floor
+  rfqVault:         process.env.NEXT_PUBLIC_RFQ_VAULT         ?? "",
 };
 
 // Minimal ABI of the official 1inch Aqua registry (ship/dock). LPs call it

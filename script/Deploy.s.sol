@@ -20,6 +20,7 @@ import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
 import { SpreadVault } from "../src/periphery/SpreadVault.sol";
 import { MarginVault } from "../src/periphery/MarginVault.sol";
 import { MarginBackstop } from "../src/periphery/MarginBackstop.sol";
+import { RfqVault } from "../src/periphery/RfqVault.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -60,6 +61,27 @@ contract Deploy is Script, StdCheats {
         spread.setPricingDefaults(50, 25, 0.001e18);
         spread.setProtocolFee(0.01e9, dao);
         return address(spread);
+    }
+
+    /// @dev R6 RfqVault: signed-quote tier, own settlement, same Aqua pull.
+    function _deployRfq(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address wethAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address tokenFactory,
+        address dao,
+        address deployer
+    ) internal returns (address) {
+        RfqVault rfq = new RfqVault(aquaAddr, oracleAddr, hookAddr, deployer, tokenFactory, wethAddr, usdcAddr);
+        AquaOptionSettlement rfqSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        rfqSettlement.setRegistrar(address(rfq));
+        rfq.setSettlement(address(rfqSettlement));
+        rfq.setPricingDefaults(50, 25, 0.001e18);
+        rfq.setProtocolFee(0.01e9, dao);
+        return address(rfq);
     }
 
     /// @dev S13 MarginVault: opt-in margined puts, own settlement, own
@@ -248,6 +270,11 @@ contract Deploy is Script, StdCheats {
             block.chainid == 31337 && !forkMainnet // mock USDC only: seed the backstop + insurance
         );
 
+        // ── R6 RfqVault: signed-quote tier over the formula floor ─────────
+        address rfqAddr = _deployRfq(
+            aquaAddr, oracleAddr, address(hook), wethAddr, usdcAddr, chainlinkFeed, address(tokenFactory), dao, deployer
+        );
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
@@ -266,6 +293,7 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_MARGIN_VAULT=%s",    marginAddr);
         console.log("NEXT_PUBLIC_MARGIN_BACKSTOP=%s", backstopAddr);
         console.log("NEXT_PUBLIC_MARGIN_SETTLEMENT=%s", marginSettlementAddr);
+        console.log("NEXT_PUBLIC_RFQ_VAULT=%s",       rfqAddr);
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }
