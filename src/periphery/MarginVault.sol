@@ -150,8 +150,16 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     uint256 public constant MIN_TIME_TO_EXPIRY = 3 hours;
     /// @notice Naked notional may never exceed this multiple of the backstop
     /// pool — the Maker debt-ceiling idea: exposure is bounded by what could
-    /// actually absorb a default.
-    uint256 public constant BACKSTOP_MULTIPLE = 10;
+    /// actually absorb a default. 7, not 10: a writer sitting exactly at MM
+    /// (30% buffer) who gaps 40% before settlement leaves a shortfall of
+    /// 0.1·S against 0.7·S of naked notional — one seventh — and the
+    /// gap-40 test holds holders whole at exactly that.
+    uint256 public constant BACKSTOP_MULTIPLE = 7;
+    /// @notice A series can be finalized this long after expiry even if some
+    /// writer never settled; their margin repays the pool when they do.
+    uint256 public constant FINALIZE_GRACE = 6 hours;
+    /// @notice IM buffer raise after any holder haircut.
+    uint16 public constant HAIRCUT_RATCHET_BPS = 500;
 
     /// @notice Owner ceiling on naked notional (USDC); the effective ceiling
     /// is `min(notionalCeiling, backstop.totalAssets() * BACKSTOP_MULTIPLE)`.
@@ -190,6 +198,8 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     mapping(address => bytes32[]) internal _openSeries;
     mapping(address => uint256) public flaggedCount;
     bytes32[] internal _allSeries;
+    /// @notice Insurance drawn per series at finalization; repaid by late settlers.
+    mapping(bytes32 => uint256) public insuranceDrawn;
 
     error ExpiryInPast();
     error ZeroCapacity();
@@ -228,6 +238,10 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
     error AuctionNotOver();
     error SelfTakeover();
     error Expired();
+    error NotSettled();
+    error NotFinalized();
+    error AlreadyFinalized();
+    error NotAllSettled();
 
     event RangeOpened(
         uint256 indexed authId,
@@ -259,6 +273,15 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         bytes32 indexed sid, address indexed writer, address indexed bidder, uint256 units, uint256 moved, uint256 bonus, uint256 penalty, uint256 posted
     );
     event Absorbed(bytes32 indexed sid, address indexed writer, uint256 units, uint256 moved, uint256 drawn, uint256 tip, uint256 penalty);
+    event PositionSettled(
+        bytes32 indexed sid, address indexed writer, uint256 units, uint256 owed, uint256 paid, uint256 shortfall, uint256 released
+    );
+    event SeriesFinalized(
+        bytes32 indexed sid, uint256 owed, uint256 pot, uint256 backstopDrawn, uint256 insuranceDrawn, uint256 payoutPerUnit
+    );
+    event HolderHaircut(bytes32 indexed sid, uint256 owed, uint256 paid, uint16 haircutBps, uint16 newImBufferBps);
+    /// @dev Same ABI as AquaCollateralVault.Redeemed.
+    event Redeemed(address indexed optionToken, address indexed holder, uint256 amount, uint256 payout);
 
     constructor(address aqua_, address oracle_, address hook_, address owner_, address tokenFactory_, address usdc_)
         AquaApp(IAqua(aqua_))
@@ -951,6 +974,147 @@ contract MarginVault is AquaApp, Ownable, ReentrancyGuard {
         _clearFlag(sid, writer, pos);
         pos.units = 0;
         pos.locked = 0;
+    }
+
+    // ── Two-step settlement: per-writer waterfall, then finalization (B6) ───
+
+    /// @notice What every holder unit of a series is owed at its settlement
+    /// price, in USDC per 1e18 units: `max(K − S, 0)`.
+    function intrinsicPerUnit(bytes32 sid) public view returns (uint256) {
+        (bool settled, uint256 price) = _settlementOf(sid);
+        require(settled, NotSettled());
+        uint256 k = seriesOf[sid].strike;
+        return price < k ? (k - price) / 1e12 : 0;
+    }
+
+    /// @notice Settle one writer's short against the series' settlement
+    /// price. Waterfall: locked margin, then free balance; whatever is
+    /// still short is the writer's bad debt, plus the 2 % default penalty
+    /// — junior to the holder claim, so it never eats into what holders
+    /// get. Anything left of the margin is released to the writer. Before
+    /// finalization the money goes to the holder pot; after it (a late
+    /// settler) it repays the backstop first, then insurance, then the
+    /// writer.
+    function settlePosition(bytes32 sid, address writer) external nonReentrant {
+        Position storage pos = positions[sid][writer];
+        require(pos.units > 0, NoPosition());
+        Series storage s = seriesOf[sid];
+        uint256 units = pos.units;
+        uint256 owed = (intrinsicPerUnit(sid) * units) / 1e18;
+        uint256 notional = (s.strike * units) / 1e30;
+
+        uint256 paid = pos.locked < owed ? pos.locked : owed;
+        uint256 released = pos.locked - paid;
+        uint256 shortfall = owed - paid;
+        Account storage a = accounts[writer];
+        if (shortfall > 0 && writer != address(backstop)) {
+            uint256 fromFree = a.free < shortfall ? a.free : shortfall;
+            a.free -= fromFree;
+            paid += fromFree;
+            shortfall -= fromFree;
+            if (shortfall > 0) a.badDebt += shortfall + (notional * PENALTY_BPS) / 1e4;
+        }
+        if (writer == address(backstop)) {
+            // The pool stands behind what it absorbed: draw the rest now.
+            if (shortfall > 0) {
+                uint256 drawn = backstop.draw(shortfall);
+                paid += drawn;
+                shortfall -= drawn;
+                s.backstopDrawn += drawn;
+            }
+            backstop.noteRequirement(notional, false);
+        }
+
+        nakedNotional -= notional - pos.locked;
+        pos.units = 0;
+        pos.locked = 0;
+        if (pos.flaggedAt != 0) _clearFlag(sid, writer, pos);
+        s.positionCount--;
+        s.settledPositions++;
+
+        if (!s.finalized) {
+            s.owedTotal += owed;
+            s.pot += paid;
+            _credit(writer, released);
+        } else {
+            // Late settler: repay whoever covered the holders in their absence.
+            uint256 left = paid + released;
+            uint256 toBackstop = left < s.backstopDrawn ? left : s.backstopDrawn;
+            if (toBackstop > 0) {
+                s.backstopDrawn -= toBackstop;
+                IERC20(usdc).safeTransfer(address(backstop), toBackstop);
+                left -= toBackstop;
+            }
+            uint256 toInsurance = left < insuranceDrawn[sid] ? left : insuranceDrawn[sid];
+            insuranceDrawn[sid] -= toInsurance;
+            insuranceFund += toInsurance;
+            left -= toInsurance;
+            _credit(writer, left);
+        }
+        emit PositionSettled(sid, writer, units, owed, paid, shortfall, released);
+    }
+
+    /// @notice Close the books on a series: once every writer has settled,
+    /// or {FINALIZE_GRACE} after expiry regardless. The remaining holder
+    /// shortfall is drawn from the backstop, then insurance; only if both
+    /// run dry do holders take a haircut — announced loudly, and the IM
+    /// buffer ratchets up {HAIRCUT_RATCHET_BPS} so the next series is
+    /// margined harder.
+    function finalizeSeries(bytes32 sid) external nonReentrant {
+        Series storage s = seriesOf[sid];
+        require(!s.finalized, AlreadyFinalized());
+        uint256 perUnit = intrinsicPerUnit(sid);
+        require(s.positionCount == 0 || block.timestamp >= s.expiry + FINALIZE_GRACE, NotAllSettled());
+
+        uint256 owed = (perUnit * s.totalUnits) / 1e18;
+        uint256 shortfall = owed > s.pot ? owed - s.pot : 0;
+        if (shortfall > 0) {
+            uint256 drawn = backstop.draw(shortfall);
+            s.backstopDrawn += drawn;
+            s.pot += drawn;
+            shortfall -= drawn;
+        }
+        if (shortfall > 0) {
+            uint256 take = insuranceFund < shortfall ? insuranceFund : shortfall;
+            insuranceFund -= take;
+            insuranceDrawn[sid] += take;
+            s.pot += take;
+            shortfall -= take;
+        }
+        s.owedTotal = owed;
+        s.finalized = true;
+        s.payoutPerUnit = s.totalUnits == 0 ? 0 : (s.pot * 1e18) / s.totalUnits;
+        if (shortfall > 0) {
+            s.haircutBps = uint16((shortfall * 1e4) / owed);
+            uint16 im = imBufferBps + HAIRCUT_RATCHET_BPS > 1e4 ? 1e4 : imBufferBps + HAIRCUT_RATCHET_BPS;
+            imBufferBps = im;
+            emit HolderHaircut(sid, owed, s.pot, s.haircutBps, im);
+        }
+        emit SeriesFinalized(sid, owed, s.pot, s.backstopDrawn, insuranceDrawn[sid], s.payoutPerUnit);
+    }
+
+    /// @notice Holder burns `units` of a finalized series for its payout.
+    function redeem(bytes32 sid, uint256 units) external nonReentrant returns (uint256 payout) {
+        Series storage s = seriesOf[sid];
+        require(s.finalized, NotFinalized());
+        require(units > 0, ZeroAmount());
+        OptionToken(s.token).burn(msg.sender, units);
+        payout = (s.payoutPerUnit * units) / 1e18;
+        if (payout > s.pot) payout = s.pot;
+        s.pot -= payout;
+        if (payout > 0) IERC20(usdc).safeTransfer(msg.sender, payout);
+        emit Redeemed(s.token, msg.sender, units, payout);
+    }
+
+    function _settlementOf(bytes32 sid) internal view returns (bool settled, uint256 price) {
+        (,,,, settled, price) = AquaOptionSettlement(settlement).series(sid);
+    }
+
+    /// @dev Released margin: a writer's free balance, or straight back to the pool.
+    function _credit(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        if (to == address(backstop)) IERC20(usdc).safeTransfer(to, amount);
+        else accounts[to].free += amount;
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────

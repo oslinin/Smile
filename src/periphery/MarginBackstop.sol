@@ -7,6 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 interface IMarginVaultView {
     function nakedNotional() external view returns (uint256);
     function hasExpiredUnfinalized() external view returns (bool);
+    function BACKSTOP_MULTIPLE() external view returns (uint256);
 }
 
 /// @notice Pre-funded USDC pool that adopts margin positions nobody buys at
@@ -14,8 +15,9 @@ interface IMarginVaultView {
 /// docs/plans/2026-09-05-ethonline2026-continuation-track.md).
 ///
 /// Share-based. Withdrawals wait 24 h, may not take the pool below
-/// `max(poolRequirement, nakedNotional / 10)` — what the positions it has
-/// absorbed could owe, or a tenth of everything naked in the vault — and
+/// `max(poolRequirement, nakedNotional / BACKSTOP_MULTIPLE)` — what the
+/// positions it has absorbed could owe, or its share of everything naked
+/// in the vault (the same multiple the fill ceiling uses) — and
 /// freeze while any expired series is still unfinalized. When a draw
 /// empties the pool every share is void and a new epoch starts, so late
 /// depositors never inherit a dead cap table.
@@ -107,7 +109,7 @@ contract MarginBackstop {
         require(r.shares <= sharesOf[epoch][msg.sender], NoShares());
 
         amount = assetsOf(r.shares);
-        uint256 floor = IMarginVaultView(vault).nakedNotional() / 10;
+        uint256 floor = IMarginVaultView(vault).nakedNotional() / IMarginVaultView(vault).BACKSTOP_MULTIPLE();
         if (poolRequirement > floor) floor = poolRequirement;
         require(totalAssets() - amount >= floor, BelowRequirement(totalAssets() - amount, floor));
 

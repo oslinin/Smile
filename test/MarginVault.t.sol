@@ -57,7 +57,7 @@ contract MarginVaultTest is Test {
         mv.setPricingDefaults(50, 25, 0.001e18);
         mv.setProtocolFee(0.01e9);
         mv.setNotionalCeiling(250_000e6);
-        usdc.mint(address(backstop), 25_000e6); // ceiling = min(250k, 10 x 25k)
+        usdc.mint(address(backstop), 25_000e6); // ceiling = min(250k, 7 x 25k = 175k)
 
         expiry = block.timestamp + 30 days;
         usdc.mint(lp, CAPACITY);
@@ -255,7 +255,7 @@ contract MarginVaultTest is Test {
 
     function test_buy_nakedCeilingBinds() public {
         uint256 authId = _openAndShip(CAPACITY, false);
-        mv.setNotionalCeiling(100_000e6); // the backstop-coupled one is 10 x 25k = 250k, so the owner's binds
+        mv.setNotionalCeiling(100_000e6); // the backstop-coupled one is 7 x 25k = 175k, so the owner's binds
         // 50 ATM units = 75k naked: fine. 100 = 150k: not.
         vm.prank(buyer);
         mv.buy(authId, K, 50e18, type(uint256).max);
