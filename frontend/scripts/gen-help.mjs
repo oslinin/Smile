@@ -88,16 +88,27 @@ const renderDoc = (relPath) => {
 
 const pageHtml = Object.fromEntries(pages.map((p) => [p.id, renderDoc(p.source)]));
 
-// The Reference Table is its own standalone interactive document (filters,
-// cross-reference scrolling) — copy it next to help.html and embed via
-// iframe rather than inlining its markup, so its CSS/JS can't collide with
-// the wiki shell's.
+// Standalone interactive documents (filters, cross-reference scrolling) —
+// copied next to help.html and embedded via iframe rather than inlined, so
+// their own CSS/JS can't collide with the wiki shell's.
+const standalonePages = [
+  { id: "reference", label: "Reference Table", file: "reference-table.html", title: "Smile reference table" },
+  {
+    id: "continuation-track",
+    label: "Continuation Track",
+    file: "continuation-track-reference.html",
+    title: "Smile Continuation Track reference",
+  },
+];
+
 mkdirSync(publicDir, { recursive: true });
-copyFileSync(join(repoRoot, "docs", "reference-table.html"), join(publicDir, "reference-table.html"));
+for (const sp of standalonePages) {
+  copyFileSync(join(repoRoot, "docs", sp.file), join(publicDir, sp.file));
+}
 
 const sidebarLinks = [
   ...pages.map((p) => `<button class="nav-link" data-page="${p.id}">${p.label}</button>`),
-  `<button class="nav-link" data-page="reference">Reference Table</button>`,
+  ...standalonePages.map((sp) => `<button class="nav-link" data-page="${sp.id}">${sp.label}</button>`),
 ].join("\n        ");
 
 const pageSections = [
@@ -106,9 +117,11 @@ const pageSections = [
       <article class="doc">${pageHtml[p.id]}</article>
     </section>`
   ),
-  `<section id="page-reference" class="page page-reference">
-      <iframe src="${basePath}/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
-    </section>`,
+  ...standalonePages.map(
+    (sp) => `<section id="page-${sp.id}" class="page page-reference">
+      <iframe src="${basePath}/${sp.file}" title="${sp.title}" loading="lazy"></iframe>
+    </section>`
+  ),
 ].join("\n    ");
 
 const html = `<!doctype html>
@@ -227,7 +240,7 @@ const html = `<!doctype html>
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ${JSON.stringify([...pages.map((p) => p.id), "reference"])};
+    var VALID_PAGES = ${JSON.stringify([...pages.map((p) => p.id), ...standalonePages.map((sp) => sp.id)])};
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 
