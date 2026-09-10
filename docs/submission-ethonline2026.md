@@ -99,8 +99,10 @@ the bidder posts 725 and holds the position at IM 2,000.
 
 **Not done, on purpose.** Calls (a WETH shortfall has no USDC waterfall
 yet), partial-unit takeover, per-range block caps, `close()` (a
-sigma-priced buyback paid from margin is exactly L7's attack), any testnet
-deployment. [L13](limitations.md) lists what the tier does not promise.
+sigma-priced buyback paid from margin is exactly L7's attack), a full
+liquidation run on a live chain (no time warps there — the fill is on Arc
+and Sepolia, the crash → auction → settle path is the Anvil script).
+[L13](limitations.md) lists what the tier does not promise.
 
 ## 1inch — Build an Aqua App, part three: `RfqVault`
 

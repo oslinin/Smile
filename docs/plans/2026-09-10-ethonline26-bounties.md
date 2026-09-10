@@ -109,7 +109,9 @@ qualifies on the base "Aqua contracts used" requirement.
 > (absorb and `MODE=takeover`), `keeper/margin.mjs`, the **Margin · Opt-in
 > Puts** tab. What was cut, per the source plan's cut order: partial-unit
 > takeover, `test/MarginDemo.t.sol` (the shell script is the demo), per-range
-> block caps. Not deployed to Arc or Sepolia. The paragraphs below are the
+> block caps. Deployed to Sepolia and to Arc testnet, where a real-USDC
+> margined put fill locked 1.50 USDC instead of the 3.00 USDC strike
+> (`docs/arc-testnet-deployment.md`). The paragraphs below are the
 > pre-build framing, kept for the record.
 
 The story doesn't need SwapVM at all, and it's genuinely the better Aqua
@@ -156,7 +158,8 @@ a `signedPremium` SwapVM instruction because nonce replay protection needs
 state an instruction doesn't have. Eight tests (200 total), the **RFQ ·
 Signed Quotes** tab (wallet-signed quotes), `script/rfq-lifecycle.sh`
 (formula Ask 691.93 USDC → signed 685.01, 1 WETH pulled JIT, replay
-rejected). Not on a testnet. Story for the 1inch judges: tier 1 is the
+rejected). On Arc testnet with a real-USDC signed fill (0.688860 vs a
+0.695819 formula Ask); not on Sepolia. Story for the 1inch judges: tier 1 is the
 public floor, tier 2 is price improvement from makers who bring their own
 models — tradfi's NBBO — and both settle through the identical Aqua pull.
 
