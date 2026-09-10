@@ -105,7 +105,7 @@ echo "Writing $ENV_FILE …"
 WC_KEY=$(grep NEXT_PUBLIC_WC_PROJECT_ID "$ENV_FILE" 2>/dev/null || true)
 UNI_KEY=$(grep NEXT_PUBLIC_UNISWAP_API_KEY "$ENV_FILE" 2>/dev/null || true)
 FORK_KEY=$(grep "^FORK_URL=" "$ENV_FILE" 2>/dev/null || true)
-AI_KEYS=$(grep -E "^(COPILOT_|ANTHROPIC_|OPENAI_|GOOGLE_|NEXT_PUBLIC_COPILOT)" "$ENV_FILE" 2>/dev/null || true)
+AI_KEYS=$(grep -E "^(COPILOT_|ANTHROPIC_|OPENAI_|GOOGLE_|OPENROUTER_|NEXT_PUBLIC_COPILOT)" "$ENV_FILE" 2>/dev/null || true)
 
 # Extract addresses from forge output
 parse() { echo "$DEPLOY_OUT" | grep "$1=" | tail -1 | cut -d= -f2 | tr -d '[:space:]'; }

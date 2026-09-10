@@ -29,15 +29,22 @@ provider key to actually answer — set one of these in `frontend/.env.local`
 
 ```
 NEXT_PUBLIC_COPILOT=1
-COPILOT_PROVIDER=anthropic   # or openai / google
+COPILOT_PROVIDER=anthropic   # or openai / google / openrouter
 # the provider's own API key env var, e.g. ANTHROPIC_API_KEY=...
-COPILOT_MODEL=               # optional override; defaults to claude-opus-4-8 / gpt-5-mini / gemini-2.5-pro
+COPILOT_MODEL=               # optional override; defaults to claude-opus-4-8 / gpt-5-mini / gemini-2.5-pro / openrouter/auto
 ```
 
+`openrouter` is a fourth option: one key, hundreds of models across every
+major provider, OpenAI-API-compatible so it reuses the same client under the
+hood (`frontend/lib/copilot/provider.ts`) pointed at
+`https://openrouter.ai/api/v1`. Its default model is `openrouter/auto`,
+which lets OpenRouter itself pick a model per-prompt — set `COPILOT_MODEL`
+to pin a specific one instead (e.g. `anthropic/claude-3.5-sonnet`).
+
 **Bring-your-own-key** is also supported without touching `.env.local`: the
-panel's settings gear lets a visitor paste their own Anthropic/OpenAI/Google
-key, stored only in that browser's `localStorage` and sent per-request via
-headers — never persisted server-side.
+panel's settings gear lets a visitor paste their own Anthropic/OpenAI/Google/
+OpenRouter key, stored only in that browser's `localStorage` and sent
+per-request via headers — never persisted server-side.
 
 ## What it can actually do
 

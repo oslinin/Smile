@@ -7,7 +7,7 @@
 import { useState } from "react";
 
 export interface ByokSettings {
-  provider: "anthropic" | "openai" | "google";
+  provider: "anthropic" | "openai" | "google" | "openrouter";
   apiKey: string;
   model?: string;
 }
@@ -30,6 +30,7 @@ const PROVIDERS = [
   { key: "anthropic", label: "Claude (Anthropic)", keyHint: "sk-ant-…, from console.anthropic.com" },
   { key: "openai", label: "GPT (OpenAI)", keyHint: "sk-…, from platform.openai.com" },
   { key: "google", label: "Gemini (Google)", keyHint: "from aistudio.google.com" },
+  { key: "openrouter", label: "OpenRouter (many models)", keyHint: "sk-or-…, from openrouter.ai/keys" },
 ] as const;
 
 export function CopilotSettings({

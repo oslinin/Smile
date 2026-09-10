@@ -11,7 +11,7 @@ import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google, createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
-export type CopilotProvider = "anthropic" | "openai" | "google";
+export type CopilotProvider = "anthropic" | "openai" | "google" | "openrouter";
 
 export interface ProviderOverride {
   provider: CopilotProvider;
@@ -23,28 +23,38 @@ const DEFAULT_MODELS: Record<CopilotProvider, string> = {
   anthropic: "claude-opus-4-8",
   openai: "gpt-5-mini",
   google: "gemini-2.5-pro",
+  // "auto" lets OpenRouter itself pick a model per-prompt — a sane default
+  // for a provider whose whole pitch is "hundreds of models, one key".
+  openrouter: "openrouter/auto",
 };
 
 const KEY_VARS: Record<CopilotProvider, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   google: "GOOGLE_GENERATIVE_AI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
 };
+
+const PROVIDERS: CopilotProvider[] = ["anthropic", "openai", "google", "openrouter"];
 
 export function parseProvider(p: string | null | undefined): CopilotProvider | null {
   const v = (p ?? "").toLowerCase();
-  return v === "anthropic" || v === "openai" || v === "google" ? v : null;
+  return (PROVIDERS as string[]).includes(v) ? (v as CopilotProvider) : null;
 }
 
 function serverProvider(): CopilotProvider {
   const p = parseProvider(process.env.COPILOT_PROVIDER ?? "anthropic");
   if (!p) {
     throw new Error(
-      `Unknown COPILOT_PROVIDER "${process.env.COPILOT_PROVIDER}" — use anthropic | openai | google`
+      `Unknown COPILOT_PROVIDER "${process.env.COPILOT_PROVIDER}" — use ${PROVIDERS.join(" | ")}`
     );
   }
   return p;
 }
+
+// OpenRouter is OpenAI-API-compatible — same createOpenAI client, pointed at
+// its base URL instead of api.openai.com.
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export function isCopilotConfigured(override?: ProviderOverride | null): boolean {
   if (override?.apiKey) return true;
@@ -65,6 +75,8 @@ export function getModel(override?: ProviderOverride | null): LanguageModel {
         return createOpenAI({ apiKey: override.apiKey })(modelId);
       case "google":
         return createGoogleGenerativeAI({ apiKey: override.apiKey })(modelId);
+      case "openrouter":
+        return createOpenAI({ apiKey: override.apiKey, baseURL: OPENROUTER_BASE_URL })(modelId);
     }
   }
   const provider = serverProvider();
@@ -76,5 +88,10 @@ export function getModel(override?: ProviderOverride | null): LanguageModel {
       return openai(modelId);
     case "google":
       return google(modelId);
+    case "openrouter":
+      return createOpenAI({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: OPENROUTER_BASE_URL,
+      })(modelId);
   }
 }

@@ -108,6 +108,7 @@
         <button class="nav-link" data-page="solutions">Solutions</button>
         <button class="nav-link" data-page="copilot">AI Copilot</button>
         <button class="nav-link" data-page="reference">Reference Table</button>
+        <button class="nav-link" data-page="continuation-track">Continuation Track</button>
     </nav>
     <div class="content">
       <section id="page-overview" class="page" data-mermaid="true">
@@ -618,6 +619,43 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <blockquote>
 <p><strong>Design note.</strong> Because both paths resolve to the on-chain Chainlink feed, the DON&#39;s role is a <em>scheduled, trust-minimized keeper</em> (deterministic read + signed write) rather than novel off-chain data sourcing.</p>
 </blockquote>
+<h3>6. Quoting Oracle — Chainlink Data Feeds, with an Optional Pyth Pull-Oracle</h3>
+<p>Settlement (§5 above) always resolves through Chainlink&#39;s on-chain round
+history — that&#39;s what makes permissionless expiry-bracketing verifiable, and
+it never changes. <strong>Quoting</strong> (pricing a live <code>buy()</code>/<code>close()</code>) is a
+separate concern and reads whatever <code>IPriceOracle</code> the vault was deployed
+with:</p>
+<ul>
+<li><strong>Default — Chainlink Data Feeds.</strong> <code>OptionPremiumInstruction</code> and the
+vault&#39;s put-pricing path call <code>latestRoundData()</code> directly, gated by a
+<code>maxStalenessSec</code> freshness check. This is a <strong>push</strong> oracle: the price is
+only as fresh as Chainlink&#39;s last heartbeat/deviation-triggered update,
+which is the root cause of the oracle-latency gap documented as
+<a href="docs/limitations.md">L1/L2 in docs/limitations.md</a> (stale-quote sniping,
+and an &quot;invisible window&quot; of sub-threshold drift with no on-chain signal
+at all).</li>
+<li><strong>Optional — <code>PythSpotAdapter</code> pull-oracle.</strong> <a href="https://pyth.network">Pyth</a>
+is a first-party oracle: 100+ trading firms and exchanges submit price +
+confidence directly, aggregated into an update roughly every 400ms. It&#39;s a
+<strong>pull</strong> oracle — the taker fetches a signed update off-chain and posts it
+in their own transaction (<code>PythSpotAdapter.refresh()</code>), so the very next
+read in that transaction prices against a near-live spot instead of
+Chainlink&#39;s last published round. <code>PythSpotAdapter.sol</code> wraps this behind
+the same <code>latestRoundData()</code> shape the pricing path already expects (round
+ids are meaningless for a pull oracle and returned as zero;
+<code>updatedAt</code> maps to Pyth&#39;s <code>publishTime</code>), so swapping it in requires no
+changes to <code>OptionPremiumInstruction</code> or the vault. Scope is <strong>quoting
+only</strong> — settlement is untouched and still reads Chainlink rounds. See
+<a href="docs/solutions.md">R5 in docs/solutions.md</a> for the full design rationale
+and <a href="docs/limitations.md">docs/limitations.md</a> for what it does and
+doesn&#39;t fix.</li>
+</ul>
+<p>To enable it at deploy time, set <code>PYTH</code> (the Pyth contract address on your
+target chain) and <code>PYTH_PRICE_ID</code> (the feed id, e.g. ETH/USD) in <code>.env</code> —
+<code>script/Deploy.s.sol</code> then deploys <code>PythSpotAdapter</code> and wires it in as the
+quoting oracle in place of the raw Chainlink feed. Leave both unset to use
+Chainlink Data Feeds for quoting (the default, and what the Sepolia
+addresses above run).</p>
 <hr>
 <h2>🔄 Flow Diagrams</h2>
 <blockquote>
@@ -1989,14 +2027,20 @@ with the flag on, the backend (<code>app/api/copilot/route.ts</code>) needs an L
 provider key to actually answer — set one of these in <code>frontend/.env.local</code>
 (<code>local.sh</code> preserves them across restarts):</p>
 <pre><code>NEXT_PUBLIC_COPILOT=1
-COPILOT_PROVIDER=anthropic   # or openai / google
+COPILOT_PROVIDER=anthropic   # or openai / google / openrouter
 # the provider&#39;s own API key env var, e.g. ANTHROPIC_API_KEY=...
-COPILOT_MODEL=               # optional override; defaults to claude-opus-4-8 / gpt-5-mini / gemini-2.5-pro
+COPILOT_MODEL=               # optional override; defaults to claude-opus-4-8 / gpt-5-mini / gemini-2.5-pro / openrouter/auto
 </code></pre>
+<p><code>openrouter</code> is a fourth option: one key, hundreds of models across every
+major provider, OpenAI-API-compatible so it reuses the same client under the
+hood (<code>frontend/lib/copilot/provider.ts</code>) pointed at
+<code>https://openrouter.ai/api/v1</code>. Its default model is <code>openrouter/auto</code>,
+which lets OpenRouter itself pick a model per-prompt — set <code>COPILOT_MODEL</code>
+to pin a specific one instead (e.g. <code>anthropic/claude-3.5-sonnet</code>).</p>
 <p><strong>Bring-your-own-key</strong> is also supported without touching <code>.env.local</code>: the
-panel&#39;s settings gear lets a visitor paste their own Anthropic/OpenAI/Google
-key, stored only in that browser&#39;s <code>localStorage</code> and sent per-request via
-headers — never persisted server-side.</p>
+panel&#39;s settings gear lets a visitor paste their own Anthropic/OpenAI/Google/
+OpenRouter key, stored only in that browser&#39;s <code>localStorage</code> and sent
+per-request via headers — never persisted server-side.</p>
 <h2>What it can actually do</h2>
 <p>The Copilot is tool-calling, not free-floating chat — every substantive
 answer comes from one of these (<code>frontend/lib/copilot/tools.ts</code>):</p>
@@ -2062,6 +2106,9 @@ scan.</p>
     <section id="page-reference" class="page page-reference">
       <iframe src="/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
     </section>
+    <section id="page-continuation-track" class="page page-reference">
+      <iframe src="/continuation-track-reference.html" title="Smile Continuation Track reference" loading="lazy"></iframe>
+    </section>
     </div>
   </div>
   <script>
@@ -2069,7 +2116,7 @@ scan.</p>
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ["overview","limitations","solutions","copilot","reference"];
+    var VALID_PAGES = ["overview","limitations","solutions","copilot","reference","continuation-track"];
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 
