@@ -1,0 +1,146 @@
+# Smile — EthOnline 2026 submission notes
+
+Continuation-track entry. Repo: https://github.com/oslinin/Smile, branch
+`EthOnline2026_continuation_track`. Everything on `main` at `5b4cc63` predates
+the event (September 5, 2026); everything after is event work — 30 commits,
+~12,400 lines, one task per commit so the history reads as the build log.
+
+The protocol itself — on-chain ETH options where LP collateral stays in the
+LP's wallet until a buyer matches, pulled just-in-time through 1inch Aqua,
+priced by a custom SwapVM opcode with a Uniswap v4 hook feeding the vol
+surface — is described in the [README](../README.md). This page is the
+per-bounty pitch and the audit trail a judge can follow.
+
+## What was already there, what the event added
+
+| Pre-existing (`main` @ `5b4cc63`) | Built at EthOnline 2026 |
+|---|---|
+| `AquaCollateralVault` (single-leg calls and puts, JIT pull through Aqua) | `SpreadVault` — a second AquaApp for defined-risk spreads, escrowing the true max loss |
+| `SmileSwapVMRouter` + `OptionPremiumInstruction` (opcode 33), `OptionPricingHook` | `SmilePremiumLib` — the vault's premium math as a library with an `isCall` flag |
+| `AquaOptionSettlement` (Chainlink round-verified, CRE keeper) | reused unchanged by the spread vault (its own instance) |
+| Next.js app: option matrix, LP range authorization, payoff builder, LP dashboard, vol surface, AI copilot | **Spreads · Defined Risk** tab; LP dashboard + copilot read from The Graph with RPC fallback; Arc in the network picker; OpenRouter copilot provider |
+| Sepolia deployment | Arc testnet deployment on Circle's real USDC |
+| 82 Foundry tests | 151 Foundry tests |
+| — | `subgraph/` — The Graph subgraph, schema, mappings, matchstick tests |
+| Help site (README, limitations, solutions, reference table) | Continuation Track tracker page, copilot help page, code references on every reference-table row |
+
+## 1inch — Build an Aqua App: `SpreadVault`
+
+**Pitch.** Smile's core user sells spreads and condors, and the existing vault
+margins each leg as if naked: a 3000/3200 call credit spread locks 1 WETH,
+its put twin locks 3,200 USDC. `SpreadVault` is a sibling Aqua app in which
+the writer's strategy is the spread itself and the escrow pulled through
+`Aqua.pull` is the structure's true maximum loss — **0.0625 WETH instead of
+1 WETH (16×)** and **200 USDC instead of 3,200**. Collateral still stays in
+the writer's wallet until a taker fills; settlement is one price through one
+floored formula whose maximum over the settlement price is exactly the
+escrow, so the cap never binds and `holder payout + writer reclaim == escrow`
+to the wei.
+
+**Qualification checklist.**
+
+- *Official Aqua contracts* — `lib/aqua` vendored unmodified; `SpreadVault`
+  extends `AquaApp`, ships with `app = address(this)` and an abi-encoded
+  terms blob as the strategy, pulls under `nonReentrantStrategy`.
+- *On-chain execution of token transfers in the demo* —
+  `script/spread-lifecycle.sh` (Anvil) and `script/arc-smoke.sh` (Arc
+  testnet, hashes below) are real transactions, not simulations.
+- *Proper git history* — `2b060d2` scaffold → `3bf3bba` premium lib + quote
+  → `949eda0` buy pulls exactly the netted escrow → `a5c17eb` Spreads tab +
+  demo → `988b329` settle/redeem/reclaim → `8e81839` lifecycle script.
+
+**Code.** `src/periphery/SpreadVault.sol`, `SmilePremiumLib.sol`,
+`SpreadToken.sol` · `test/SpreadVault.t.sol` (11) and
+`test/SpreadSettlement.t.sol` (10, incl. a 256-run fuzz over the settlement
+price) · `frontend/components/SpreadDesk.tsx`.
+
+**Demo numbers (Anvil, `./script/spread-lifecycle.sh`, settlement at
+$3,100).** Writer pulled for 62,500,000,000,000,000 wei; holder redeemed
+32,258,064,516,129,032; writer reclaimed 30,241,935,483,870,968; sum equals
+the escrow, vault balance 0, spread-token supply 0.
+
+**Not done, on purpose.** Iron condors are strike-validated but not priced
+or fillable; the optional SwapVM opcode for the call-credit leg was not
+attempted; `MarginVault` (the plan's Part B, cross-margin with liquidation)
+was designed and deliberately not rushed.
+
+## The Graph — AI tooling / agents on live chain data: `subgraph/`
+
+**Pitch.** The LP dashboard and the AI copilot used to discover LP
+authorizations by brute-force `getLogs` + per-id RPC calls, capped at 50 —
+past that, both went blind ([L12a](limitations.md)). The subgraph indexes
+every `Authorized` / `OptionBought` event into `Authorization` and `Fill`
+entities, refreshing live fields (`filled`, `active`) with bound
+`authorizations()` calls, so the copilot answers "which ranges are active
+and how full are they" from one query.
+
+**Code.** `subgraph/` (schema, `src/vault.ts`, matchstick tests, README) ·
+`frontend/lib/subgraph.ts` · `components/LPDashboard.tsx` and
+`lib/copilot/chain.ts` read the subgraph when `NEXT_PUBLIC_SUBGRAPH_URL` is
+set and fall back to RPC otherwise. Commits `476cb30`, `b818634`.
+
+**Status, honestly.** Mappings, tests, and wiring are complete; the hosted
+Studio deployment on Sepolia is pending (needs a funded deployer + Studio
+key). A local graph-node was attempted and abandoned: no arm64 image exists
+and qemu emulation segfaults on the build machine — documented in
+`subgraph/README.md` and the compose file is marked x86-64-only.
+
+## Arc — Best DeFi Application
+
+**Pitch.** The whole stack, `SpreadVault` included, on Circle's Arc testnet
+with **Circle's real Arc USDC** (`0x3600…0000`, the ERC-20 view of the
+native asset) as premium, fee, put-collateral and gas token. A DeFi
+options venue whose quote currency *is* the chain's native dollar.
+
+**Deployment.** [`arc-testnet-deployment.md`](arc-testnet-deployment.md)
+lists every address (Aqua `0x6419…bb7d`, vault `0xE37E…C789`, SpreadVault
+`0x70E2…227e`, …). Deploy cost ~0.46 USDC. Commits `108e25d`, `7d409bc`.
+
+**On-chain transactions (2026-09-10, explorer `https://testnet.arcscan.app`).**
+
+| Step | Tx |
+|---|---|
+| `authorizeRange` calls $2,800–$3,200, real-USDC premium | `0x586eb3a4…aa6aae` |
+| `Aqua.ship` | `0xf2d8c6b5…55ab7d9` |
+| `buy` 0.01 units → `OptionToken` `0x9b12…e128` | `0x3563dc09…45989a` |
+| `SpreadVault.openStructure` 3000/3200 call credit | `0xfda949cd…dcb920` |
+| `Aqua.ship` (spread) | `0x1e6f39cd…471e98` |
+| `SpreadVault.buy` 0.01 units → `SpreadToken` `0xFAEe…ea70` | `0x73a8e488…e0996a5` |
+
+Full hashes in `arc-testnet-deployment.md`. The spread fill pulled 0.000625
+WETH where a naked leg would have locked 0.01 — the same 16× on Arc.
+
+**Gotchas that became docs.** `forge script` cannot simulate calls to Arc's
+native-asset USDC (`StackUnderflow` in revm) → `cast send` only; Arc's RPC
+blocks well-known dev keys; faucet USDC is both gas and premium balance.
+
+**Cut.** USDC/EURC FX options — no Chainlink-compatible FX feed on Arc
+testnet (only Stork's pull oracle, which would need an adapter). Arc
+mainnet launches Sept 16, so the $2,000 mainnet bonus is a follow-up.
+
+## Where to look
+
+- Status page: **Help → Continuation Track** in the app
+  (`docs/continuation-track-reference.html`), one row per task, flipped as
+  they landed.
+- Plans and scope decisions: [`plans/2026-09-10-ethonline26-bounties.md`](plans/2026-09-10-ethonline26-bounties.md)
+  → [SpreadVault/MarginVault](plans/2026-09-05-ethonline2026-continuation-track.md),
+  [The Graph](plans/2026-09-09-theGraph.md), [Arc](plans/2026-09-10-arc-bounty.md).
+- Run it: `./local.sh` then `./script/spread-lifecycle.sh`; Arc:
+  `cp .env.arc.example frontend/.env.local`, `PRIVATE_KEY=… ./script/arc-smoke.sh`.
+
+## Video storyboard (≈3 min)
+
+1. **0:00 — the problem (20 s).** README's ladder table: a credit spread
+   margined per leg locks 1 WETH for a 0.0625 WETH max loss.
+2. **0:20 — Spreads tab (60 s).** `./local.sh`; writer opens and ships a
+   3000/3200 call credit spread — point at the "netted vs naked" escrow
+   line; taker buys; MetaMask shows 0.0625 WETH leaving the writer.
+3. **1:20 — lifecycle in one command (40 s).** `./script/spread-lifecycle.sh`
+   in a terminal: expiry, oracle round, permissionless settle, redeem,
+   reclaim, "conservation ✓".
+4. **2:00 — Arc (30 s).** Switch network to Arc Testnet; show the real-USDC
+   balance and one of the tx hashes on arcscan.
+5. **2:30 — The Graph + copilot (30 s).** LP dashboard / copilot reading
+   authorizations; the `NEXT_PUBLIC_SUBGRAPH_URL` switch and the fallback.
+6. **2:55 — close.** Help → Continuation Track page scrolled top to bottom.

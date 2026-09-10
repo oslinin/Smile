@@ -891,7 +891,8 @@ the honest scope decisions behind them:
 [SpreadVault / MarginVault](docs/plans/2026-09-05-ethonline2026-continuation-track.md) ·
 [The Graph subgraph](docs/plans/2026-09-09-theGraph.md) ·
 [Arc](docs/plans/2026-09-10-arc-bounty.md). The task-by-task status page is
-**Help → Continuation Track** in the app.
+**Help → Continuation Track** in the app; the per-bounty pitch, audit trail
+and video storyboard are in [`docs/submission-ethonline2026.md`](docs/submission-ethonline2026.md).
 
 ### What the event added
 
