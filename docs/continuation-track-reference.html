@@ -339,9 +339,10 @@
           <td><span class="cat">Part A</span></td>
           <td>
             <strong>Settle, redeem, reclaim</strong> — wires the spread through to expiry: one settlement price, one floored payout formula per the netting table (credit spreads, condors), holder redemption, and the LP reclaiming whatever's left. Also the deploy-script wiring so `local.sh` and the frontend pick up the new vault's address.
-            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">SpreadVault.sol</span>, <span class="code">script/Deploy.s.sol</span>, <span class="code">local.sh</span>; test <span class="code">test/SpreadSettlement.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">SpreadVault.netPayout / redeem / reclaim</span> <span class="code">test/SpreadSettlement.t.sol</span> (deploy wiring landed with A3's UI commit)</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>one settlement price, one floored payout expression per structure — call credit <span class="code">units·(clamp(S,K1,K2)−K1)/S</span> WETH, put credit <span class="code">units·(K2−clamp(S,K1,K2))/1e30</span> USDC — whose maximum over S is exactly the escrow, so the cap never binds. 10 tests: pin at K2 pays the holder exactly the escrow with zero shortfall; <span class="code">holder payout + writer reclaim == escrow</span> to the wei in both orders; a 256-run fuzz across OTM / between / far-ITM matches the formula; OTM burns for zero and the writer reclaims everything; the put-credit twin pays the full 200 USDC below K1. Settlement reuses <span class="code">AquaOptionSettlement</span> unchanged (the spread's own instance, registrar = SpreadVault).</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 6</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('A3')">A3</span><span class="ref-link" onclick="scrollTo('M2')">M2</span></span></td>
         </tr>

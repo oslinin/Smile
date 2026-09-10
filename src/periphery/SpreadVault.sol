@@ -34,8 +34,9 @@ interface IBetaSource {
 /// surface the main vault uses (SmilePremiumLib is that math lifted into a
 /// library), so a spread is purely a collateral-accounting layer.
 ///
-/// Scope so far: A1 scaffold, A2 quote, A3 buy (call credit + put credit;
-/// iron condor is strike-validated but not priced or fillable yet).
+/// Scope so far: A1 scaffold, A2 quote, A3 buy, A4 settle/redeem/reclaim
+/// (call credit + put credit; iron condor is strike-validated but not
+/// priced, fillable, or settleable yet).
 contract SpreadVault is AquaApp, Ownable {
     using SafeERC20 for IERC20;
 
@@ -326,6 +327,90 @@ contract SpreadVault is AquaApp, Ownable {
     /// array members, so the frontend and any indexer read them here.
     function strikesOf(uint256 authId) external view returns (uint256[4] memory) {
         return structures[authId].strikes;
+    }
+
+    // ── Settlement, redeem, reclaim (A4) ────────────────────────────────────
+
+    /// @dev Same ABIs as AquaCollateralVault's, so one decoder covers both vaults.
+    event Redeemed(address indexed optionToken, address indexed holder, uint256 amount, uint256 payout);
+    event CollateralReleased(address indexed optionToken, address indexed lp, uint256 amount);
+
+    error NotSettled();
+    error NothingToReclaim();
+    error SettlementNotSet();
+
+    /// @notice The structure's net payout to a holder of `units` at settlement
+    /// price `settlementPrice`, in the structure's collateral token — the S12
+    /// table's single floored expression per structure, so both legs settle
+    /// at ONE price through ONE formula (no per-leg rounding drift):
+    ///   call credit (short K1, long K2): units · (clamp(S, K1, K2) − K1) / S    WETH
+    ///   put credit  (short K2, long K1): units · (K2 − clamp(S, K1, K2)) / 1e30  USDC
+    /// Its maximum over S is exactly the escrow {quote} charges, so escrow
+    /// always covers it — solvency is the same fully-collateralized property
+    /// as the main vault, just at the structure's true worst case.
+    function netPayout(uint256 authId, uint256 settlementPrice, uint256 units) public view returns (uint256) {
+        Structure storage s = structures[authId];
+        if (s.kind == Kind.CallCredit) {
+            uint256 k1 = s.strikes[2];
+            uint256 k2 = s.strikes[3];
+            uint256 c = settlementPrice < k1 ? k1 : settlementPrice > k2 ? k2 : settlementPrice;
+            return settlementPrice == 0 ? 0 : (units * (c - k1)) / settlementPrice;
+        }
+        if (s.kind == Kind.PutCredit) {
+            uint256 k1 = s.strikes[0];
+            uint256 k2 = s.strikes[1];
+            uint256 c = settlementPrice < k1 ? k1 : settlementPrice > k2 ? k2 : settlementPrice;
+            return (units * (k2 - c)) / 1e30;
+        }
+        revert UnsupportedKind();
+    }
+
+    /// @notice Holder burns `units` of the structure's SpreadToken after
+    /// settlement and receives the net intrinsic from the writer's escrow.
+    /// OTM redeems burn for zero — the escrow belongs to the writer.
+    function redeem(uint256 authId, uint256 units) external returns (uint256 payout) {
+        require(units > 0, ZeroAmount());
+        address token = spreadTokens[authId];
+        require(token != address(0), UnknownStructure());
+        (bool settled, uint256 price) = _settlementOf(authId);
+        require(settled, NotSettled());
+
+        SpreadToken(token).burn(msg.sender, units);
+
+        payout = netPayout(authId, price, units);
+        Position storage pos = positions[token][structures[authId].lp];
+        if (payout > pos.escrow) payout = pos.escrow;
+        if (payout > 0) {
+            pos.escrow -= payout;
+            IERC20(pos.collateralToken).safeTransfer(msg.sender, payout);
+        }
+        emit Redeemed(token, msg.sender, units, payout);
+    }
+
+    /// @notice Writer takes back everything not owed to outstanding holders
+    /// after settlement: escrow minus the net payout on the whole remaining
+    /// supply (OTM → all of it; ITM → the non-intrinsic remainder).
+    function reclaim(uint256 authId) external returns (uint256 amount) {
+        Structure storage s = structures[authId];
+        require(msg.sender == s.lp, NotLp());
+        address token = spreadTokens[authId];
+        require(token != address(0), UnknownStructure());
+        (bool settled, uint256 price) = _settlementOf(authId);
+        require(settled, NotSettled());
+
+        uint256 owed = netPayout(authId, price, IERC20(token).totalSupply());
+        Position storage pos = positions[token][s.lp];
+        require(pos.escrow > owed, NothingToReclaim());
+
+        amount = pos.escrow - owed;
+        pos.escrow = owed;
+        IERC20(pos.collateralToken).safeTransfer(s.lp, amount);
+        emit CollateralReleased(token, s.lp, amount);
+    }
+
+    function _settlementOf(uint256 authId) internal view returns (bool settled, uint256 settlementPrice) {
+        require(settlement != address(0), SettlementNotSet());
+        (,,,, settled, settlementPrice) = AquaOptionSettlement(settlement).series(seriesId(authId));
     }
 
     // ── Official Aqua strategy plumbing ──────────────────────────────────────
