@@ -130,34 +130,61 @@ Commits `6e3a913`, then the wiring commit.
 1 WETH left the LP wallet at the fill; the second fill of the same nonce
 reverted `QuoteUsed`.
 
-## The Graph — AI tooling / agents on live chain data: `subgraph/`
+## The Graph — AI tooling / agents on live chain data (Continuity)
 
-**Pitch.** The LP dashboard and the AI copilot used to discover LP
-authorizations by brute-force `getLogs` + per-id RPC calls, capped at 50 —
-past that, both went blind ([L12a](limitations.md)). The subgraph indexes
-every `Authorized` / `OptionBought` event into `Authorization` and `Fill`
-entities, refreshing live fields (`filled`, `active`) with bound
-`authorizations()` calls, so the copilot answers "which ranges are active
-and how full are they" from one query.
+**Pitch.** An on-chain options venue has no public tape. Smile's subgraph
+is that tape — every range, instrument, fill and position — and the AI
+copilot is a trading agent that lives on it. On Sepolia and Arc the app
+and the copilot read **only** The Graph: the capped brute-force scan that
+used to blind them past 50 ranges ([L12a](limitations.md)) is gone, and no
+RPC path exists on a public network. The copilot screens every live
+strike against the listed reference market (Deribit) and against the last
+fill, maps where liquidity is scarce or empty, reads the wallet's whole
+book (long side and written side) into greeks, sizes a hedge, and prepares
+the range to write or the RFQ quote to sign — the user signs in the
+wallet; the agent never holds a key. The tooling half of the track is
+covered too: the copilot's know-how ships as eight `SKILL.md` files with a
+Skills menu (user-added skills included), it connects to MCP servers with
+a preset for The Graph's Subgraph MCP, and `subgraph/SKILL.md` +
+`.mcp.json.example` let any AI environment query the subgraph.
 
-**Code.** `subgraph/` (schema, `src/vault.ts`, matchstick tests, README) ·
-`frontend/lib/subgraph.ts` · `components/LPDashboard.tsx` and
-`lib/copilot/chain.ts` read the subgraph when `NEXT_PUBLIC_SUBGRAPH_URL` is
-set and fall back to RPC otherwise. Commits `476cb30`, `b818634`.
+**Code.** `subgraph/` (schema with `Authorization`, `Fill`, `Instrument`,
+`Position`; `src/vault.ts`; matchstick tests; `SKILL.md`; README) ·
+`frontend/lib/tape.ts`, `lib/subgraph.ts`, `app/api/subgraph/route.ts` ·
+`lib/copilot/graphTools.ts`, `deribit.ts`, `macro.ts`, `mcp.ts`,
+`skills.ts`, `frontend/skills/*.md` · `components/copilot/SkillsMenu.tsx`,
+`PrepareCard.tsx`, `CopilotSettings.tsx` · `components/PriceChart.tsx`
+(premium + IV per instrument) · `script/SeedTape.s.sol`, `seed-tape.sh`
+(the 100-trade Anvil tape) · [docs/copilot.md](copilot.md). Plan:
+[`plans/2026-09-09-theGraph.md`](plans/2026-09-09-theGraph.md), Phase 2.
 
-**Live.** `smile-sepolia` on Graph Studio —
-https://thegraph.com/studio/subgraph/smile-sepolia, query endpoint
-`https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2` —
-indexing the EthOnline 2026 Sepolia deployment of the full stack
-([`sepolia-deployment.md`](sepolia-deployment.md): real Circle USDC,
-canonical WETH, Chainlink ETH/USD). Authorization #0 (calls $2,300–$2,800,
-tx `0x98e4e922…`) was queryable within a minute of `Aqua.ship`
-(`0x878d8bb5…`); the `Fill` for a real 0.01-unit $2,500 call
-(`0x505285ff…`, 0.01 WETH pulled JIT from the LP wallet, premium 5.636405
-USDC) appeared one block after the buy with `usedCollateral` refreshed
-through the bound `authorizations()` call; `hasIndexingErrors: false`. A local graph-node was
-attempted and abandoned: no arm64 image exists and qemu emulation
-segfaults on the build machine — documented in `subgraph/README.md`.
+**Live.** `smile-sepolia` v0.0.4 —
+https://thegraph.com/studio/subgraph/smile-sepolia, query
+`https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.4` — and
+`smile-arc-testnet` v0.0.1 —
+https://thegraph.com/studio/subgraph/smile-arc-testnet, query
+`https://api.studio.thegraph.com/query/44448/smile-arc-testnet/v0.0.1`.
+Both return the Sepolia / Arc deployments' real fills as `Instrument`
+rows (open interest, last premium per unit) and `Position` rows,
+`hasIndexingErrors: false`. The app carries both endpoints per chain
+(`lib/deployments.ts`); a gateway URL with an API key goes in
+`SUBGRAPH_URL` server-side and is proxied so the key never reaches a
+browser.
+
+**Judge it in three prompts** (copilot, Sepolia or `./local.sh` with the
+seeded tape): *"what's cheap right now?"* → `find_opportunities`, source
+cited, Deribit reference, a trade card; *"where is liquidity thin?"* →
+`liquidity_map` and a **Write a Range** card that prefills the form;
+*"hedge my book"* → `portfolio_greeks` + `hedge_suggestion`. Then
+**Skills** in the panel header, and the gear → MCP servers → *Add The
+Graph Subgraph MCP*.
+
+**Honest limits.** ERC-20 transfers of option tokens are not indexed (a
+transferred position shows on the original buyer until closed/redeemed;
+needs a data-source template per `OptionToken`). The macro calendar is a
+static 2026 table. Local Anvil has no graph-node (arm64), so the app
+rebuilds the same entities from events there, gated on chain id — that
+path does not exist on public networks.
 
 ## Arc — Best DeFi Application
 

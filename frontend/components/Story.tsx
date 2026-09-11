@@ -127,7 +127,7 @@ export function Story({ spot, onGo }: { spot: number; onGo: (tab: TabId) => void
             <div className="text-gray-500 text-[11px] uppercase tracking-wider">You are on</div>
             <div className="text-white font-semibold text-lg">{mounted ? chainName : "…"}</div>
             <div className="text-gray-400 text-xs mt-1">{dep ? dep.realMoney : "mock USDC / WETH, settable oracle — the full lifecycle runs here in minutes"}</div>
-            {dep?.subgraph && <div className="text-green-400 text-xs mt-2">● indexed by The Graph (Studio)</div>}
+            {dep?.subgraph && <div className="text-green-400 text-xs mt-2">● indexed by The Graph — no range cap, the copilot trades off it</div>}
             {!isConnected && mounted && <div className="text-gray-500 text-xs mt-2">connect a wallet to trade; reading works without one</div>}
           </div>
         </div>

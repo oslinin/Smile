@@ -127,8 +127,23 @@ playground — run
 ```
 
 > **"Deployed on Sepolia with Circle USDC and the Chainlink feed; The
-> Graph indexed the fill one block after the buy — the LP dashboard and
-> the copilot read from it."**
+> Graph indexed the fill one block after the buy — on Sepolia and Arc the
+> app and the copilot read only from it."**
+
+Then the copilot, on the tape (Sepolia or Anvil with the seeded 100
+trades): open it, click **Skills** (show the list and the "add a skill"
+box for two seconds), then type **"what's cheap right now?"** — it calls
+`find_opportunities`, cites *The Graph* as the source and Deribit as the
+reference, and proposes a trade card. Follow with **"where is liquidity
+thin?"** → the liquidity map and a **Write a Range** card; click its
+button: the Earn form opens prefilled. Last, **"hedge my book"** →
+`portfolio_greeks` then `hedge_suggestion`. On the Trade tab point at the
+price chart: the premium and IV lines of the most-traded instrument under
+the ETH candles.
+
+> **"The subgraph is Smile's tape. The copilot screens every strike
+> against Deribit, maps liquidity, reads the whole book, and prepares the
+> range or the quote — I sign. No cap, no RPC scan."**
 
 Switch MetaMask to **Arc Testnet**; Overview flips to the Arc receipts;
 click the MarginVault fill → arcscan.

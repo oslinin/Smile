@@ -259,27 +259,35 @@ slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 [solutions.md](./solutions.md) (S1–S4).
 
-### L12a. No indexer — "my authorizations" is a linear on-chain scan
+### L12a. No indexer — lifted by the subgraph (EthOnline 2026)
 
-There is no subgraph or indexing service. `LPDashboard` finds "the connected
-wallet's own active authorization" (`components/LPDashboard.tsx`) by calling
-`eth_getLogs` for `RangeAuthorized` filtered on the indexed `lp` topic, then
-reading `authorizations(authId)` for each match, newest-first, until it finds
-one still `active`. This is correct — unlike the earlier version, which
-displayed whichever authorization was *globally* most recent (any LP), so one
-LP's `authorizeRange` could silently evict a different LP's still-active range
-from the dashboard's — and buyer-facing option chain's — single-slot state —
-but it does not scale: cost grows linearly with how many ranges that address
-has ever authorized, and `getLogs` against `fromBlock: 0` gets slow or
-rate-limited on a real RPC provider once history is long. It also still only
-surfaces **one** authorization: if the same LP has multiple simultaneously
-active ranges (this can happen — nothing stops an LP from authorizing a
-second range before closing the first), only the most-recently-created one is
-shown or tradable; the older one stays fully active and fillable on-chain, it
-is just invisible in the UI. A real fix (subgraph, or a small indexing
-service backed by the same `RangeAuthorized`/`AuthorizationRevoked` events)
-would return the LP's complete active-range list in one query and let the UI
-show — and let buyers trade against — all of them, not just the latest.
+**Was:** there was no subgraph or indexing service. `LPDashboard` found the
+connected wallet's active range by scanning `RangeAuthorized` logs from
+block 0 and reading each match; the copilot's `readAuths` looped every
+`authId` up to a hard `MAX_AUTHS = 50` — past 50 ranges ever created it
+went blind, including to its own wallet's position — and then walked a
+40-strike grid per range with N+1 RPC calls to find option balances.
+Cost grew with history, only one range per LP was ever shown, and a
+public RPC rate-limited the whole thing.
+
+**Now:** `subgraph/` indexes the vault into `Authorization`, `Fill`,
+`Instrument` (open interest, last trade per strike) and `Position` (holder
+balance) entities, live on Graph Studio for Sepolia (`smile-sepolia`) and
+Arc (`smile-arc-testnet`). The LP dashboard, the copilot's position tools
+and its trading tools (opportunities, liquidity map, portfolio greeks) read
+that tape through `frontend/lib/tape.ts`; the price chart draws premium and
+implied vol per instrument from it. On a public network there is **no RPC
+path any more** — a missing subgraph is an error, not a capped scan. The
+50-range cap is gone.
+
+**What remains:** the local Anvil chain has no graph-node (no arm64 image),
+so `lib/tape.ts` rebuilds the same entities from the vault's events there —
+gated on chain id 31337/1337 only. ERC-20 transfers of option tokens between
+wallets are not indexed (a data-source template per `OptionToken` would do
+it — plan G6); a transferred position shows on the original buyer until it
+is closed or redeemed. The Studio endpoints are rate-limited dev endpoints;
+publishing to the network and querying through the gateway with an API key
+(`SUBGRAPH_URL`, proxied by `/api/subgraph`) is the production path.
 
 ### L13. Bad debt in the opt-in margin tier
 

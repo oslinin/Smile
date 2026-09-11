@@ -148,5 +148,44 @@ Try: *"walk me through selling a 30-day cash-secured put"*, *"what does my
 range look like right now?"*, *"build me an iron condor around spot"*
 (it loads the builder), *"what happens to my margined put if ETH drops
 20%?"*, *"explain the last liquidation"* (from the Risk Monitor), *"how do
-I sign an RFQ quote?"*. It reads the connected chain, the subgraph where
-available, and these docs.
+I sign an RFQ quote?"*. It reads the connected chain, The Graph (on Sepolia
+and Arc), Deribit for reference vol, and these docs.
+
+### Trading with the tape
+
+On Sepolia and Arc every range, fill and position is indexed by The Graph
+(`subgraph/`), and the copilot's trading tools read that tape — with no
+cap on how many ranges exist. Ask it:
+
+- *"What's cheap right now?"* — it screens every live strike, compares
+  Smile's implied vol with the nearest listed Deribit instrument and with
+  the last fill, and ranks the edge; then it prices the trade and proposes
+  it as a card you can load into the builder.
+- *"Where is liquidity thin?"* / *"where should I write a range?"* — the
+  liquidity map: every range's capacity, how full it is, open interest,
+  when it last traded, and the strikes near spot nobody quotes. The card
+  it proposes opens **Earn · Write a Range** with the band, expiry and
+  size filled in; you review and sign.
+- *"What are my greeks?"* / *"hedge my short puts with short calls"* — the
+  whole book (long positions and the ranges you wrote) as net delta, gamma,
+  theta and vega, then the exact quantity of spot or options that flattens
+  the delta.
+- *"Quote the 3,000 call for me on RFQ"* — recent fills and reference IV
+  for that instrument, a premium inside the formula ask, and a card that
+  opens the **RFQ** desk with the quote ready to sign (EIP-712, in your
+  wallet — the copilot never holds a key).
+- *"Anything on the calendar this week?"* — FOMC, CPI and listed expiries
+  with the usual vol behaviour around each.
+
+The **Skills** button in the copilot lists what it knows how to do
+(opportunities, risk management, delta hedging, margin, market making,
+RFQ quoting, macro context, calendar spreads) with a starter prompt each,
+and lets you add your own skill as a markdown note. The gear lets you add
+MCP servers, including The Graph's Subgraph MCP, so the copilot can query
+any indexed subgraph in natural language.
+
+On the local Anvil chain there is no indexer; the app rebuilds the same
+tape from the vault's events, and `./local.sh` seeds 100 trades so the
+chart and the screens have something to show. The Trade tab's price chart
+draws the traded premium and implied vol of any instrument next to the
+ETH candles.
