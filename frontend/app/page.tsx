@@ -465,6 +465,7 @@ export default function Home() {
         spot={spotPrice ?? 3420}
         chainId={chainId}
         address={address}
+        tab={activeTab}
         onProposeLegs={(legs) => {
           setProposal((p) => ({ legs, key: (p?.key ?? 0) + 1 }));
           setActiveTab("chain");

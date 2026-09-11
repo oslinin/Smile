@@ -24,6 +24,7 @@ import {
 } from "@/lib/copilot/provider";
 import { buildSystemPrompt, type CopilotContext } from "@/lib/copilot/systemPrompt";
 import { buildTools } from "@/lib/copilot/tools";
+import { isTabId } from "@/lib/copilot/tabs";
 import { mergeMcpConfigs, openMcpTools, parseMcpHeader, serverMcpConfigs } from "@/lib/copilot/mcp";
 
 export const runtime = "nodejs";
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
     spot: typeof context?.spot === "number" && context.spot > 0 ? context.spot : 3420,
     chainId: context?.chainId,
     address: context?.address,
+    tab: isTabId(context?.tab) ? context.tab : undefined,
     skills: Array.isArray(context?.skills) ? context.skills.filter((s) => typeof s === "string") : undefined,
     customSkills: Array.isArray(context?.customSkills) ? context.customSkills : undefined,
   };

@@ -18,6 +18,8 @@ import type { QuizAnswer } from "./QuizCard";
 // wrap up in text; ChatMessage renders their cards from the input.
 const DISPLAY_ONLY = new Set(["propose_trade", "prepare_lp_range", "prepare_rfq_quote"]);
 
+import { TABS, type TabId } from "@/lib/copilot/tabs";
+
 const STARTERS = [
   "Explain the volatility smile in this protocol",
   "I'm bullish on ETH — show me trade ideas",
@@ -29,11 +31,13 @@ export interface CopilotPanelProps {
   spot: number;
   chainId?: number;
   address?: string;
+  /** The tab on screen — the copilot explains and suggests for it. */
+  tab?: TabId;
   /** Load proposed legs into the Payoff Builder (page switches to the chain tab). */
   onProposeLegs?: (legs: BuilderLeg[], name: string) => void;
 }
 
-export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotPanelProps) {
+export function CopilotPanel({ spot, chainId, address, tab, onProposeLegs }: CopilotPanelProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -55,13 +59,13 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   // Latest context via refs: the transport is created once, but its body()
   // and headers() callbacks run per request (an event, not render) and must
   // see the current spot/chain/wallet and BYOK key.
-  const ctxRef = useRef({ spot, chainId, address });
+  const ctxRef = useRef({ spot, chainId, address, tab });
   const byokRef = useRef<ByokSettings | null>(null);
   const mcpRef = useRef<McpServer[]>([]);
   const skillsRef = useRef<SkillPrefs | null>(null);
   useEffect(() => {
-    ctxRef.current = { spot, chainId, address };
-  }, [spot, chainId, address]);
+    ctxRef.current = { spot, chainId, address, tab };
+  }, [spot, chainId, address, tab]);
   useEffect(() => {
     byokRef.current = byok;
     mcpRef.current = mcp;
@@ -257,7 +261,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
                   review and sign yourself. Bring your own API key via the ⚙ icon.
                 </p>
                 <div className="space-y-1.5">
-                  {STARTERS.map((s) => (
+                  {(tab ? [...TABS[tab].starters, ...STARTERS.slice(0, 1)] : STARTERS).map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}

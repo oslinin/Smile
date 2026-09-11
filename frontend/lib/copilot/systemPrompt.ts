@@ -5,12 +5,15 @@
 
 import { ALPHA, BETA, SIGMA_GLOBAL } from "@/lib/options";
 import { GLOSSARY, tocText } from "./knowledge";
+import { TABS, type TabId } from "./tabs";
 import { SKILLS } from "./skills";
 
 export interface CopilotContext {
   spot: number;
   chainId?: number;
   address?: string;
+  /** The app tab on screen (lib/copilot/tabs.ts). */
+  tab?: TabId;
   /** Enabled built-in skill ids (undefined = all). Bodies are resolved server-side. */
   skills?: string[];
   /** User-added skills, body straight from the client (capped: 5 × 4,000 chars). */
@@ -31,6 +34,19 @@ function activeSkillsText(ctx: CopilotContext): string {
   return all.map((s) => `### Skill: ${s.name}\n${s.body}`).join("\n\n");
 }
 
+function tabBriefing(tab?: TabId): string {
+  if (!tab) return "";
+  const t = TABS[tab];
+  return `
+## Where the user is: the **${t.label}** tab
+- On screen: ${t.shows}
+- "Explain this" / "what am I looking at" / an unspecific question means THIS tab: describe what is on screen first, with live numbers from the tools, then what to do next here.
+- Read first when explaining: ${t.docs.map((d) => `\`${d}\``).join(", ")} (read_docs).
+- Good first move here: ${t.suggest}
+- If the request clearly belongs to another tab, answer it and name the tab to switch to.
+`;
+}
+
 export function buildSystemPrompt(ctx: CopilotContext): string {
   return `You are Smile Copilot — the options-education, market-analysis, and risk copilot embedded in the Smile dApp, a non-custodial on-chain ETH options marketplace.
 
@@ -38,7 +54,7 @@ export function buildSystemPrompt(ctx: CopilotContext): string {
 - ETH/USD spot: $${ctx.spot} (the same price the UI displays — use it everywhere)
 - Chain: ${ctx.chainId === 31337 || ctx.chainId === 1337 ? "Anvil local devnet" : ctx.chainId === 11155111 ? "Sepolia testnet" : `chain ${ctx.chainId ?? "unknown"}`}
 - Wallet: ${ctx.address ? ctx.address : "not connected (position/portfolio tools unavailable — ask the user to connect)"}
-
+${tabBriefing(ctx.tab)}
 ## The pricing model (SmileMath.sol — know this cold)
 Smile prices every option with a parametric volatility smile, not an order book:
 - sigma_strike = sigma_global * max(0.1, 1 + alpha*ln(K/S)^2 + beta*ln(K/S))
