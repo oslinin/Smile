@@ -10,7 +10,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import type { BuilderLeg } from "@/lib/options";
 import { ChatMessage } from "./ChatMessage";
-import { CopilotSettings, loadByok, type ByokSettings } from "./CopilotSettings";
+import { CopilotSettings, loadByok, loadMcp, type ByokSettings, type McpServer } from "./CopilotSettings";
 import { SkillsMenu, loadSkillPrefs, type SkillPrefs } from "./SkillsMenu";
 import type { QuizAnswer } from "./QuizCard";
 
@@ -38,6 +38,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [byok, setByok] = useState<ByokSettings | null>(null);
+  const [mcp, setMcp] = useState<McpServer[]>([]);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [skillPrefs, setSkillPrefs] = useState<SkillPrefs | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -47,6 +48,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
     // client syncs after mount (same pattern as page.tsx's `setMounted`).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setByok(loadByok());
+    setMcp(loadMcp());
     setSkillPrefs(loadSkillPrefs());
   }, []);
 
@@ -55,14 +57,16 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   // see the current spot/chain/wallet and BYOK key.
   const ctxRef = useRef({ spot, chainId, address });
   const byokRef = useRef<ByokSettings | null>(null);
+  const mcpRef = useRef<McpServer[]>([]);
   const skillsRef = useRef<SkillPrefs | null>(null);
   useEffect(() => {
     ctxRef.current = { spot, chainId, address };
   }, [spot, chainId, address]);
   useEffect(() => {
     byokRef.current = byok;
+    mcpRef.current = mcp;
     skillsRef.current = skillPrefs;
-  }, [byok, skillPrefs]);
+  }, [byok, mcp, skillPrefs]);
 
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
     // eslint-disable-next-line react-hooks/refs -- body()/headers() run at request time (fetch), not during render
@@ -77,9 +81,10 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
         },
       }),
       // BYOK: the user's own key rides each request; the server uses it for
-      // this request only and never stores it.
+      // this request only and never stores it. Same for the MCP server list.
       headers: () => {
         const b = byokRef.current;
+        const m = mcpRef.current;
         return {
           ...(b?.apiKey
             ? {
@@ -88,6 +93,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
                 ...(b.model ? { "x-copilot-model": b.model } : {}),
               }
             : {}),
+          ...(m.length ? { "x-copilot-mcp": JSON.stringify(m) } : {}),
         };
       },
     }),
@@ -225,6 +231,8 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
             <CopilotSettings
               value={byok}
               onChange={setByok}
+              mcp={mcp}
+              onMcpChange={setMcp}
               onClose={() => setSettingsOpen(false)}
             />
           )}
