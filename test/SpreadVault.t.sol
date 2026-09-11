@@ -25,7 +25,7 @@ contract MockERC20 is ERC20 {
     function mint(address to, uint256 amount) external { _mint(to, amount); }
 }
 
-/// @notice SpreadVault, test-first per docs/plans/2026-09-05-ethonline2026-continuation-track.md.
+/// @notice SpreadVault, test-first per docs/plans/2026-09-05-aqua.md.
 /// A1: the shipped Aqua strategy backs exactly the true max loss, settlement
 /// wires once. A2: the shared premium library agrees with the main vault to
 /// the wei, and a spread quote is Ask(long leg) − Bid(short leg). A3: buy()

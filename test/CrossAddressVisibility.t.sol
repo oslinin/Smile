@@ -92,7 +92,7 @@ contract CrossAddressVisibilityTest is Test {
             address collateralToken,
             bool isCall,
             bool active,
-            ,,,,,,
+            ,,,,,,,
         ) = vault.authorizations(authId);
 
         assertEq(lp, lpA, "authorization attributes to lpA regardless of who reads it");

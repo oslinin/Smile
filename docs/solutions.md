@@ -286,7 +286,7 @@ never exceed 7× the backstop pool, and the pool's withdrawals are delayed,
 floored, and frozen while an expired series is unfinalized.
 
 > **Implemented (EthOnline 2026)** — B1–B8 of
-> [plans/2026-09-05-ethonline2026-continuation-track.md](./plans/2026-09-05-ethonline2026-continuation-track.md):
+> [plans/2026-09-05-aqua.md](./plans/2026-09-05-aqua.md):
 > `MarginVault.sol` (23.5 KB, under EIP-170 without a split),
 > `MarginBackstop.sol`, 54 tests across `test/Margin*.t.sol` including the
 > gap-40 solvency test and a book-balance invariant, `script/margin-lifecycle.sh`

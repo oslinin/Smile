@@ -12,7 +12,7 @@ interface IMarginVaultView {
 
 /// @notice Pre-funded USDC pool that adopts margin positions nobody buys at
 /// auction and pays holder shortfalls at settlement (S13, Part B of
-/// docs/plans/2026-09-05-ethonline2026-continuation-track.md).
+/// docs/plans/2026-09-05-aqua.md).
 ///
 /// Share-based. Withdrawals wait 24 h, may not take the pool below
 /// `max(poolRequirement, nakedNotional / BACKSTOP_MULTIPLE)` — what the

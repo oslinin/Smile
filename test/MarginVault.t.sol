@@ -21,7 +21,7 @@ contract MockERC20 is ERC20 {
 }
 
 /// @notice MarginVault, test-first per Part B of
-/// docs/plans/2026-09-05-ethonline2026-continuation-track.md.
+/// docs/plans/2026-09-05-aqua.md.
 /// B1: a range ships to Aqua under this vault's own strategy hash, wiring
 /// is one-time, and the vol buffer can only ratchet up — IM at once, MM
 /// after a day.

@@ -8,7 +8,7 @@
 //
 // Same three-step Aqua flow as the spread desk (approve → open → ship),
 // against the MarginVault. Part B of
-// docs/plans/2026-09-05-ethonline2026-continuation-track.md.
+// docs/plans/2026-09-05-aqua.md.
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";

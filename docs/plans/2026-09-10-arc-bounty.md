@@ -63,7 +63,7 @@ No plan risk here — this actually happened, not "should work":
 FX options are **a second, separate deployment of the existing stack** on
 Arc — the main vault contract is never modified, same principle as the
 Continuation Track plan's SpreadVault/MarginVault siblings
-(`docs/plans/2026-09-05-ethonline2026-continuation-track.md`). Concretely:
+(`docs/plans/2026-09-05-aqua.md`). Concretely:
 a fresh `AquaCollateralVault` instance constructed with an FX price oracle
 instead of ETH/USD, and `collateralToken`/`premiumToken` set to EURC/USDC
 per authorization instead of WETH/USDC. `AquaCollateralVault` already takes

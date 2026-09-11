@@ -895,7 +895,7 @@ what was built during EthOnline 2026 (September 5–13, 2026) on branch
 `EthOnline2026_continuation_track`, cut from `main` at `5b4cc63`. Plans and
 the honest scope decisions behind them:
 [bounty overview](docs/plans/2026-09-10-ethonline26-bounties.md) ·
-[SpreadVault / MarginVault](docs/plans/2026-09-05-ethonline2026-continuation-track.md) ·
+[SpreadVault / MarginVault](docs/plans/2026-09-05-aqua.md) ·
 [The Graph subgraph](docs/plans/2026-09-09-theGraph.md) ·
 [Arc](docs/plans/2026-09-10-arc-bounty.md). The task-by-task status page is
 **Help → Continuation Track** in the app; the per-bounty pitch, audit trail

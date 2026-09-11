@@ -42,7 +42,7 @@ for the extra $2,000, not a second deadline for anything else.
 
 ## 1inch — Build an Aqua App
 
-**Full plan:** [`2026-09-05-ethonline2026-continuation-track.md`](./2026-09-05-ethonline2026-continuation-track.md)
+**Full plan:** [`2026-09-05-aqua.md`](./2026-09-05-aqua.md)
 — two opt-in sibling vaults, Part A (SpreadVault) and Part B (MarginVault).
 Both are real product work independent of this bounty; submitting them here
 is free reuse, not extra scope. **SpreadVault alone is a complete,

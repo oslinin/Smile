@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // S13 margin keeper — the permissionless half of MarginVault (Part B of
-// docs/plans/2026-09-05-ethonline2026-continuation-track.md).
+// docs/plans/2026-09-05-aqua.md).
 //
 // Anyone can run this against any key: every call it makes is open to the
 // public and paid for by the vault (flagger slice, keeper tip). It watches

@@ -233,7 +233,7 @@ full standalone terminal built on it, not a component.
   (`docs/continuation-track-reference.html`), one row per task, flipped as
   they landed.
 - Plans and scope decisions: [`plans/2026-09-10-ethonline26-bounties.md`](plans/2026-09-10-ethonline26-bounties.md)
-  → [SpreadVault/MarginVault](plans/2026-09-05-ethonline2026-continuation-track.md),
+  → [SpreadVault/MarginVault](plans/2026-09-05-aqua.md),
   [The Graph](plans/2026-09-09-theGraph.md), [Arc](plans/2026-09-10-arc-bounty.md).
 - Run it: `./local.sh` then `./script/spread-lifecycle.sh`; Arc:
   `cp .env.arc.example frontend/.env.local`, `PRIVATE_KEY=… ./script/arc-smoke.sh`.

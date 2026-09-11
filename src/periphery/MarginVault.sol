@@ -25,7 +25,7 @@ interface IBetaSource {
 
 /// @notice Opt-in true-margin sibling vault (S13, rung 4 of the capital-
 /// efficiency ladder — design: Part B of
-/// docs/plans/2026-09-05-ethonline2026-continuation-track.md).
+/// docs/plans/2026-09-05-aqua.md).
 ///
 /// v1 scope: short PUTS, USDC only. A put writer posts initial margin — a
 /// fraction of the strike keyed off a conservative Chainlink mark — instead
