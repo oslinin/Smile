@@ -1233,9 +1233,19 @@ and video storyboard are in <a href="docs/submission-ethonline2026.md"><code>doc
 <td><strong>1inch</strong> · Build an Aqua App</td>
 </tr>
 <tr>
-<td><strong>The Graph subgraph</strong> <code>smile-sepolia</code> + copilot/dashboard readers</td>
-<td>The LP dashboard and the copilot were brute-force-scanning logs and went blind past 50 ranges (L12a); an indexer answers &quot;which ranges are live and how full&quot; in one query</td>
+<td><strong>The Graph subgraph</strong> <code>smile-sepolia</code> + <code>smile-arc-testnet</code>, the copilot&#39;s tape</td>
+<td>The LP dashboard and the copilot were brute-force-scanning logs and went blind past 50 ranges (L12a). The subgraph is now the only position source on public networks — no RPC path — and the copilot trades off it: opportunities vs Deribit, liquidity map, portfolio greeks, hedging, LP/RFQ preparation</td>
 <td><strong>The Graph</strong> · AI tooling / agents on live chain data</td>
+</tr>
+<tr>
+<td><strong>Trader skills, Skills menu, MCP servers</strong> — eight SKILL.md files, user-added skills, The Graph Subgraph MCP preset, <code>subgraph/SKILL.md</code></td>
+<td>The bounty&#39;s tooling half: the copilot&#39;s know-how is packaged as skills any AI environment can read, and it can query any indexed subgraph through The Graph&#39;s MCP</td>
+<td><strong>The Graph</strong> · AI tooling</td>
+</tr>
+<tr>
+<td><strong>Option premium + IV over time on the price chart</strong>, 100-trade Anvil tape</td>
+<td>An options venue has no public tape; the subgraph is Smile&#39;s — and a chart needs trades to draw</td>
+<td><strong>The Graph</strong> (data) · UI</td>
 </tr>
 <tr>
 <td><strong>Arc testnet deployment</strong> — every vault on Circle&#39;s native USDC, real fills</td>
@@ -1349,10 +1359,10 @@ added. Sponsors and non-sponsor infrastructure alike.</p>
 <td><code>src/periphery/RfqVault.sol</code> · <code>test/RfqVault.t.sol</code> (8) · the <strong>RFQ · Signed Quotes</strong> tab · <code>script/rfq-lifecycle.sh</code></td>
 </tr>
 <tr>
-<td><strong>The Graph subgraph</strong></td>
-<td>Indexes every LP authorization and fill. Replaces the capped brute-force scan the LP Dashboard and the AI copilot used (<code>chain.ts</code> stopped seeing anything past 50 authorizations — <a href="docs/limitations.md">L12a</a>) with one query, RPC path kept as the fallback.</td>
+<td><strong>The Graph subgraph + trading copilot</strong></td>
+<td><code>Authorization</code>, <code>Fill</code>, <code>Instrument</code> (open interest, last trade) and <code>Position</code> (holder balance) entities, live on Studio for Sepolia and Arc. On public networks the app and the copilot read <strong>only</strong> The Graph — the capped brute-force scan (<code>MAX_AUTHS = 50</code>, <a href="docs/limitations.md">L12a</a>) is gone. The copilot trades off the tape: <code>find_opportunities</code> (Smile IV vs the nearest Deribit instrument and vs the last fill), <code>liquidity_map</code> (capacity, used %, open interest, stale/scarce/empty flags, per-strike heat map), <code>portfolio_greeks</code> (long side + written side), <code>hedge_suggestion</code>, <code>reference_market</code>, <code>macro_calendar</code>, and <code>prepare_lp_range</code> / <code>prepare_rfq_quote</code> cards that prefill the forms — the user signs. Eight trader skills (SKILL.md), a Skills menu with user-added skills, MCP servers with a Subgraph MCP preset, <code>subgraph/SKILL.md</code> for AI environments. The price chart draws premium and IV per instrument from the tape; <code>./local.sh</code> seeds 100 trades.</td>
 <td>The Graph · AI tooling / agent on live chain data</td>
-<td><code>subgraph/</code> · <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Studio: <code>smile-sepolia</code></a> · <code>frontend/lib/subgraph.ts</code> · <code>components/LPDashboard.tsx</code>, <code>lib/copilot/chain.ts</code></td>
+<td><code>subgraph/</code> · <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Studio: <code>smile-sepolia</code></a>, <a href="https://thegraph.com/studio/subgraph/smile-arc-testnet"><code>smile-arc-testnet</code></a> · <code>frontend/lib/tape.ts</code>, <code>lib/subgraph.ts</code>, <code>lib/copilot/graphTools.ts</code>, <code>frontend/skills/</code>, <code>lib/copilot/mcp.ts</code> · <code>components/PriceChart.tsx</code> · <code>script/seed-tape.sh</code> · <a href="docs/copilot.md">docs/copilot.md</a></td>
 </tr>
 <tr>
 <td><strong>Arc testnet deployment</strong></td>
@@ -1648,8 +1658,44 @@ tier and the S1 firmness checks exist for that (<a href="limitations.md">limitat
 range look like right now?&quot;</em>, <em>&quot;build me an iron condor around spot&quot;</em>
 (it loads the builder), <em>&quot;what happens to my margined put if ETH drops
 20%?&quot;</em>, <em>&quot;explain the last liquidation&quot;</em> (from the Risk Monitor), <em>&quot;how do
-I sign an RFQ quote?&quot;</em>. It reads the connected chain, the subgraph where
-available, and these docs.</p>
+I sign an RFQ quote?&quot;</em>. It reads the connected chain, The Graph (on Sepolia
+and Arc), Deribit for reference vol, and these docs.</p>
+<h3>Trading with the tape</h3>
+<p>On Sepolia and Arc every range, fill and position is indexed by The Graph
+(<code>subgraph/</code>), and the copilot&#39;s trading tools read that tape — with no
+cap on how many ranges exist. Ask it:</p>
+<ul>
+<li><em>&quot;What&#39;s cheap right now?&quot;</em> — it screens every live strike, compares
+Smile&#39;s implied vol with the nearest listed Deribit instrument and with
+the last fill, and ranks the edge; then it prices the trade and proposes
+it as a card you can load into the builder.</li>
+<li><em>&quot;Where is liquidity thin?&quot;</em> / <em>&quot;where should I write a range?&quot;</em> — the
+liquidity map: every range&#39;s capacity, how full it is, open interest,
+when it last traded, and the strikes near spot nobody quotes. The card
+it proposes opens <strong>Earn · Write a Range</strong> with the band, expiry and
+size filled in; you review and sign.</li>
+<li><em>&quot;What are my greeks?&quot;</em> / <em>&quot;hedge my short puts with short calls&quot;</em> — the
+whole book (long positions and the ranges you wrote) as net delta, gamma,
+theta and vega, then the exact quantity of spot or options that flattens
+the delta.</li>
+<li><em>&quot;Quote the 3,000 call for me on RFQ&quot;</em> — recent fills and reference IV
+for that instrument, a premium inside the formula ask, and a card that
+opens the <strong>RFQ</strong> desk with the quote ready to sign (EIP-712, in your
+wallet — the copilot never holds a key).</li>
+<li><em>&quot;Anything on the calendar this week?&quot;</em> — FOMC, CPI and listed expiries
+with the usual vol behaviour around each.</li>
+</ul>
+<p>The <strong>Skills</strong> button in the copilot lists what it knows how to do
+(opportunities, risk management, delta hedging, margin, market making,
+RFQ quoting, macro context, calendar spreads) with a starter prompt each,
+and lets you add your own skill as a markdown note. The gear lets you add
+MCP servers, including The Graph&#39;s Subgraph MCP, so the copilot can query
+any indexed subgraph in natural language.</p>
+<p>On the local Anvil chain there is no indexer; the app rebuilds the same
+tape from the vault&#39;s events, and <code>./local.sh</code> seeds 100 trades so the
+chart and the screens have something to show. The Trade tab&#39;s price chart
+draws the traded premium and implied vol of any instrument next to the
+ETH candles.</p>
 </article>
     </section>
     <section id="page-limitations" class="page" data-mermaid="false">
@@ -1904,26 +1950,32 @@ is firm; an Aqua quote is indicative. Mitigations — honest depth display,
 slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 <a href="./solutions.md">solutions.md</a> (S1–S4).</p>
-<h3>L12a. No indexer — &quot;my authorizations&quot; is a linear on-chain scan</h3>
-<p>There is no subgraph or indexing service. <code>LPDashboard</code> finds &quot;the connected
-wallet&#39;s own active authorization&quot; (<code>components/LPDashboard.tsx</code>) by calling
-<code>eth_getLogs</code> for <code>RangeAuthorized</code> filtered on the indexed <code>lp</code> topic, then
-reading <code>authorizations(authId)</code> for each match, newest-first, until it finds
-one still <code>active</code>. This is correct — unlike the earlier version, which
-displayed whichever authorization was <em>globally</em> most recent (any LP), so one
-LP&#39;s <code>authorizeRange</code> could silently evict a different LP&#39;s still-active range
-from the dashboard&#39;s — and buyer-facing option chain&#39;s — single-slot state —
-but it does not scale: cost grows linearly with how many ranges that address
-has ever authorized, and <code>getLogs</code> against <code>fromBlock: 0</code> gets slow or
-rate-limited on a real RPC provider once history is long. It also still only
-surfaces <strong>one</strong> authorization: if the same LP has multiple simultaneously
-active ranges (this can happen — nothing stops an LP from authorizing a
-second range before closing the first), only the most-recently-created one is
-shown or tradable; the older one stays fully active and fillable on-chain, it
-is just invisible in the UI. A real fix (subgraph, or a small indexing
-service backed by the same <code>RangeAuthorized</code>/<code>AuthorizationRevoked</code> events)
-would return the LP&#39;s complete active-range list in one query and let the UI
-show — and let buyers trade against — all of them, not just the latest.</p>
+<h3>L12a. No indexer — lifted by the subgraph (EthOnline 2026)</h3>
+<p><strong>Was:</strong> there was no subgraph or indexing service. <code>LPDashboard</code> found the
+connected wallet&#39;s active range by scanning <code>RangeAuthorized</code> logs from
+block 0 and reading each match; the copilot&#39;s <code>readAuths</code> looped every
+<code>authId</code> up to a hard <code>MAX_AUTHS = 50</code> — past 50 ranges ever created it
+went blind, including to its own wallet&#39;s position — and then walked a
+40-strike grid per range with N+1 RPC calls to find option balances.
+Cost grew with history, only one range per LP was ever shown, and a
+public RPC rate-limited the whole thing.</p>
+<p><strong>Now:</strong> <code>subgraph/</code> indexes the vault into <code>Authorization</code>, <code>Fill</code>,
+<code>Instrument</code> (open interest, last trade per strike) and <code>Position</code> (holder
+balance) entities, live on Graph Studio for Sepolia (<code>smile-sepolia</code>) and
+Arc (<code>smile-arc-testnet</code>). The LP dashboard, the copilot&#39;s position tools
+and its trading tools (opportunities, liquidity map, portfolio greeks) read
+that tape through <code>frontend/lib/tape.ts</code>; the price chart draws premium and
+implied vol per instrument from it. On a public network there is <strong>no RPC
+path any more</strong> — a missing subgraph is an error, not a capped scan. The
+50-range cap is gone.</p>
+<p><strong>What remains:</strong> the local Anvil chain has no graph-node (no arm64 image),
+so <code>lib/tape.ts</code> rebuilds the same entities from the vault&#39;s events there —
+gated on chain id 31337/1337 only. ERC-20 transfers of option tokens between
+wallets are not indexed (a data-source template per <code>OptionToken</code> would do
+it — plan G6); a transferred position shows on the original buyer until it
+is closed or redeemed. The Studio endpoints are rate-limited dev endpoints;
+publishing to the network and querying through the gateway with an API key
+(<code>SUBGRAPH_URL</code>, proxied by <code>/api/subgraph</code>) is the production path.</p>
 <h3>L13. Bad debt in the opt-in margin tier</h3>
 <p><code>MarginVault</code> (S13) is the one place Smile&#39;s &quot;a written option always pays&quot;
 promise can break, and it is opt-in precisely because of that. What can go
@@ -2653,11 +2705,168 @@ answer comes from one of these (<code>frontend/lib/copilot/tools.ts</code>):</p>
 <td>Asks one interactive multiple-choice question, scored against a real pricing-tool answer.</td>
 </tr>
 </tbody></table>
-<p><code>get_positions</code> and <code>portfolio_risk</code> currently read on-chain state directly
-(<code>frontend/lib/copilot/chain.ts</code>) with a hard cap of 50 authorizations ever
-created (<code>MAX_AUTHS</code>) — see <code>docs/limitations.md</code> L12a and
-<code>docs/plans/2026-09-09-theGraph.md</code> for the subgraph work replacing that
-scan.</p>
+<h3>Tools over the tape — The Graph as the copilot&#39;s chain data (EthOnline 2026)</h3>
+<p>The second set reads <strong>the tape</strong>: every range, instrument, fill and
+position, from The Graph on Sepolia and Arc (<code>subgraph/</code>, Studio
+<code>smile-sepolia</code> / <code>smile-arc-testnet</code>) and, only on the local Anvil chain,
+from the vault&#39;s event log rebuilt into the same shape (<code>frontend/lib/tape.ts</code>).
+On a public network there is no RPC path: a missing subgraph is an error,
+not a capped scan. Every result carries <code>source: &quot;subgraph&quot; | &quot;anvil-logs&quot;</code>
+and the copilot is instructed to say where the numbers came from.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Does</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>find_opportunities</code></td>
+<td>Screens every live strike on every active range: Smile&#39;s ask as an implied vol vs the nearest listed <strong>Deribit</strong> instrument&#39;s IV, and vs the last fill of the same instrument; free capacity and open interest per row; ranked cheap / expensive.</td>
+<td>Graph + Deribit</td>
+</tr>
+<tr>
+<td><code>liquidity_map</code></td>
+<td>Every active range with capacity, used %, open interest, fills, days since last trade — flags <strong>scarce</strong> (≥80% used), <strong>empty</strong>, <strong>stale</strong> (&gt;3 d), <strong>expiring</strong> — plus a per-strike heat map and the strikes near spot nobody quotes. &quot;Expensive liquidity&quot; is a query.</td>
+<td>Graph</td>
+</tr>
+<tr>
+<td><code>portfolio_greeks</code></td>
+<td>The wallet&#39;s whole book: long positions (the <code>Position</code> entity, cost basis from its own fills) <strong>and</strong> the written side (open interest on its ranges), net delta/gamma/theta/vega, marks, and <code>legs</code> ready for the next two tools.</td>
+<td>Graph</td>
+</tr>
+<tr>
+<td><code>hedge_suggestion</code></td>
+<td>How much spot ETH, or how many calls/puts at a strike, brings a book to a target delta (&quot;hedge my 3 short puts with short calls&quot;); before/after greeks.</td>
+<td>math</td>
+</tr>
+<tr>
+<td><code>reference_market</code></td>
+<td>Deribit public API: ETH index, the DVOL 30-day vol index, ATM IV at the nearest listed expiry, nearest instrument to a strike/expiry with its mark IV. No key, 60 s cache.</td>
+<td>Deribit</td>
+</tr>
+<tr>
+<td><code>macro_calendar</code></td>
+<td>Upcoming FOMC / US CPI / monthly and quarterly listed expiries (a hardcoded 2026 table) with the event-vol heuristic for each, plus the general ones (event-vol crush, ETH beta, weekend theta, max-pain pinning).</td>
+<td>static</td>
+</tr>
+<tr>
+<td><code>prepare_lp_range</code></td>
+<td>A card proposing a range to write (band, expiry, size, expected premium) whose button prefills <strong>Earn · Write a Range</strong>; the user signs <code>authorizeRange</code> + <code>Aqua.ship</code>.</td>
+<td>UI</td>
+</tr>
+<tr>
+<td><code>prepare_rfq_quote</code></td>
+<td>A card proposing an RFQ quote (range, strike, size, premium inside the formula ask, ttl) whose button prefills the <strong>RFQ</strong> signer; the user signs the EIP-712 message in the wallet.</td>
+<td>UI</td>
+</tr>
+</tbody></table>
+<p>The agent prepares; the user signs. No key ever leaves the wallet, and the
+copilot cannot send a transaction.</p>
+<p><code>get_positions</code> and <code>portfolio_risk</code> read the same tape now: the
+<code>MAX_AUTHS = 50</code> cap and the per-strike <code>N+1</code> RPC scan that used to blind
+them past 50 ranges (<a href="limitations.md">L12a</a>) are gone on public networks.</p>
+<h2>Skills</h2>
+<p>The copilot&#39;s behaviour is packaged as <strong>skills</strong> — <code>frontend/skills/*.md</code>
+in the <code>SKILL.md</code> convention (frontmatter <code>name</code>, <code>description</code>,
+<code>starter</code>; the body is what the model follows). The <strong>Skills</strong> button in
+the panel header lists them with a toggle and a one-click starter prompt,
+and lets you <strong>add your own</strong> (a name and a markdown body, kept in this
+browser only) — so &quot;calendar spreads&quot;, which the strategy catalog does not
+have, is just a skill, and so is anything you want the copilot to do your
+way. Enabled skills ride each request and are appended to the system
+prompt as &quot;Active skills&quot;.</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>What it teaches the copilot</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>trading-opportunities</code></td>
+<td>screen with <code>find_opportunities</code> + <code>reference_market</code>, confirm with <code>price_strategy</code>, present with <code>propose_trade</code>; what &quot;cheap&quot; means; sanity checks</td>
+</tr>
+<tr>
+<td><code>risk-management</code></td>
+<td><code>portfolio_greeks</code> → <code>scenario_analysis</code> → limits (max loss vs balance, gamma near expiry, vega vs DVOL); when to roll</td>
+</tr>
+<tr>
+<td><code>delta-hedging</code></td>
+<td>net delta × spot, <code>hedge_suggestion</code> with spot or options, re-hedge triggers, the gamma caveat</td>
+</tr>
+<tr>
+<td><code>explain-margin</code></td>
+<td>the margin tier, the liquidation waterfall, what the Risk Monitor shows, &quot;why was I liquidated&quot;</td>
+</tr>
+<tr>
+<td><code>lp-market-making</code></td>
+<td><code>liquidity_map</code> → empty/scarce bands → size vs collateral → expected premium → <code>prepare_lp_range</code>; adverse-selection risks</td>
+</tr>
+<tr>
+<td><code>rfq-quoting</code></td>
+<td>recent fills and IV for an instrument → a quote inside the formula ask → <code>prepare_rfq_quote</code>; ttl/nonce hygiene</td>
+</tr>
+<tr>
+<td><code>macro-context</code></td>
+<td><code>macro_calendar</code> + heuristics, combined with <code>find_opportunities</code>; labelled as heuristics</td>
+</tr>
+<tr>
+<td><code>calendar-spreads</code></td>
+<td>same strike, two expiries with per-leg <code>expiryDays</code>; term structure; theta/vega reading</td>
+</tr>
+</tbody></table>
+<h2>MCP servers</h2>
+<p>The settings gear has an <strong>MCP servers</strong> list (name, URL, bearer token —
+kept in this browser, sent per request in a header the same way the BYOK
+key is). The copilot opens each server for the request and merges its
+tools with the built-ins. One preset: <strong>The Graph Subgraph MCP</strong>
+(<code>https://subgraphs.mcp.thegraph.com/sse</code>, token = a Gateway API key from
+Studio → API Keys) — with it the copilot can query any of The Graph&#39;s
+indexed subgraphs in natural language, not only Smile&#39;s own. The operator
+can seed the same list server-side with <code>COPILOT_MCP_SERVERS</code> (JSON) for a
+hosted demo.</p>
+<p>For developers working on the repo, the same server is a one-file client
+config: <code>.mcp.json.example</code> at the repo root (Claude Code / Cursor), and
+<code>subgraph/SKILL.md</code> is the agent-facing description of Smile&#39;s subgraph —
+entities, canonical queries, endpoints, units — so an AI environment can
+query <code>smile-sepolia</code> without reading the schema.</p>
+<h2>Where the data comes from</h2>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>Source</th>
+<th>Fallback</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Spot, smile parameters, per-leg pricing</td>
+<td>the same code as the UI (<code>lib/options.ts</code>) and the deployed pricing engine (<code>get_onchain_quote</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Ranges, instruments, fills, positions</td>
+<td><strong>The Graph</strong> — <code>smile-sepolia</code> on Sepolia, <code>smile-arc-testnet</code> on Arc (recorded per chain in <code>lib/deployments.ts</code>; <code>SUBGRAPH_URL</code> server-side overrides with a gateway URL carrying an API key, proxied through <code>/api/subgraph</code> so the key never reaches the browser)</td>
+<td>Anvil only: the vault&#39;s event log rebuilt into the same entities</td>
+</tr>
+<tr>
+<td>Listed reference vol</td>
+<td>Deribit public API</td>
+<td>tool reports &quot;unreachable&quot;; edge is then measured against the protocol&#39;s flat ATM vol</td>
+</tr>
+<tr>
+<td>Macro dates</td>
+<td>hardcoded 2026 table</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Anything else</td>
+<td>MCP servers you add</td>
+<td>—</td>
+</tr>
+</tbody></table>
 </article>
     </section>
     <section id="page-reference" class="page page-reference">
