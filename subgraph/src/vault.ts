@@ -5,10 +5,13 @@ import {
   AuthorizationRevoked,
   OptionBought,
   OptionClosed,
+  Redeemed,
   CollateralReleased,
   PullFailed,
 } from "../generated/AquaCollateralVault/AquaCollateralVault";
-import { Authorization, Fill } from "../generated/schema";
+import { Authorization, Fill, Series, Position } from "../generated/schema";
+
+const WAD = BigInt.fromString("1000000000000000000");
 
 // RangeAuthorized doesn't carry collateralToken or a live usedCollateral, and
 // the vault's JIT-pull accounting is not something to re-implement in
@@ -58,8 +61,24 @@ export function handleOptionBought(event: OptionBought): void {
   let auth = Authorization.load(id);
   if (auth == null) return;
 
+  let series = loadOrCreateSeries(event.params.optionToken, auth, event.params.strike);
+  series.openInterest = series.openInterest.plus(event.params.amount);
+  series.volume = series.volume.plus(event.params.amount);
+  series.fillCount = series.fillCount + 1;
+  if (event.params.amount.gt(BigInt.zero())) {
+    series.lastPremiumPerUnit = event.params.premium.times(WAD).div(event.params.amount);
+  }
+  series.lastTradeAt = event.block.timestamp;
+  series.save();
+
+  let pos = loadOrCreatePosition(event.params.optionToken, event.params.buyer, series.id);
+  pos.balance = pos.balance.plus(event.params.amount);
+  pos.updatedAt = event.block.timestamp;
+  pos.save();
+
   let fill = new Fill(event.transaction.hash.toHexString() + "-" + event.logIndex.toString());
   fill.authorization = id;
+  fill.series = series.id;
   fill.lp = auth.lp;
   fill.buyer = event.params.buyer;
   fill.optionToken = event.params.optionToken;
@@ -90,8 +109,59 @@ function refreshBySeries(optionToken: Address, vaultAddress: Address): void {
   auth.save();
 }
 
+function loadOrCreateSeries(optionToken: Address, auth: Authorization, strike: BigInt): Series {
+  let id = optionToken.toHexString();
+  let s = Series.load(id);
+  if (s != null) return s as Series;
+  s = new Series(id);
+  s.optionToken = optionToken;
+  s.authorization = auth.id;
+  s.lp = auth.lp;
+  s.strike = strike;
+  s.expiry = auth.expiry;
+  s.isCall = auth.isCall;
+  s.openInterest = BigInt.zero();
+  s.volume = BigInt.zero();
+  s.fillCount = 0;
+  s.lastPremiumPerUnit = BigInt.zero();
+  s.lastTradeAt = BigInt.zero();
+  return s as Series;
+}
+
+function loadOrCreatePosition(optionToken: Address, holder: Address, seriesId: string): Position {
+  let id = optionToken.toHexString() + "-" + holder.toHexString();
+  let p = Position.load(id);
+  if (p != null) return p as Position;
+  p = new Position(id);
+  p.holder = holder;
+  p.series = seriesId;
+  p.optionToken = optionToken;
+  p.balance = BigInt.zero();
+  p.updatedAt = BigInt.zero();
+  return p as Position;
+}
+
+// Sellback or redemption: the holder's balance and the series' open interest
+// both drop by `amount` (clamped at zero — a transfer the subgraph never saw
+// must not drive a balance negative).
+function debit(optionToken: Address, holder: Address, amount: BigInt, ts: BigInt): void {
+  let series = Series.load(optionToken.toHexString());
+  if (series == null) return;
+  series.openInterest = series.openInterest.gt(amount) ? series.openInterest.minus(amount) : BigInt.zero();
+  series.save();
+  let pos = loadOrCreatePosition(optionToken, holder, series.id);
+  pos.balance = pos.balance.gt(amount) ? pos.balance.minus(amount) : BigInt.zero();
+  pos.updatedAt = ts;
+  pos.save();
+}
+
 export function handleOptionClosed(event: OptionClosed): void {
+  debit(event.params.optionToken, event.params.holder, event.params.amount, event.block.timestamp);
   refreshBySeries(event.params.optionToken, event.address);
+}
+
+export function handleRedeemed(event: Redeemed): void {
+  debit(event.params.optionToken, event.params.holder, event.params.amount, event.block.timestamp);
 }
 
 export function handleCollateralReleased(event: CollateralReleased): void {

@@ -12,8 +12,16 @@ import {
   RangeAuthorized,
   AuthorizationRevoked,
   OptionBought,
+  OptionClosed,
+  Redeemed,
 } from "../generated/AquaCollateralVault/AquaCollateralVault";
-import { handleRangeAuthorized, handleAuthorizationRevoked, handleOptionBought } from "../src/vault";
+import {
+  handleRangeAuthorized,
+  handleAuthorizationRevoked,
+  handleOptionBought,
+  handleOptionClosed,
+  handleRedeemed,
+} from "../src/vault";
 
 const VAULT = Address.fromString("0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0");
 const LP = Address.fromString("0x1111111111111111111111111111111111111111");
@@ -90,6 +98,35 @@ function optionBought(authId: i32, amountWad: string, premium: i32): OptionBough
   return ev;
 }
 
+const SERIES_SIG = "seriesOf(address):(uint256,uint256)";
+
+function mockSeriesOf(authId: i32): void {
+  createMockedFunction(VAULT, "seriesOf", SERIES_SIG)
+    .withArgs([ethereum.Value.fromAddress(TOKEN)])
+    .returns([u(authId), ethereum.Value.fromUnsignedBigInt(BigInt.fromString("3000000000000000000000"))]);
+}
+
+function optionClosed(amountWad: string): OptionClosed {
+  let ev = changetype<OptionClosed>(newMockEvent());
+  ev.address = VAULT;
+  ev.parameters = [];
+  ev.parameters.push(new ethereum.EventParam("optionToken", ethereum.Value.fromAddress(TOKEN)));
+  ev.parameters.push(new ethereum.EventParam("holder", ethereum.Value.fromAddress(BUYER)));
+  ev.parameters.push(new ethereum.EventParam("amount", ethereum.Value.fromUnsignedBigInt(BigInt.fromString(amountWad))));
+  return ev;
+}
+
+function redeemed(amountWad: string): Redeemed {
+  let ev = changetype<Redeemed>(newMockEvent());
+  ev.address = VAULT;
+  ev.parameters = [];
+  ev.parameters.push(new ethereum.EventParam("optionToken", ethereum.Value.fromAddress(TOKEN)));
+  ev.parameters.push(new ethereum.EventParam("holder", ethereum.Value.fromAddress(BUYER)));
+  ev.parameters.push(new ethereum.EventParam("amount", ethereum.Value.fromUnsignedBigInt(BigInt.fromString(amountWad))));
+  ev.parameters.push(new ethereum.EventParam("payout", u(0)));
+  return ev;
+}
+
 describe("AquaCollateralVault mappings", () => {
   beforeEach(() => {
     clearStore();
@@ -144,5 +181,46 @@ describe("AquaCollateralVault mappings", () => {
     assert.entityCount("Authorization", 2);
     assert.fieldEquals("Authorization", "0", "active", "true");
     assert.fieldEquals("Authorization", "1", "active", "true");
+  });
+
+  test("a fill creates the Series (open interest, last premium per unit) and the buyer's Position", () => {
+    mockAuthorizations(BigInt.fromI32(0), BigInt.zero(), true);
+    handleRangeAuthorized(rangeAuthorized(0));
+    mockAuthorizations(BigInt.fromI32(0), BigInt.fromString("2000000000000000000"), true);
+    // 2 units for 1,400 USDC (6-dec) → 700 USDC per unit
+    handleOptionBought(optionBought(0, "2000000000000000000", 1_400_000_000));
+
+    let sid = TOKEN.toHexString();
+    assert.entityCount("Series", 1);
+    assert.fieldEquals("Series", sid, "openInterest", "2000000000000000000");
+    assert.fieldEquals("Series", sid, "volume", "2000000000000000000");
+    assert.fieldEquals("Series", sid, "fillCount", "1");
+    assert.fieldEquals("Series", sid, "lastPremiumPerUnit", "700000000");
+    assert.fieldEquals("Series", sid, "strike", "3000000000000000000000");
+    assert.fieldEquals("Series", sid, "lp", LP.toHexString());
+    assert.entityCount("Position", 1);
+    assert.fieldEquals("Position", sid + "-" + BUYER.toHexString(), "balance", "2000000000000000000");
+    assert.fieldEquals("Fill", "0xa16081f360e3847006db660bae1c6d1b2e17ec2a-1", "series", sid);
+  });
+
+  test("a sellback and a redemption debit the Position and the Series' open interest, clamped at zero", () => {
+    mockAuthorizations(BigInt.fromI32(0), BigInt.zero(), true);
+    handleRangeAuthorized(rangeAuthorized(0));
+    mockAuthorizations(BigInt.fromI32(0), BigInt.fromString("2000000000000000000"), true);
+    handleOptionBought(optionBought(0, "2000000000000000000", 1_400_000_000));
+    mockSeriesOf(0);
+    mockAuthorizations(BigInt.fromI32(0), BigInt.fromString("1500000000000000000"), true);
+
+    handleOptionClosed(optionClosed("500000000000000000"));
+    let sid = TOKEN.toHexString();
+    let pid = sid + "-" + BUYER.toHexString();
+    assert.fieldEquals("Series", sid, "openInterest", "1500000000000000000");
+    assert.fieldEquals("Position", pid, "balance", "1500000000000000000");
+    assert.fieldEquals("Series", sid, "volume", "2000000000000000000");
+
+    // Redeem more than the subgraph saw (a transfer it never indexed): clamp, don't go negative.
+    handleRedeemed(redeemed("9000000000000000000"));
+    assert.fieldEquals("Series", sid, "openInterest", "0");
+    assert.fieldEquals("Position", pid, "balance", "0");
   });
 });

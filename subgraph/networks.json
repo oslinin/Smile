@@ -10,5 +10,11 @@
       "address": "0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D",
       "startBlock": 11677088
     }
+  },
+  "arc-testnet": {
+    "AquaCollateralVault": {
+      "address": "0xE37ED711F7D1dc5aC045206b4A6367C55229C789",
+      "startBlock": 61227750
+    }
   }
 }
