@@ -8,7 +8,7 @@
 // use bounded Promise.all fan-outs instead.
 
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, contractsFor } from "@/config/wagmi";
 import { ALPHA, SIGMA_GLOBAL } from "@/lib/options";
 import {
   fetchActiveAuthorizations,
@@ -142,7 +142,9 @@ export async function readAuths(
   client: PublicClient,
   opts?: { lp?: string; chainId?: number }
 ): Promise<AuthSummary[]> {
-  const vault = CONTRACTS.aquaVault as Address;
+  // Server-side the module-level active chain isn't set by the page; resolve
+  // addresses from the request's chain id.
+  const vault = (opts?.chainId ? contractsFor(opts.chainId) : CONTRACTS).aquaVault as Address;
   if (!vault) return [];
   const now = Date.now() / 1000;
 
@@ -222,7 +224,7 @@ export async function readWalletPositions(
   address: string,
   chainId?: number
 ): Promise<WalletPositions> {
-  const vault = CONTRACTS.aquaVault as Address;
+  const vault = (chainId ? contractsFor(chainId) : CONTRACTS).aquaVault as Address;
   const user = address as Address;
 
   const [ethWei, auths] = await Promise.all([

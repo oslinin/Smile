@@ -8,7 +8,7 @@
 import { blackScholes } from "black-scholes";
 import { getDelta } from "greeks";
 import type { Address } from "viem";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, contractsFor } from "@/config/wagmi";
 import {
   type BuilderLeg,
   DEFAULT_DTE,
@@ -29,7 +29,8 @@ const YEAR = 31_536_000;
 const nowSec = () => Date.now() / 1000;
 
 export async function loadTape(chainId?: number, since?: number): Promise<Tape> {
-  return readTape({ chainId, client: getPublicClient(chainId), vault: CONTRACTS.aquaVault as Address, since });
+  const vault = (chainId ? contractsFor(chainId) : CONTRACTS).aquaVault as Address;
+  return readTape({ chainId, client: getPublicClient(chainId), vault, since });
 }
 
 /** Black-Scholes implied vol by bisection; null when the premium is below intrinsic. */
