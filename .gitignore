@@ -26,3 +26,6 @@ frontend/.env.local
 
 # local deployer keys
 .env.sepolia
+# Circle Wallets kit state + entity-secret recovery file (keeper/backstop-wallet.mjs)
+keeper/.circle-wallet.json
+keeper/recovery_file_*.dat
