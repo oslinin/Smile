@@ -11,7 +11,7 @@ The Graph indexes `AquaCollateralVault` events into four entities. Every copilot
 | Network | Endpoint |
 |---|---|
 | Sepolia (Studio) | `https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.4` |
-| Arc testnet | `smile-arc-testnet` — Studio deployment pending; same schema |
+| Arc testnet | `smile-arc-testnet` — `https://api.studio.thegraph.com/query/44448/smile-arc-testnet/v0.0.1` (same schema) |
 | Anvil (31337 / 1337) | **no subgraph.** The app rebuilds the same entities from `eth_getLogs` (`frontend/lib/tape.ts`, tagged `source: "anvil-logs"`); subgraph results are tagged `source: "subgraph"`. |
 
 Studio endpoints are rate-limited dev endpoints. For production use publish to the network and query the gateway with a Gateway API key (thegraph.com/studio → API Keys); the app keeps that URL server-side (`SUBGRAPH_URL`, proxied by `/api/subgraph`).
