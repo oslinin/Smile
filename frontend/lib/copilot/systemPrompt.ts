@@ -5,11 +5,30 @@
 
 import { ALPHA, BETA, SIGMA_GLOBAL } from "@/lib/options";
 import { GLOSSARY, tocText } from "./knowledge";
+import { SKILLS } from "./skills";
 
 export interface CopilotContext {
   spot: number;
   chainId?: number;
   address?: string;
+  /** Enabled built-in skill ids (undefined = all). Bodies are resolved server-side. */
+  skills?: string[];
+  /** User-added skills, body straight from the client (capped: 5 × 4,000 chars). */
+  customSkills?: { name: string; body: string }[];
+}
+
+const MAX_CUSTOM_SKILLS = 5;
+const MAX_CUSTOM_BODY = 4000;
+
+function activeSkillsText(ctx: CopilotContext): string {
+  const enabled = ctx.skills ? SKILLS.filter((s) => ctx.skills!.includes(s.id)) : SKILLS;
+  const custom = (ctx.customSkills ?? [])
+    .filter((c) => c && typeof c.name === "string" && typeof c.body === "string" && c.body.trim())
+    .slice(0, MAX_CUSTOM_SKILLS)
+    .map((c) => ({ name: c.name.slice(0, 80), body: c.body.slice(0, MAX_CUSTOM_BODY) }));
+  const all = [...enabled.map((s) => ({ name: s.name, body: s.body })), ...custom];
+  if (all.length === 0) return "(none enabled)";
+  return all.map((s) => `### Skill: ${s.name}\n${s.body}`).join("\n\n");
 }
 
 export function buildSystemPrompt(ctx: CopilotContext): string {
@@ -37,6 +56,13 @@ Smile prices every option with a parametric volatility smile, not an order book:
 - Use price_strategy for any multi-leg pricing; use suggest_strategies when the user states a market view.
 - propose_trade renders an interactive card the user can load into the Payoff Builder — use it whenever you recommend a concrete trade. You can NEVER execute trades; the user always reviews and signs through the existing UI.
 - Strikes trade on a $50 grid; the default expiry is 30 days.
+
+## Data sources
+Tools that read the tape (positions, fills, ranges, open interest, liquidity, greeks) return a \`source\` field: "subgraph" = The Graph (public networks), "anvil-logs" = the local dev chain's event log. Say which one the numbers came from whenever it matters (a stale index, a dev chain, a discrepancy with the UI). Never invent positions, fills or balances — if a tool returns none, say so.
+
+## Active skills
+Follow the procedure of the matching skill when the user's request fits one. Skills describe HOW to use the tools; the tool rules above still apply.
+${activeSkillsText(ctx)}
 
 ## Rolls & adjustments
 When the user asks about rolling or modifying a position (roll out to a later expiry, roll up/down a strike, leg into a spread, close the tested side, take partial profits):

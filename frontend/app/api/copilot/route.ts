@@ -61,6 +61,8 @@ export async function POST(req: Request) {
     spot: typeof context?.spot === "number" && context.spot > 0 ? context.spot : 3420,
     chainId: context?.chainId,
     address: context?.address,
+    skills: Array.isArray(context?.skills) ? context.skills.filter((s) => typeof s === "string") : undefined,
+    customSkills: Array.isArray(context?.customSkills) ? context.customSkills : undefined,
   };
 
   const result = streamText({

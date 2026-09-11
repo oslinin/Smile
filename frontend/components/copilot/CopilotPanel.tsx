@@ -11,7 +11,12 @@ import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } fro
 import type { BuilderLeg } from "@/lib/options";
 import { ChatMessage } from "./ChatMessage";
 import { CopilotSettings, loadByok, type ByokSettings } from "./CopilotSettings";
+import { SkillsMenu, loadSkillPrefs, type SkillPrefs } from "./SkillsMenu";
 import type { QuizAnswer } from "./QuizCard";
+
+// UI-only tools (no server execute): acknowledge at once so the model can
+// wrap up in text; ChatMessage renders their cards from the input.
+const DISPLAY_ONLY = new Set(["propose_trade", "prepare_lp_range", "prepare_rfq_quote"]);
 
 const STARTERS = [
   "Explain the volatility smile in this protocol",
@@ -33,6 +38,8 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [byok, setByok] = useState<ByokSettings | null>(null);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [skillPrefs, setSkillPrefs] = useState<SkillPrefs | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +47,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
     // client syncs after mount (same pattern as page.tsx's `setMounted`).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setByok(loadByok());
+    setSkillPrefs(loadSkillPrefs());
   }, []);
 
   // Latest context via refs: the transport is created once, but its body()
@@ -47,27 +55,39 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   // see the current spot/chain/wallet and BYOK key.
   const ctxRef = useRef({ spot, chainId, address });
   const byokRef = useRef<ByokSettings | null>(null);
+  const skillsRef = useRef<SkillPrefs | null>(null);
   useEffect(() => {
     ctxRef.current = { spot, chainId, address };
   }, [spot, chainId, address]);
   useEffect(() => {
     byokRef.current = byok;
-  }, [byok]);
+    skillsRef.current = skillPrefs;
+  }, [byok, skillPrefs]);
 
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
     // eslint-disable-next-line react-hooks/refs -- body()/headers() run at request time (fetch), not during render
     transport: new DefaultChatTransport({
       api: "/api/copilot/", // trailing slash: next.config has trailingSlash:true
-      body: () => ({ context: ctxRef.current }),
+      // skills undefined (before hydration) = server treats all built-ins as on.
+      body: () => ({
+        context: {
+          ...ctxRef.current,
+          skills: skillsRef.current?.enabled,
+          customSkills: skillsRef.current?.custom,
+        },
+      }),
       // BYOK: the user's own key rides each request; the server uses it for
       // this request only and never stores it.
       headers: () => {
         const b = byokRef.current;
-        if (!b?.apiKey) return {};
         return {
-          "x-copilot-provider": b.provider,
-          "x-copilot-api-key": b.apiKey,
-          ...(b.model ? { "x-copilot-model": b.model } : {}),
+          ...(b?.apiKey
+            ? {
+                "x-copilot-provider": b.provider,
+                "x-copilot-api-key": b.apiKey,
+                ...(b.model ? { "x-copilot-model": b.model } : {}),
+              }
+            : {}),
         };
       },
     }),
@@ -76,9 +96,9 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
       if (toolCall.dynamic) return;
       // propose_trade is display-only: acknowledge immediately so the model can
       // wrap up in text. The "Load into Builder" button is pure UI on top.
-      if (toolCall.toolName === "propose_trade") {
+      if (DISPLAY_ONLY.has(toolCall.toolName)) {
         addToolOutput({
-          tool: "propose_trade",
+          tool: toolCall.toolName as "propose_trade",
           toolCallId: toolCall.toolCallId,
           output: { displayed: true },
         });
@@ -170,7 +190,21 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
                 </span>
               )}
               <button
-                onClick={() => setSettingsOpen((o) => !o)}
+                onClick={() => {
+                  setSkillsOpen((o) => !o);
+                  setSettingsOpen(false);
+                }}
+                className={`text-[11px] font-semibold transition-colors ${skillsOpen ? "text-white" : "text-gray-500 hover:text-white"}`}
+                aria-label="Copilot skills"
+                title="Skills: built-in procedures and your own"
+              >
+                Skills
+              </button>
+              <button
+                onClick={() => {
+                  setSettingsOpen((o) => !o);
+                  setSkillsOpen(false);
+                }}
                 className={`transition-colors ${settingsOpen ? "text-white" : "text-gray-500 hover:text-white"}`}
                 aria-label="Copilot settings"
                 title="Use your own API key"
@@ -188,7 +222,21 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
           </div>
 
           {settingsOpen && (
-            <CopilotSettings value={byok} onChange={setByok} onClose={() => setSettingsOpen(false)} />
+            <CopilotSettings
+              value={byok}
+              onChange={setByok}
+              onClose={() => setSettingsOpen(false)}
+            />
+          )}
+          {skillsOpen && skillPrefs && (
+            <SkillsMenu
+              value={skillPrefs}
+              onChange={setSkillPrefs}
+              onStarter={(t) => {
+                setSkillsOpen(false);
+                send(t);
+              }}
+            />
           )}
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
