@@ -308,14 +308,21 @@ export function buildTools(ctx: CopilotContext) {
       description:
         "How much of what to add to bring a book to a target delta (default 0): spot ETH, or short/long calls or puts at a strike (e.g. 'hedge my 3 short puts with short calls'). Returns before/after greeks and the hedge leg. Pass the `legs` from portfolio_greeks or describe them.",
       inputSchema: z.object({
-        legs: legsSchema,
+        legs: z.array(legSchema).max(200).optional().describe("Omit to hedge the connected wallet's whole book (fetched from the tape)"),
         hedgeWith: z.enum(["spot", "call", "put"]),
         strike: z.number().positive().optional().describe("Strike for an option hedge; default 5% OTM on the $50 grid"),
         expiryDays: z.number().int().positive().max(365).optional(),
         targetDelta: z.number().optional().describe("Default 0 (delta-neutral)"),
       }),
-      execute: async ({ legs, hedgeWith, strike, expiryDays, targetDelta }) =>
-        hedgeSuggestion(ctx.spot, legs as BuilderLeg[], hedgeWith, strike, expiryDays, targetDelta),
+      execute: async ({ legs, hedgeWith, strike, expiryDays, targetDelta }) => {
+        let book = legs as BuilderLeg[] | undefined;
+        if (!book?.length) {
+          if (!ctx.address) return { error: "Pass legs, or connect a wallet so the book can be read from the tape." };
+          book = (await portfolioGreeks(ctx.chainId, ctx.spot, ctx.address)).legs;
+          if (!book.length) return { error: "The wallet has no open positions or written exposure on the tape." };
+        }
+        return hedgeSuggestion(ctx.spot, book, hedgeWith, strike, expiryDays, targetDelta);
+      },
     }),
 
     reference_market: tool({
