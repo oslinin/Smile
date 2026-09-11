@@ -3,7 +3,7 @@
 import { useAccount, useReadContract, useBalance, usePublicClient } from "wagmi";
 import { useState, useEffect, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
-import { subgraphEnabled, fetchAuthorizationsByLp } from "@/lib/subgraph";
+import { fetchAuthorizationsByLp, isLocalChain, subgraphUrlFor } from "@/lib/subgraph";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 
 const VAULT_ABI = [
@@ -40,13 +40,14 @@ const VAULT_ABI = [
 ] as const;
 
 export function LPDashboard() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const [mounted, setMounted] = useState(false);
   // The connected wallet's own most-recently-authorized *active* range.
-  // Read from the subgraph when NEXT_PUBLIC_SUBGRAPH_URL is set (one indexed
-  // query), otherwise via getLogs on `RangeAuthorized`'s indexed `lp` topic
-  // — the fallback for local Anvil dev with no indexer running. Distinct
+  // Read from the subgraph (one indexed query — always present on Sepolia /
+  // Arc, see lib/subgraph.ts), or on the local Anvil chain only via getLogs
+  // on `RangeAuthorized`'s indexed `lp` topic, since no graph-node runs
+  // there. Distinct
   // from app/page.tsx's `activeAuth`, which tracks the market-wide latest
   // authorization (any LP) for the buyer-facing option chain — see
   // docs/limitations.md L12a for why these can't share one piece of state.
@@ -55,9 +56,10 @@ export function LPDashboard() {
 
   const refreshMyAuth = useCallback(async () => {
     if (!publicClient || !address || !CONTRACTS.aquaVault) { setMyAuth(null); return; }
-    if (subgraphEnabled()) {
+    const url = subgraphUrlFor(chainId);
+    if (url) {
       try {
-        const live = (await fetchAuthorizationsByLp(address)).find((r) => r.active);
+        const live = (await fetchAuthorizationsByLp(address, url)).find((r) => r.active);
         setMyAuth(
           live
             ? {
@@ -73,7 +75,9 @@ export function LPDashboard() {
         );
         return;
       } catch {
-        // Indexer unreachable — fall through to the on-chain scan.
+        // Indexer unreachable — on a public network there is nothing else to
+        // read from; on Anvil fall through to the event scan.
+        if (!isLocalChain(chainId)) { setMyAuth(null); return; }
       }
     }
     const logs = await publicClient.getLogs({
@@ -107,7 +111,7 @@ export function LPDashboard() {
       }
     }
     setMyAuth(null);
-  }, [publicClient, address]);
+  }, [publicClient, address, chainId]);
 
   useEffect(() => {
     refreshMyAuth();

@@ -235,7 +235,7 @@ export function buildTools(ctx: CopilotContext) {
           return { error: "No wallet connected — ask the user to connect their wallet first." };
         }
         const client = getPublicClient(ctx.chainId);
-        return await readWalletPositions(client, ctx.address);
+        return await readWalletPositions(client, ctx.address, ctx.chainId);
       },
     }),
 
@@ -250,7 +250,7 @@ export function buildTools(ctx: CopilotContext) {
           return { error: "No wallet connected — ask the user to connect their wallet first." };
         }
         const client = getPublicClient(ctx.chainId);
-        const positions = await readWalletPositions(client, ctx.address);
+        const positions = await readWalletPositions(client, ctx.address, ctx.chainId);
         if (positions.longOptions.length === 0) {
           return {
             balances: positions.balances,

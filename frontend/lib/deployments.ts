@@ -19,7 +19,7 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
     name: "Sepolia",
     explorer: "https://sepolia.etherscan.io",
     realMoney: "Circle USDC · canonical WETH · Chainlink ETH/USD",
-    subgraph: "https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2",
+    subgraph: "https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.4",
     contracts: [
       { label: "Aqua (official registry)", address: "0x915Bc53936Ecb14A18dB8270A4a648E8dE248749" },
       { label: "AquaCollateralVault", address: "0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D" },
