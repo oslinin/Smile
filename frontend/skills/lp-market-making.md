@@ -8,7 +8,7 @@ starter: Where is liquidity missing on the book, and what range should I write?
 Goal: a range the user can write in one click, chosen where the book needs it.
 
 ## Procedure
-1. `liquidity_map` — per $50 band × call/put × expiry: capacity, used %, open interest, days since last trade. Flags: `empty` (no range covers it), `scarce` (used > 70 %), `stale` (no trade in > 7 days). Cite the `source`.
+1. `liquidity_map` — per $50 band × call/put × expiry: capacity, used %, open interest, days since last trade. Flags per range: `scarce` (≥ 80 % used), `empty` (no fills yet), `stale` (no trade in > 3 days), `expiring` (< 3 days); `summary.uncoveredStrikesNearSpot` lists strikes no range quotes. Cite the `source`.
 2. Pick bands that are `empty` or `scarce` AND near demand — bands with recent fills next door, or within 1× the expected move (`get_market_state`). An empty band nobody trades is not an opportunity.
 3. Size vs collateral: calls need WETH collateral, puts need USDC. Max size = collateral / (per-unit collateral requirement for that tier). Keep at least 30 % of collateral free for margin drift; on a full-collateral range, no margin risk.
 4. Expected premium: `price_strategy` on a representative strike in the band, short side, for the chosen size and expiry. Report premium per unit and the annualized yield on collateral; say it assumes full fill.

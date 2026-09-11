@@ -21,6 +21,7 @@ import {
 } from "@/lib/options";
 import { readTape, type Tape, type TapeAuth, type TapeInstrument } from "@/lib/tape";
 import { getPublicClient, readWalletPositions } from "./chain";
+import type { PublicClient } from "viem";
 import { nearestReference, referenceSurface, type ReferenceSurface } from "./deribit";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -31,6 +32,40 @@ const nowSec = () => Date.now() / 1000;
 export async function loadTape(chainId?: number, since?: number): Promise<Tape> {
   const vault = (chainId ? contractsFor(chainId) : CONTRACTS).aquaVault as Address;
   return readTape({ chainId, client: getPublicClient(chainId), vault, since });
+}
+
+// The on-chain surface is live: the Uniswap v4 hook bumps sigma per tenor
+// bucket on every trade (the σ feedback loop), so the ask the chain actually
+// charges drifts from the frontend's constant SIGMA_GLOBAL. Read the hook's
+// bucket for each expiry and scale the smile by it; fall back to the
+// constant when the hook can't be read (no vault address, old deployment).
+const HOOK_ABI = [
+  { name: "hook", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+  { name: "sigmaFor", type: "function", stateMutability: "view", inputs: [{ name: "timeToExpiry", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] },
+] as const;
+
+async function liveSigmaByExpiry(client: PublicClient, vault: Address, expiries: number[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  try {
+    const hook = await client.readContract({ address: vault, abi: HOOK_ABI, functionName: "hook" });
+    const now = Math.floor(Date.now() / 1000);
+    await Promise.all(
+      expiries.map(async (e) => {
+        const wad = await client.readContract({ address: hook, abi: HOOK_ABI, functionName: "sigmaFor", args: [BigInt(Math.max(e - now, 0))] });
+        out.set(e, Number(wad) / 1e18);
+      })
+    );
+  } catch {
+    /* constant model below */
+  }
+  return out;
+}
+
+/** protocolPremium with the hook's live sigma for that expiry in place of SIGMA_GLOBAL. */
+function liveAsk(spot: number, strike: number, isCall: boolean, tYears: number, sigmaGlobal: number): number {
+  const sigma = smileSigma(spot, strike) * (sigmaGlobal / SIGMA_GLOBAL);
+  const intrinsic = isCall ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
+  return intrinsic + spot * sigma * Math.sqrt(Math.max(tYears, 0)) * (Math.min(spot, strike) / Math.max(spot, strike));
 }
 
 /** Black-Scholes implied vol by bisection; null when the premium is below intrinsic. */
@@ -95,6 +130,8 @@ export async function findOpportunities(
   opts: { side?: "cheap" | "expensive" | "both"; isCall?: boolean; maxResults?: number }
 ) {
   const [tape, ref] = await Promise.all([loadTape(chainId), tryReference()]);
+  const vault = (chainId ? contractsFor(chainId) : CONTRACTS).aquaVault as Address;
+  const sigmas = await liveSigmaByExpiry(getPublicClient(chainId), vault, [...new Set(tape.auths.map((a) => a.expiry))]);
   const now = nowSec();
   const byToken = new Map(tape.instruments.map((i) => [`${i.authId}-${i.strike}`, i]));
   const rows: Opportunity[] = [];
@@ -102,8 +139,9 @@ export async function findOpportunities(
     if (opts.isCall !== undefined && a.isCall !== opts.isCall) continue;
     const t = (a.expiry - now) / YEAR;
     if (t <= 0) continue;
+    const sigmaGlobal = sigmas.get(a.expiry) ?? SIGMA_GLOBAL;
     for (const k of gridStrikes(a)) {
-      const ask = protocolPremium(spot, k, a.isCall, t);
+      const ask = liveAsk(spot, k, a.isCall, t, sigmaGlobal);
       const smileIv = impliedVol(ask, spot, k, t, a.isCall);
       const near = ref ? nearestReference(ref, k, a.expiry, a.isCall) : null;
       const referenceIv = near ? near.iv : null;
@@ -135,14 +173,16 @@ export async function findOpportunities(
   const n = opts.maxResults ?? 6;
   const cheap = [...withEdge].sort((x, y) => edge(x) - edge(y)).slice(0, n);
   const expensive = [...withEdge].sort((x, y) => edge(y) - edge(x)).slice(0, n);
+  const liveSigma = Object.fromEntries([...sigmas].map(([e, v]) => [`${Math.round((e - now) / 86400)}d`, round4(v)]));
   return {
     source: tape.source,
+    liveSigmaGlobalByExpiry: sigmas.size ? liveSigma : { note: `hook unreadable — constant ${SIGMA_GLOBAL}` },
     reference: ref ? { venue: "Deribit", indexPrice: ref.indexPrice, dvol: ref.dvol === null ? null : round4(ref.dvol), listed: ref.instruments.length } : { venue: "none", note: `Deribit unreachable — edge measured against the flat ${SIGMA_GLOBAL * 100}% protocol vol` },
     spotUsd: spot,
     universe: { activeRanges: tape.auths.length, strikesScanned: rows.length, instrumentsTraded: tape.instruments.length },
     cheap: opts.side === "expensive" ? undefined : cheap,
     expensive: opts.side === "cheap" ? undefined : expensive,
-    note: "ivEdgePts < 0: Smile's ask implies less vol than the listed reference (cheap to buy). vsLastTradePct: today's ask vs the last fill of the same instrument. freeUnits is what the range can still write at that strike; capacity is shared across the range's strikes.",
+    note: "ivEdgePts < 0: Smile's ask implies less vol than the listed reference (cheap to buy). vsLastTradePct: today's ask vs the last fill of the same instrument. freeUnits is what the range can still write at that strike; capacity is shared across the range's strikes. Model caveat: Smile's on-chain time value is S·σ·√T·damping with no Black-Scholes 0.4 factor, so BS-implied vol reads roughly 2× the protocol's σ; the absolute gap to Deribit is mostly that plus the deployment's σ_global, and the σ feedback loop (liveSigmaGlobalByExpiry) moves it with flow — rank instruments against each other and against their own last trades, and quote the Deribit gap as context, not as a free lunch.",
   };
 }
 
