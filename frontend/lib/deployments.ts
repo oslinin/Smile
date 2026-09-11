@@ -41,6 +41,7 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
     name: "Arc Testnet",
     explorer: "https://testnet.arcscan.app",
     realMoney: "Circle's native USDC — premium, collateral, margin, backstop, and gas",
+    subgraph: "https://api.studio.thegraph.com/query/44448/smile-arc-testnet/v0.0.1",
     contracts: [
       { label: "Aqua (official registry)", address: "0x641970C7D4534d983Aa7BB9E2c7700ea3007bb7d" },
       { label: "AquaCollateralVault", address: "0xE37ED711F7D1dc5aC045206b4A6367C55229C789" },
