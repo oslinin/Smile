@@ -13,6 +13,7 @@ import { ChatPayoffChart } from "./ChatPayoffChart";
 import { ChatSmileChart } from "./ChatSmileChart";
 import { StrategyCard } from "./StrategyCard";
 import { QuizCard, type QuizAnswer } from "./QuizCard";
+import { RangeCard, RfqCard, type RangePrefill, type RfqPrefill } from "./PrepareCard";
 
 // Structural view of a UI tool part — the generated tool-part union is only
 // available when the route's tool types are threaded through useChat; the
@@ -39,6 +40,12 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-analyze_adjustment": "analyzing adjustment",
   "tool-get_positions": "reading wallet positions",
   "tool-portfolio_risk": "aggregating portfolio risk",
+  "tool-find_opportunities": "screening the tape for edge",
+  "tool-liquidity_map": "mapping liquidity by strike",
+  "tool-portfolio_greeks": "reading the book from The Graph",
+  "tool-hedge_suggestion": "sizing the hedge",
+  "tool-reference_market": "checking Deribit",
+  "tool-macro_calendar": "checking the macro calendar",
 };
 
 function ToolChip({ label, pending }: { label: string; pending: boolean }) {
@@ -183,6 +190,16 @@ export function ChatMessage({
                   onLoad={onLoadLegs}
                 />
               );
+            }
+
+            if (part.type === "tool-prepare_lp_range" && part.state !== "input-streaming") {
+              const input = part.input as RangePrefill | undefined;
+              return input?.strikeMin ? <RangeCard key={part.toolCallId} p={input} /> : null;
+            }
+
+            if (part.type === "tool-prepare_rfq_quote" && part.state !== "input-streaming") {
+              const input = part.input as RfqPrefill | undefined;
+              return input?.strike ? <RfqCard key={part.toolCallId} p={input} /> : null;
             }
 
             if (part.type === "tool-quiz_question" && part.state !== "input-streaming") {

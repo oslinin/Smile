@@ -24,6 +24,9 @@ import { positionsToLegs, scenarioGrid, subtractLegs } from "./analytics";
 import { getPublicClient, readOnchainQuote, readWalletPositions } from "./chain";
 import { getSection, SECTION_IDS } from "./knowledge";
 import type { CopilotContext } from "./systemPrompt";
+import { findOpportunities, hedgeSuggestion, liquidityMap, portfolioGreeks } from "./graphTools";
+import { atmReferenceIv, nearestReference, referenceSurface } from "./deribit";
+import { HEURISTICS, upcomingEvents } from "./macro";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -271,7 +274,117 @@ export function buildTools(ctx: CopilotContext) {
       },
     }),
 
+    // ── Tape tools: The Graph on public networks, the event log on Anvil ──────
+
+    find_opportunities: tool({
+      description:
+        "Screen every live strike on every active range for cheap or expensive options: Smile's ask (as implied vol) vs the nearest listed Deribit instrument's IV, and vs the last fill of the same instrument, with the range's free capacity and open interest. Data source: The Graph (Sepolia/Arc) or the Anvil event log. Use for 'what's cheap right now', 'where is Smile mispriced', 'find me an edge'. Follow up with price_strategy / propose_trade for the trade.",
+      inputSchema: z.object({
+        side: z.enum(["cheap", "expensive", "both"]).optional().describe("Default both"),
+        isCall: z.boolean().optional().describe("Restrict to calls (true) or puts (false)"),
+        maxResults: z.number().int().positive().max(15).optional().describe("Per side, default 6"),
+      }),
+      execute: async ({ side, isCall, maxResults }) => findOpportunities(ctx.chainId, ctx.spot, { side, isCall, maxResults }),
+    }),
+
+    liquidity_map: tool({
+      description:
+        "Where the liquidity is: every active range with capacity, used %, open interest, fills and days since last trade (flags: scarce ≥80% used, empty, stale >3d, expiring <3d), plus a per-strike heat map (ranges covering it, free units, open interest) and the strikes near spot nobody quotes. Use for 'expensive liquidity', 'where should I write a range', 'is there depth at 3200'. Data source: The Graph / Anvil event log.",
+      inputSchema: z.object({ isCall: z.boolean().optional() }),
+      execute: async ({ isCall }) => liquidityMap(ctx.chainId, ctx.spot, { isCall }),
+    }),
+
+    portfolio_greeks: tool({
+      description:
+        "The connected wallet's whole book from the tape — long positions (with cost basis from its own fills) AND the written side (open interest on its ranges) — with net delta/gamma/theta/vega, marks, and `legs` ready for hedge_suggestion or scenario_analysis. Prefer this over portfolio_risk when the user writes ranges or asks about hedging. Requires a connected wallet.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        if (!ctx.address) return { error: "No wallet connected — ask the user to connect their wallet first." };
+        return portfolioGreeks(ctx.chainId, ctx.spot, ctx.address);
+      },
+    }),
+
+    hedge_suggestion: tool({
+      description:
+        "How much of what to add to bring a book to a target delta (default 0): spot ETH, or short/long calls or puts at a strike (e.g. 'hedge my 3 short puts with short calls'). Returns before/after greeks and the hedge leg. Pass the `legs` from portfolio_greeks or describe them.",
+      inputSchema: z.object({
+        legs: legsSchema,
+        hedgeWith: z.enum(["spot", "call", "put"]),
+        strike: z.number().positive().optional().describe("Strike for an option hedge; default 5% OTM on the $50 grid"),
+        expiryDays: z.number().int().positive().max(365).optional(),
+        targetDelta: z.number().optional().describe("Default 0 (delta-neutral)"),
+      }),
+      execute: async ({ legs, hedgeWith, strike, expiryDays, targetDelta }) =>
+        hedgeSuggestion(ctx.spot, legs as BuilderLeg[], hedgeWith, strike, expiryDays, targetDelta),
+    }),
+
+    reference_market: tool({
+      description:
+        "The listed reference market (Deribit, public API): ETH index price, the DVOL 30-day vol index, ATM IV at the listed expiry nearest a given horizon, and the nearest listed instrument to a strike/expiry with its mark IV. Use to judge whether Smile's vol is rich or cheap, or when the user asks what 'the market' implies.",
+      inputSchema: z.object({
+        strike: z.number().positive().optional(),
+        expiryDays: z.number().int().positive().max(365).optional().describe(`Default ${DEFAULT_DTE}`),
+        isCall: z.boolean().optional().describe("Default true"),
+      }),
+      execute: async ({ strike, expiryDays, isCall }) => {
+        const s = await referenceSurface();
+        const expiry = Date.now() / 1000 + (expiryDays ?? DEFAULT_DTE) * 86400;
+        const atm = atmReferenceIv(s, expiry);
+        const near = strike ? nearestReference(s, strike, expiry, isCall ?? true) : null;
+        return {
+          venue: "Deribit",
+          indexPriceUsd: s.indexPrice,
+          dvol: s.dvol,
+          listedInstruments: s.instruments.length,
+          atm: atm ? { iv: round2(atm.iv * 100) / 100, listedExpiry: new Date(atm.expiry * 1000).toISOString().slice(0, 10) } : null,
+          nearest: near ? { instrument: near.name, iv: near.iv, markUsd: round2(near.markUsd), openInterest: near.openInterest } : null,
+          smileAtmVol: round2(surfaceQuotes(ctx.spot, (expiryDays ?? DEFAULT_DTE) / 365).atmVol),
+        };
+      },
+    }),
+
+    macro_calendar: tool({
+      description:
+        "Upcoming scheduled macro and expiry events (FOMC, US CPI, monthly/quarterly listed-options expiries) within N days, each with the event-vol heuristic that usually applies, plus the general heuristics (event-vol crush, ETH beta to BTC/Nasdaq, weekend theta, max-pain pinning). Dates are a hardcoded 2026 table — say so. Use with find_opportunities to time trades.",
+      inputSchema: z.object({ daysAhead: z.number().int().positive().max(120).optional().describe("Default 30") }),
+      execute: async ({ daysAhead }) => ({
+        asOf: new Date().toISOString().slice(0, 10),
+        events: upcomingEvents(daysAhead ?? 30),
+        heuristics: HEURISTICS,
+        note: "Static 2026 calendar (FOMC from the Fed, CPI from the BLS schedule) — verify a date before trading on it.",
+      }),
+    }),
+
     // ── Client-side UI tools (no execute — rendered by the chat panel) ────────
+
+    prepare_lp_range: tool({
+      description:
+        "Present a range-to-write proposal as a card with an 'Open in Write a Range' button that prefills the form; the user reviews and signs authorizeRange + Aqua.ship in their wallet. Call AFTER liquidity_map (where capacity is missing) and price_strategy (expected premium). You cannot write the range yourself.",
+      inputSchema: z.object({
+        isCall: z.boolean(),
+        strikeMin: z.number().positive().describe("$50 grid"),
+        strikeMax: z.number().positive(),
+        expiryDays: z.number().int().positive().max(365),
+        maxCollateral: z.number().positive().describe("WETH for calls, USDC for puts"),
+        expectedPremiumUsd: z.number().optional().describe("Per unit at the middle strike, from price_strategy"),
+        rationale: z.string().describe("One or two sentences: why this band, this expiry, this size"),
+      }),
+    }),
+
+    prepare_rfq_quote: tool({
+      description:
+        "Present an RFQ quote for the LP to sign as a card with an 'Open in RFQ desk' button that prefills the signer (EIP-712, signed in the wallet, no key leaves it). Call AFTER find_opportunities / reference_market so premiumPerUnitUsd sits inside the formula ask with a justified improvement. authId is the RfqVault range id.",
+      inputSchema: z.object({
+        authId: z.number().int().nonnegative(),
+        isCall: z.boolean().optional(),
+        strike: z.number().positive(),
+        maxAmount: z.number().positive().describe("Units the quote is good for"),
+        premiumPerUnitUsd: z.number().positive(),
+        formulaAskUsd: z.number().positive().optional(),
+        ttlMinutes: z.number().int().positive().max(1440),
+        rationale: z.string(),
+      }),
+    }),
 
     propose_trade: tool({
       description:

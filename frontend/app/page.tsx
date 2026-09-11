@@ -123,6 +123,12 @@ export default function Home() {
   const [builderLegs, setBuilderLegs] = useState<Leg[]>([]);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
   const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "risk" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
+  // The copilot's prepare_* cards switch to the form they prefill.
+  useEffect(() => {
+    const onGoto = (ev: Event) => setActiveTab((ev as CustomEvent<typeof activeTab>).detail);
+    window.addEventListener("smile:goto", onGoto);
+    return () => window.removeEventListener("smile:goto", onGoto);
+  }, []);
   const spot = useUniswapSpot();
   const spotPrice = spot.status === "loading" ? null : spot.price;
 

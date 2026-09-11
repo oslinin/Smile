@@ -2,6 +2,7 @@
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";
+import { takePrefill, type RangePrefill } from "@/components/copilot/PrepareCard";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 
 const VAULT_ABI = [
@@ -97,6 +98,23 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   const shipCalledRef = useRef(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Prefill from the copilot's prepare_lp_range card (stored before the tab
+  // switch, or pushed live while this form is mounted).
+  useEffect(() => {
+    const apply = (p: RangePrefill | null) => {
+      if (!p) return;
+      setIsCall(p.isCall);
+      setStrikeMin(p.strikeMin);
+      setStrikeMax(p.strikeMax);
+      setExpiryOffset(p.expiryDays * 86_400);
+      setMaxCollateral(String(p.maxCollateral));
+    };
+    apply(takePrefill<RangePrefill>("range"));
+    const onPrefill = (ev: Event) => apply((ev as CustomEvent<RangePrefill>).detail);
+    window.addEventListener("smile:prefill-range", onPrefill);
+    return () => window.removeEventListener("smile:prefill-range", onPrefill);
+  }, []);
 
   const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
 

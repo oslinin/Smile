@@ -14,6 +14,7 @@
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract, useSignTypedData, useChainId } from "wagmi";
 import { useState, useEffect, useRef } from "react";
+import { takePrefill, type RfqPrefill } from "@/components/copilot/PrepareCard";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 
 const QUOTE_TYPES = {
@@ -171,7 +172,10 @@ export function RfqDesk({ spot }: { spot: number }) {
   const isWorking = (step === "approving" && (approvePending || approveConfirming)) || (step === "opening" && (openPending || openConfirming)) || (step === "shipping" && (shipPending || shipConfirming));
 
   // ── 2. LP signs a quote (no gas) ────────────────────────────────────────
-  const viewAuthId: bigint | null = step === "done" && authIdToShip !== null ? authIdToShip : nextAuthId !== undefined && nextAuthId > ZERO_BI ? nextAuthId - ONE_BI : null;
+  // A copilot prefill pins the range to quote on; otherwise the desk shows
+  // the range just shipped, else the latest one.
+  const [pinnedAuthId, setPinnedAuthId] = useState<bigint | null>(null);
+  const viewAuthId: bigint | null = pinnedAuthId ?? (step === "done" && authIdToShip !== null ? authIdToShip : nextAuthId !== undefined && nextAuthId > ZERO_BI ? nextAuthId - ONE_BI : null);
   const { data: range } = useReadContract({ address: rfq, abi: RFQ_ABI, functionName: "ranges", args: [viewAuthId ?? ZERO_BI], query: { enabled: enabled && viewAuthId !== null, refetchInterval: 10_000 } });
   const rLp = range ? range[0] : ZERO;
   const rMin = range ? Number(range[1]) / 1e18 : 0;
@@ -192,6 +196,26 @@ export function RfqDesk({ spot }: { spot: number }) {
   const formulaPremium = formula?.[0] ?? ZERO_BI;
   const improved = qAmountWad > ZERO_BI ? (formulaPremium * BigInt(10_000 - (Number(improveBps) || 0)) / BigInt(10_000)) : ZERO_BI;
   const premiumPerUnit = qAmountWad > ZERO_BI ? (improved * WAD) / qAmountWad : ZERO_BI;
+
+  // Prefill from the copilot's prepare_rfq_quote card: the range to quote
+  // on, strike, size, ttl, and the premium expressed as an improvement on
+  // the formula ask (the desk quotes in bps below formula).
+  useEffect(() => {
+    const apply = (p: RfqPrefill | null) => {
+      if (!p) return;
+      setPinnedAuthId(BigInt(p.authId));
+      setQStrike(p.strike);
+      setQAmount(String(p.maxAmount));
+      setTtlMin(String(p.ttlMinutes));
+      if (p.formulaAskUsd && p.formulaAskUsd > 0) {
+        setImproveBps(String(Math.max(0, Math.round((1 - p.premiumPerUnitUsd / p.formulaAskUsd) * 10_000))));
+      }
+    };
+    apply(takePrefill<RfqPrefill>("rfq"));
+    const onPrefill = (ev: Event) => apply((ev as CustomEvent<RfqPrefill>).detail);
+    window.addEventListener("smile:prefill-rfq", onPrefill);
+    return () => window.removeEventListener("smile:prefill-rfq", onPrefill);
+  }, []);
 
   const [signed, setSigned] = useState<SignedQuote | null>(null);
   const { signTypedDataAsync, isPending: signing, error: signError } = useSignTypedData();
