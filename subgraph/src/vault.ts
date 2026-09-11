@@ -9,7 +9,7 @@ import {
   CollateralReleased,
   PullFailed,
 } from "../generated/AquaCollateralVault/AquaCollateralVault";
-import { Authorization, Fill, Series, Position } from "../generated/schema";
+import { Authorization, Fill, Instrument, Position } from "../generated/schema";
 
 const WAD = BigInt.fromString("1000000000000000000");
 
@@ -61,24 +61,24 @@ export function handleOptionBought(event: OptionBought): void {
   let auth = Authorization.load(id);
   if (auth == null) return;
 
-  let series = loadOrCreateSeries(event.params.optionToken, auth, event.params.strike);
-  series.openInterest = series.openInterest.plus(event.params.amount);
-  series.volume = series.volume.plus(event.params.amount);
-  series.fillCount = series.fillCount + 1;
+  let inst = loadOrCreateInstrument(event.params.optionToken, auth, event.params.strike);
+  inst.openInterest = inst.openInterest.plus(event.params.amount);
+  inst.volume = inst.volume.plus(event.params.amount);
+  inst.fillCount = inst.fillCount + 1;
   if (event.params.amount.gt(BigInt.zero())) {
-    series.lastPremiumPerUnit = event.params.premium.times(WAD).div(event.params.amount);
+    inst.lastPremiumPerUnit = event.params.premium.times(WAD).div(event.params.amount);
   }
-  series.lastTradeAt = event.block.timestamp;
-  series.save();
+  inst.lastTradeAt = event.block.timestamp;
+  inst.save();
 
-  let pos = loadOrCreatePosition(event.params.optionToken, event.params.buyer, series.id);
+  let pos = loadOrCreatePosition(event.params.optionToken, event.params.buyer, inst.id);
   pos.balance = pos.balance.plus(event.params.amount);
   pos.updatedAt = event.block.timestamp;
   pos.save();
 
   let fill = new Fill(event.transaction.hash.toHexString() + "-" + event.logIndex.toString());
   fill.authorization = id;
-  fill.series = series.id;
+  fill.instrument = inst.id;
   fill.lp = auth.lp;
   fill.buyer = event.params.buyer;
   fill.optionToken = event.params.optionToken;
@@ -109,11 +109,11 @@ function refreshBySeries(optionToken: Address, vaultAddress: Address): void {
   auth.save();
 }
 
-function loadOrCreateSeries(optionToken: Address, auth: Authorization, strike: BigInt): Series {
+function loadOrCreateInstrument(optionToken: Address, auth: Authorization, strike: BigInt): Instrument {
   let id = optionToken.toHexString();
-  let s = Series.load(id);
-  if (s != null) return s as Series;
-  s = new Series(id);
+  let s = Instrument.load(id);
+  if (s != null) return s as Instrument;
+  s = new Instrument(id);
   s.optionToken = optionToken;
   s.authorization = auth.id;
   s.lp = auth.lp;
@@ -125,16 +125,16 @@ function loadOrCreateSeries(optionToken: Address, auth: Authorization, strike: B
   s.fillCount = 0;
   s.lastPremiumPerUnit = BigInt.zero();
   s.lastTradeAt = BigInt.zero();
-  return s as Series;
+  return s as Instrument;
 }
 
-function loadOrCreatePosition(optionToken: Address, holder: Address, seriesId: string): Position {
+function loadOrCreatePosition(optionToken: Address, holder: Address, instrumentId: string): Position {
   let id = optionToken.toHexString() + "-" + holder.toHexString();
   let p = Position.load(id);
   if (p != null) return p as Position;
   p = new Position(id);
   p.holder = holder;
-  p.series = seriesId;
+  p.instrument = instrumentId;
   p.optionToken = optionToken;
   p.balance = BigInt.zero();
   p.updatedAt = BigInt.zero();
@@ -145,11 +145,11 @@ function loadOrCreatePosition(optionToken: Address, holder: Address, seriesId: s
 // both drop by `amount` (clamped at zero — a transfer the subgraph never saw
 // must not drive a balance negative).
 function debit(optionToken: Address, holder: Address, amount: BigInt, ts: BigInt): void {
-  let series = Series.load(optionToken.toHexString());
-  if (series == null) return;
-  series.openInterest = series.openInterest.gt(amount) ? series.openInterest.minus(amount) : BigInt.zero();
-  series.save();
-  let pos = loadOrCreatePosition(optionToken, holder, series.id);
+  let inst = Instrument.load(optionToken.toHexString());
+  if (inst == null) return;
+  inst.openInterest = inst.openInterest.gt(amount) ? inst.openInterest.minus(amount) : BigInt.zero();
+  inst.save();
+  let pos = loadOrCreatePosition(optionToken, holder, inst.id);
   pos.balance = pos.balance.gt(amount) ? pos.balance.minus(amount) : BigInt.zero();
   pos.updatedAt = ts;
   pos.save();

@@ -183,7 +183,7 @@ describe("AquaCollateralVault mappings", () => {
     assert.fieldEquals("Authorization", "1", "active", "true");
   });
 
-  test("a fill creates the Series (open interest, last premium per unit) and the buyer's Position", () => {
+  test("a fill creates the Instrument (open interest, last premium per unit) and the buyer's Position", () => {
     mockAuthorizations(BigInt.fromI32(0), BigInt.zero(), true);
     handleRangeAuthorized(rangeAuthorized(0));
     mockAuthorizations(BigInt.fromI32(0), BigInt.fromString("2000000000000000000"), true);
@@ -191,19 +191,19 @@ describe("AquaCollateralVault mappings", () => {
     handleOptionBought(optionBought(0, "2000000000000000000", 1_400_000_000));
 
     let sid = TOKEN.toHexString();
-    assert.entityCount("Series", 1);
-    assert.fieldEquals("Series", sid, "openInterest", "2000000000000000000");
-    assert.fieldEquals("Series", sid, "volume", "2000000000000000000");
-    assert.fieldEquals("Series", sid, "fillCount", "1");
-    assert.fieldEquals("Series", sid, "lastPremiumPerUnit", "700000000");
-    assert.fieldEquals("Series", sid, "strike", "3000000000000000000000");
-    assert.fieldEquals("Series", sid, "lp", LP.toHexString());
+    assert.entityCount("Instrument", 1);
+    assert.fieldEquals("Instrument", sid, "openInterest", "2000000000000000000");
+    assert.fieldEquals("Instrument", sid, "volume", "2000000000000000000");
+    assert.fieldEquals("Instrument", sid, "fillCount", "1");
+    assert.fieldEquals("Instrument", sid, "lastPremiumPerUnit", "700000000");
+    assert.fieldEquals("Instrument", sid, "strike", "3000000000000000000000");
+    assert.fieldEquals("Instrument", sid, "lp", LP.toHexString());
     assert.entityCount("Position", 1);
     assert.fieldEquals("Position", sid + "-" + BUYER.toHexString(), "balance", "2000000000000000000");
-    assert.fieldEquals("Fill", "0xa16081f360e3847006db660bae1c6d1b2e17ec2a-1", "series", sid);
+    assert.fieldEquals("Fill", "0xa16081f360e3847006db660bae1c6d1b2e17ec2a-1", "instrument", sid);
   });
 
-  test("a sellback and a redemption debit the Position and the Series' open interest, clamped at zero", () => {
+  test("a sellback and a redemption debit the Position and the Instrument's open interest, clamped at zero", () => {
     mockAuthorizations(BigInt.fromI32(0), BigInt.zero(), true);
     handleRangeAuthorized(rangeAuthorized(0));
     mockAuthorizations(BigInt.fromI32(0), BigInt.fromString("2000000000000000000"), true);
@@ -214,13 +214,13 @@ describe("AquaCollateralVault mappings", () => {
     handleOptionClosed(optionClosed("500000000000000000"));
     let sid = TOKEN.toHexString();
     let pid = sid + "-" + BUYER.toHexString();
-    assert.fieldEquals("Series", sid, "openInterest", "1500000000000000000");
+    assert.fieldEquals("Instrument", sid, "openInterest", "1500000000000000000");
     assert.fieldEquals("Position", pid, "balance", "1500000000000000000");
-    assert.fieldEquals("Series", sid, "volume", "2000000000000000000");
+    assert.fieldEquals("Instrument", sid, "volume", "2000000000000000000");
 
     // Redeem more than the subgraph saw (a transfer it never indexed): clamp, don't go negative.
     handleRedeemed(redeemed("9000000000000000000"));
-    assert.fieldEquals("Series", sid, "openInterest", "0");
+    assert.fieldEquals("Instrument", sid, "openInterest", "0");
     assert.fieldEquals("Position", pid, "balance", "0");
   });
 });

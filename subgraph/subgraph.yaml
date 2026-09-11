@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: AquaCollateralVault
-    network: arc-testnet
+    network: sepolia
     source:
       abi: AquaCollateralVault
-      address: "0xE37ED711F7D1dc5aC045206b4A6367C55229C789"
-      startBlock: 61227750
+      address: "0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D"
+      startBlock: 11677088
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -18,7 +18,7 @@ dataSources:
       entities:
         - Authorization
         - Fill
-        - Series
+        - Instrument
         - Position
       abis:
         - name: AquaCollateralVault
