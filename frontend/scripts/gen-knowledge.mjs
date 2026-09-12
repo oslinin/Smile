@@ -17,6 +17,11 @@ const DOCS = [
   { source: "docs/limitations.md", prefix: "limitations" },
   { source: "docs/solutions.md", prefix: "solutions" },
   { source: "docs/copilot.md", prefix: "copilot" },
+  { source: "docs/sponsors/aqua.md", prefix: "aqua" },
+  { source: "docs/sponsors/chainlink.md", prefix: "chainlink" },
+  { source: "docs/sponsors/uniswap.md", prefix: "uniswap" },
+  { source: "docs/sponsors/thegraph.md", prefix: "thegraph" },
+  { source: "docs/sponsors/arc.md", prefix: "arc" },
 ];
 
 const slug = (s) =>

@@ -76,6 +76,13 @@ const pages = [
   { id: "limitations", label: "Limitations", source: "docs/limitations.md", mermaid: false },
   { id: "solutions", label: "Solutions", source: "docs/solutions.md", mermaid: false },
   { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
+  // Sponsor pages: one per protocol Smile is built on — features used, why,
+  // value add, technical details, limitations, plans, glossary.
+  { id: "aqua", label: "1inch Aqua", source: "docs/sponsors/aqua.md", mermaid: false, group: "Sponsors" },
+  { id: "chainlink", label: "Chainlink", source: "docs/sponsors/chainlink.md", mermaid: false },
+  { id: "uniswap", label: "Uniswap", source: "docs/sponsors/uniswap.md", mermaid: false },
+  { id: "thegraph", label: "The Graph", source: "docs/sponsors/thegraph.md", mermaid: false },
+  { id: "arc", label: "Circle · Arc", source: "docs/sponsors/arc.md", mermaid: false },
 ];
 
 // Every doc (not just the README) goes through extractMath first, so KaTeX
@@ -108,7 +115,7 @@ for (const sp of standalonePages) {
 }
 
 const sidebarLinks = [
-  ...pages.map((p) => `<button class="nav-link" data-page="${p.id}">${p.label}</button>`),
+  ...pages.map((p) => `${p.group ? `<h3>${p.group}</h3>` : ""}<button class="nav-link" data-page="${p.id}">${p.label}</button>`),
   ...standalonePages.map((sp) => `<button class="nav-link" data-page="${sp.id}">${sp.label}</button>`),
 ].join("\n        ");
 
@@ -158,6 +165,13 @@ const html = `<!doctype html>
     font-size: 0.95rem;
     margin: 0 12px 16px;
     letter-spacing: 0.02em;
+  }
+  .sidebar h3 {
+    color: #6b7280;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 16px 12px 6px;
   }
   .nav-link {
     display: block;
@@ -220,7 +234,7 @@ const html = `<!doctype html>
       overflow-x: auto;
       padding: 12px;
     }
-    .sidebar h2 { display: none; }
+    .sidebar h2, .sidebar h3 { display: none; }
     .nav-link { width: auto; white-space: nowrap; margin-right: 4px; margin-bottom: 0; }
     .page-reference { height: 80vh; }
   }
