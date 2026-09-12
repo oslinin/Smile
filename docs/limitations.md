@@ -124,6 +124,15 @@ range.
 > phantom-depth-aware `bestQuote` routing. The sections below describe the
 > UNMITIGATED design so the reasoning stays legible; see
 > [solutions.md](./solutions.md) for what is now in place.
+>
+> **EthOnline 2026 (September 2026):** L8 is partially lifted by two opt-in
+> sibling vaults — `SpreadVault` (S12) escrows a credit spread's true maximum
+> loss and `MarginVault` (S13) lets a put writer post initial margin, at the
+> price recorded in L13. L12a is lifted by the subgraph. R6 is built as
+> `RfqVault`. Note that R1's per-authorization block cap lives in the main
+> vault only; the three sibling vaults have no per-block cap, so L4 applies
+> to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
+> that touch each protocol.
 
 ### L1. Stale-quote sniping — the oracle latency gap
 
@@ -211,6 +220,15 @@ machinery, margin oracles, and insolvency risk — an option, once written, can
 lower than a margined venue's. Aqua softens this (collateral stays in the LP's
 wallet, unrehypothecated, until the moment of sale) but does not remove it.
 
+> **Update (EthOnline 2026):** two opt-in rungs now sit above the main
+> vault. `SpreadVault` (S12) margins a credit spread at its true maximum
+> loss — 0.0625 WETH instead of 1 WETH for a 3000/3200 call credit spread,
+> 200 USDC instead of 3,200 for the put twin — without changing the
+> "always pays" property. `MarginVault` (S13) locks initial margin (1,500
+> USDC for an ATM 3000 put instead of 3,000) and *does* give up that
+> property, which is why it is opt-in and why L13 exists. The main vault
+> itself is unchanged.
+
 ### L9. Settlement still depends on one oracle
 
 `settleWithChainlinkRound` is permissionless and verifies that the supplied
@@ -219,6 +237,11 @@ but the *value* settled is still whatever Chainlink published. A wrong or
 manipulated feed settles wrong, trustlessly. This is oracle risk, distinct
 from the latency risk of L1/L2, and it is shared with essentially every
 oracle-settled derivative on-chain.
+
+On Arc testnet there is no Chainlink ETH/USD feed at all, so the deployment
+there settles against a `MockV3Aggregator` that anyone can set
+(`docs/arc-testnet-deployment.md`). Settlement on Arc is a demonstration of
+the mechanism, not of the trust model.
 
 ### L10. The off-chain alternative has its own price
 

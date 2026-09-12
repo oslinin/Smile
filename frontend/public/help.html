@@ -1850,6 +1850,14 @@ staleness-scaled spread plus the optional Pyth quoting adapter, and L11
 phantom-depth-aware <code>bestQuote</code> routing. The sections below describe the
 UNMITIGATED design so the reasoning stays legible; see
 <a href="./solutions.md">solutions.md</a> for what is now in place.</p>
+<p><strong>EthOnline 2026 (September 2026):</strong> L8 is partially lifted by two opt-in
+sibling vaults — <code>SpreadVault</code> (S12) escrows a credit spread&#39;s true maximum
+loss and <code>MarginVault</code> (S13) lets a put writer post initial margin, at the
+price recorded in L13. L12a is lifted by the subgraph. R6 is built as
+<code>RfqVault</code>. Note that R1&#39;s per-authorization block cap lives in the main
+vault only; the three sibling vaults have no per-block cap, so L4 applies
+to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
+that touch each protocol.</p>
 </blockquote>
 <h3>L1. Stale-quote sniping — the oracle latency gap</h3>
 <p>The premium is computed from Chainlink&#39;s last published price
@@ -1921,6 +1929,16 @@ machinery, margin oracles, and insolvency risk — an option, once written, can
 <em>always</em> pay out. The cost is that LP returns on capital are structurally
 lower than a margined venue&#39;s. Aqua softens this (collateral stays in the LP&#39;s
 wallet, unrehypothecated, until the moment of sale) but does not remove it.</p>
+<blockquote>
+<p><strong>Update (EthOnline 2026):</strong> two opt-in rungs now sit above the main
+vault. <code>SpreadVault</code> (S12) margins a credit spread at its true maximum
+loss — 0.0625 WETH instead of 1 WETH for a 3000/3200 call credit spread,
+200 USDC instead of 3,200 for the put twin — without changing the
+&quot;always pays&quot; property. <code>MarginVault</code> (S13) locks initial margin (1,500
+USDC for an ATM 3000 put instead of 3,000) and <em>does</em> give up that
+property, which is why it is opt-in and why L13 exists. The main vault
+itself is unchanged.</p>
+</blockquote>
 <h3>L9. Settlement still depends on one oracle</h3>
 <p><code>settleWithChainlinkRound</code> is permissionless and verifies that the supplied
 round actually brackets expiry — nobody can cherry-pick a favorable round —
@@ -1928,6 +1946,10 @@ but the <em>value</em> settled is still whatever Chainlink published. A wrong or
 manipulated feed settles wrong, trustlessly. This is oracle risk, distinct
 from the latency risk of L1/L2, and it is shared with essentially every
 oracle-settled derivative on-chain.</p>
+<p>On Arc testnet there is no Chainlink ETH/USD feed at all, so the deployment
+there settles against a <code>MockV3Aggregator</code> that anyone can set
+(<code>docs/arc-testnet-deployment.md</code>). Settlement on Arc is a demonstration of
+the mechanism, not of the trust model.</p>
 <h3>L10. The off-chain alternative has its own price</h3>
 <p>The known cure for L1–L5 is moving pricing off-chain (an RFQ model: the LP
 runs a server that streams live vol, reprices in milliseconds, scores
@@ -3227,7 +3249,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <li><strong>L8, full collateralization is capital-inefficient on purpose.</strong> The main vault locks 1 WETH per call unit and the full strike per put unit. Aqua softens this because the collateral is unrehypothecated and keeps earning until the fill, but it does not remove it. <code>SpreadVault</code> and <code>MarginVault</code> are the two rungs of the capital-efficiency ladder built to address it.</li>
 <li><strong>L11, Aqua liquidity is soft.</strong> Because the balance behind a quote sits in the LP&#39;s own wallet, it can be spent or de-approved before the fill, and the JIT pull then reverts. Displayed depth is indicative, not firm. <code>FirmEscrow</code> (S4, MVP scope) makes a range firm by becoming the LP&#39;s wallet from Aqua&#39;s point of view; honest depth display and firmness bonds are the other mitigations (S1 through S3).</li>
 <li><strong>L7, the demand-feedback loop is nudgeable.</strong> Sigma moves with every trade. This is why <code>MarginVault</code> reads margin off the oracle only and has no <code>close()</code>: a buyback priced off sigma and paid from margin would let a manipulated sigma drain margin.</li>
-<li><strong>L4, one transaction can drain a whole range.</strong> No vault imposes a per-trade or per-block size cap, so a single fill can pull an authorization&#39;s entire remaining collateral at one price. Per-range block caps were on <code>MarginVault</code>&#39;s plan and were cut; the loss per event is bounded by the range&#39;s <code>maxCollateral</code>.</li>
+<li><strong>L4, one transaction can drain a whole range.</strong> The main vault carries R1&#39;s per-authorization block cap (<code>maxBlockNotional</code>, checked in <code>AquaCollateralVault.buy</code>), which bounds the drain per block. The three sibling vaults do not: a single fill on <code>SpreadVault</code>, <code>MarginVault</code> or <code>RfqVault</code> can pull an authorization&#39;s entire remaining collateral at one price. Per-range block caps were on <code>MarginVault</code>&#39;s plan and were cut; there the loss per event is bounded by the range&#39;s <code>maxCollateral</code>.</li>
 <li><strong>L5, on-chain rules cannot reject informed traders.</strong> Every check a vault performs is public and can be simulated before submission, so no vault can filter informed flow; the remedy is pricing (R1 through R4), which is why the formula tier carries a spread and a staleness charge rather than an allow-list.</li>
 <li><strong>L10, the off-chain alternative has its own price.</strong> <code>RfqVault</code> is the R6 hybrid precisely because a pure RFQ market gives up the passive-LP thesis, composability, and permissionless quoting: a signed quote is frozen for its time-to-live while the market moves, and makers respond with shorter TTLs and last look. <code>RfqVault</code> keeps quotes single-use, keeps the formula tier as the always-live floor, and offers no <code>close()</code> so holders are never captive to a market maker&#39;s uptime; it does not make the quote-fading problem disappear for the maker who signs.</li>
 <li><strong>L12, the per-trade gas floor.</strong> A repeat fill costs about 198,000 gas, in the range of an ordinary Uniswap v3 swap; the first fill in a series costs about 1,040,000 because it deploys that series&#39; ERC-20 token. The premium arithmetic is a rounding error inside that; the floor is series bootstrapping, and EIP-1167 clones or keeper pre-deployment are the mitigations. Aqua&#39;s pull adds one external call per fill and does not change this picture.</li>
@@ -4060,11 +4082,12 @@ threshold leaves no on-chain signal at all (L2). A sniper who watches the
 live market buys the stale quote before the feed catches up; the hook&#39;s
 bump arrives after that trade (L3). The Pyth adapter (R5) narrows the
 window for quoting; it does not close it.</li>
-<li><strong>L4, one transaction can drain a whole range.</strong> There is no per-trade or
-per-block size limit, so a single <code>buy()</code> can consume an authorization&#39;s
-entire remaining collateral at one stale price, and the sigma bump fires
-only afterwards. The loss per staleness event is bounded by the range&#39;s
-<code>maxCollateral</code>, not by anything smaller.</li>
+<li><strong>L4, one transaction can drain a whole range.</strong> The main vault bounds
+this with a per-authorization block cap (R1, <code>maxBlockNotional</code>); the
+sibling vaults built at EthOnline 2026 have no such cap, so on them a
+single fill can consume an authorization&#39;s entire remaining collateral at
+one stale price, and the sigma bump fires only afterwards. The loss per
+staleness event is then bounded by the range&#39;s <code>maxCollateral</code>.</li>
 <li><strong>L5, on-chain rules cannot reject informed traders.</strong> Every rule the hook
 or the vault could apply is public, so a sniper simulates it and submits
 only trades that pass. Rules can filter mechanically definable patterns

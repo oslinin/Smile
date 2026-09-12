@@ -448,11 +448,12 @@ The numbered items refer to `docs/limitations.md`.
   live market buys the stale quote before the feed catches up; the hook's
   bump arrives after that trade (L3). The Pyth adapter (R5) narrows the
   window for quoting; it does not close it.
-- **L4, one transaction can drain a whole range.** There is no per-trade or
-  per-block size limit, so a single `buy()` can consume an authorization's
-  entire remaining collateral at one stale price, and the sigma bump fires
-  only afterwards. The loss per staleness event is bounded by the range's
-  `maxCollateral`, not by anything smaller.
+- **L4, one transaction can drain a whole range.** The main vault bounds
+  this with a per-authorization block cap (R1, `maxBlockNotional`); the
+  sibling vaults built at EthOnline 2026 have no such cap, so on them a
+  single fill can consume an authorization's entire remaining collateral at
+  one stale price, and the sigma bump fires only afterwards. The loss per
+  staleness event is then bounded by the range's `maxCollateral`.
 - **L5, on-chain rules cannot reject informed traders.** Every rule the hook
   or the vault could apply is public, so a sniper simulates it and submits
   only trades that pass. Rules can filter mechanically definable patterns
