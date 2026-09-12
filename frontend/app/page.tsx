@@ -310,6 +310,18 @@ export default function Home() {
                 >
                   {isPending ? "Connecting…" : "Connect Wallet"}
                 </button>
+                {/* No injected wallet (a phone browser): a universal link that
+                    opens this page inside MetaMask's own browser, where MetaMask
+                    is injected — no WalletConnect relay or custom-scheme deep
+                    link involved (Firefox on Android blocks the latter). */}
+                {mounted && !walletConnectors.some((c) => c.name !== "WalletConnect") && typeof window !== "undefined" && (
+                  <a
+                    href={`https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`}
+                    className="ml-2 text-xs text-gray-400 hover:text-white underline whitespace-nowrap"
+                  >
+                    Open in MetaMask
+                  </a>
+                )}
                 {walletOpen && walletConnectors.length > 1 && (
                   <div className="absolute right-0 mt-1 w-52 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
                     {walletConnectors.map((c) => (
