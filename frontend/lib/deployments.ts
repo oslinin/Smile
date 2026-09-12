@@ -33,7 +33,7 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
     demo: [
       { label: "authorizeRange · calls $2,300–$2,800", hash: "0x98e4e922e57d7fad0902089767c7b108e6485c03527c4c00f90f8e68a59d03e7" },
       { label: "Aqua.ship", hash: "0x878d8bb535045acb4c20da3ae491e681c1e7c8993ac4479476168eec2a2227c1", note: "collateral stays in the LP wallet" },
-      { label: "buy 0.01 × $2,500 call", hash: "0x505285ff96be5a576a4c1895a163cc462d777517a8c421989b504cb3701c7bca", note: "0.01 WETH pulled JIT through Aqua · indexed by The Graph one block later" },
+      { label: "buy 0.01 × $2,500 call", hash: "0x505285ff96be5a576a4c1895a163cc462d777517a8c421989b504cb3701c7bca", note: "0.01 WETH pulled JIT through Aqua · indexed by The Graph one block later · a self-fill by the deployer (L15)" },
     ],
   },
   5042002: {
@@ -52,7 +52,7 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
       { label: "USDC (native)", address: "0x3600000000000000000000000000000000000000" },
     ],
     demo: [
-      { label: "buy 0.01 × $3,000 call (main vault)", hash: "0x3563dc099723ccd01d7953160a598e8a5a82fdd3cbbae6840593f2caf245989a", note: "real-USDC premium" },
+      { label: "buy 0.01 × $3,000 call (main vault)", hash: "0x3563dc099723ccd01d7953160a598e8a5a82fdd3cbbae6840593f2caf245989a", note: "real-USDC premium · a self-fill by the deployer (L15)" },
       { label: "SpreadVault.buy · 3000/3200 call credit", hash: "0x73a8e48888b4fe77969fdcc05b6cb51c529d0ab80c4f40ff6f2f1991fe0996a5", note: "0.000625 WETH pulled — 16× less than a naked leg" },
       { label: "MarginVault.buy · 0.001 × $3,000 put", hash: "0x0938c5be639e8daf30b88d15b82d5ec80dd5d3a68096e5b796051f00791a4d02", note: "1.50 USDC of initial margin, not the 3.00 USDC strike" },
       { label: "RfqVault.fill · LP-signed quote", hash: "0x257a8fd1c638dc8590dac048abc12ef85ce78249a3f3df7a6a36d725b89bad29", note: "0.688860 vs a 0.695819 formula Ask · 0.001 WETH pulled JIT" },

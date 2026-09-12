@@ -47,7 +47,7 @@ Sepolia spot was $2,462.84 (Chainlink) at the time.
 | Step | Tx |
 |---|---|
 | Wrap 0.02 ETH → WETH | `0x1bc129b0e3de453a246f168ed69832395c0701a6a65af751b4071a6b7f48920c` |
-| `authorizeRange` #0 — calls $2,300–$2,800, 30 days, 0.02 WETH cap, USDC premium | `0x98e4e922e57d7fad0902089767c7b108e6485c03527c4c00f90f8e68a59d03e7` |
+| `authorizeRange` #0 — calls $2,300–$2,800, 30 days, 0.02 WETH cap, USDC premium (the fills below are the deployer buying from this range — self-fills, see limitations L15) | `0x98e4e922e57d7fad0902089767c7b108e6485c03527c4c00f90f8e68a59d03e7` |
 | `Aqua.ship` | `0x878d8bb535045acb4c20da3ae491e681c1e7c8993ac4479476168eec2a2227c1` |
 | USDC approvals (vault, Aqua) — 20 USDC from Circle's faucet | `0x6030d3e3…f004e4`, `0x4f7c2e62…8fc5bf` |
 | `buy` 0.01 units of the $2,500 call → OptionToken `0x4C4619A1DA2a0C5764C4E73cd68dc6415DDF4FA2` | `0x505285ff96be5a576a4c1895a163cc462d777517a8c421989b504cb3701c7bca` |

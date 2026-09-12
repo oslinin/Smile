@@ -399,6 +399,16 @@
           <td>Open · deployment, not code (a v4 pool per OptionToken on a chain with Uniswap v4)</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('L3')">L3</span><span class="ref-link" onclick="scrollTo('L7')">L7</span><span class="ref-link" onclick="scrollTo('S7')">S7</span></span></td>
         </tr>
+        <tr class="row-L">
+          <td><span class="code">L15</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>Self-fills are allowed — and economically null</strong> — no vault requires <code class="code">buyer != lp</code>; a broker's wash-trade ban needs both sides of one account, which a public chain cannot see (a second wallet defeats any guard). A self-fill pays the 1% fee, moves collateral into escrow and back, creates no counterparty risk (full collateralization), but prints volume on the tape and nudges sigma (L7). The Sepolia and Arc demo fills are the deployer buying from its own range and are labelled as such.
+            <div class="impl"><span class="impl-label">Where</span><span class="code">docs/limitations.md#L15</span>; receipts in <span class="code">docs/sepolia-deployment.md</span>, <span class="code">docs/arc-testnet-deployment.md</span>, <span class="code">frontend/lib/deployments.ts</span></div>
+          </td>
+          <td><span class="status implemented">Documented</span></td>
+          <td>Open · by design (pricing, not identity — L5)</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L5')">L5</span><span class="ref-link" onclick="scrollTo('L7')">L7</span></span></td>
+        </tr>
 
         <!-- RECOMMENDATIONS -->
         <tr class="row-R">

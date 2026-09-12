@@ -133,7 +133,8 @@ range.
 > vault only; the three sibling vaults have no per-block cap, so L4 applies
 > to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
 > that touch each protocol. L14 records that the Uniswap v4 hook entrance
-> (`beforeSwap`/`afterSwap`) has never run outside tests.
+> (`beforeSwap`/`afterSwap`) has never run outside tests; L15 that
+> self-fills are permitted and why the demo receipts are ones.
 
 ### L1. Stale-quote sniping — the oracle latency gap
 
@@ -369,6 +370,35 @@ about pricing or the demand loop depends on it: the vault path carries the
 whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
 not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
 hook's `poolManager` set to the real one (see the Uniswap sponsor page).
+
+### L15. Self-fills are allowed — and economically null
+
+An LP can buy from its own range: nothing in any vault requires
+`buyer != lp`. A broker forbids this (a self-cross is a wash trade: it
+prints volume and a price no counterparty agreed to), and can enforce it
+because it sees both sides of one account. A public chain cannot see "the
+same person" — a second wallet defeats any on-chain guard in seconds — so
+Smile, like every permissionless venue, does not try (see L5: rejection is
+the wrong frame, pricing is the right one).
+
+What a self-fill *is* here: the premium goes from the buyer to the LP,
+i.e. from one pocket to the other, minus the 1% protocol fee; collateral
+moves from the LP's wallet into escrow and comes back at expiry as payout
+plus reclaim. Because every option is fully collateralized, no
+counterparty risk is created and solvency is never touched — the position
+nullifies by construction. What it *does* do is what wash trades do
+anywhere: print volume and open interest on the tape (the subgraph) that
+is not real demand, and move the demand-feedback loop (each buy bumps the
+traded tenor's sigma). That second effect is L7, and it is bounded by the
+spread plus the fee paid per round trip.
+
+Disclosure: the recorded demo fills on Sepolia and Arc
+(`docs/sepolia-deployment.md`, `docs/arc-testnet-deployment.md`) are the
+deployer buying from its own range, so the subgraph had a real trade to
+index. They are labelled as self-fills. A `buyer != lp` check was
+considered for the three sibling vaults as a guard against accidental
+self-fills and left out on purpose: it would be cosmetic, and the main
+vault stays untouched by the event's ground rule.
 
 ### L12. The per-trade gas floor — and where it actually comes from
 

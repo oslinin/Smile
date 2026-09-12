@@ -81,7 +81,7 @@ as LP, buyer, and fee recipient:
 |---|---|
 | `authorizeRange` (calls $2,800–$3,200, 5 WETH cap, real-USDC premium) | `0x586eb3a4e3ecefb443bc2303bf42332ab425b352be9c4398adb28a03ebaa6aae` |
 | `Aqua.ship` | `0xf2d8c6b5dfc00774faef9c3019576bba80780b7005a8a6e368856e66f55ab7d9` |
-| `buy` 0.01 units @ $3,000 → OptionToken `0x9b12225DF5455D7DAb5AA91b6625297B4BE3e128` | `0x3563dc099723ccd01d7953160a598e8a5a82fdd3cbbae6840593f2caf245989a` |
+| `buy` 0.01 units @ $3,000 → OptionToken `0x9b12225DF5455D7DAb5AA91b6625297B4BE3e128` (deployer buying from its own range — a self-fill, limitations L15) | `0x3563dc099723ccd01d7953160a598e8a5a82fdd3cbbae6840593f2caf245989a` |
 | `SpreadVault.openStructure` (3000/3200 call credit) | `0xfda949cd1fee67410ac441edeaebed9c96519d732e0a91efc61b1fc12fdcb920` |
 | `Aqua.ship` (spread) | `0x1e6f39cd55134b8399eef27771588874c63b24f1cfccbd24705c2354471a4e98` |
 | `SpreadVault.buy` 0.01 units → SpreadToken `0xFAEed3C80eC8e8A353F19785C9673d4aC124ea70` | `0x73a8e48888b4fe77969fdcc05b6cb51c529d0ab80c4f40ff6f2f1991fe0996a5` |
