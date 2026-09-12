@@ -389,6 +389,16 @@
           <td>Open · opt-in</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('S13')">S13</span><span class="ref-link" onclick="scrollTo('L7')">L7</span><span class="ref-link" onclick="scrollTo('L8')">L8</span></span></td>
         </tr>
+        <tr class="row-L">
+          <td><span class="code">L14</span></td>
+          <td><span class="cat">Limitation</span></td>
+          <td><strong>The Uniswap v4 hook path has never run live</strong> — <code class="code">OptionPricingHook</code> has two entrances. The vault path (<code class="code">sigmaFor</code> to price, <code class="code">bumpSigma</code> after every fill and sellback) carries the whole vol surface and is live on Anvil, Sepolia and Arc. The v4 path (<code class="code">beforeSwap</code> 5% fair-value veto, <code class="code">afterSwap</code> surface-wide bump) is gated to a pool manager that <code class="code">Deploy.s.sol</code> sets to <code class="code">address(1)</code> everywhere; no OptionToken v4 pool exists, so there is no on-chain secondary market and that feedback is a design, not a live mechanism. Exercised only in <code class="code">test/OptionPricingHook.t.sol</code> with a pranked pool manager.
+            <div class="impl"><span class="impl-label">Where</span><span class="code">src/hooks/OptionPricingHook.sol</span> (<code class="code">poolManager</code> guard), <span class="code">script/Deploy.s.sol</span> (placeholder pool manager); <span class="code">docs/limitations.md#L14</span>, <span class="code">docs/sponsors/uniswap.md</span></div>
+          </td>
+          <td><span class="status implemented">Documented</span></td>
+          <td>Open · deployment, not code (a v4 pool per OptionToken on a chain with Uniswap v4)</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('L3')">L3</span><span class="ref-link" onclick="scrollTo('L7')">L7</span><span class="ref-link" onclick="scrollTo('S7')">S7</span></span></td>
+        </tr>
 
         <!-- RECOMMENDATIONS -->
         <tr class="row-R">
