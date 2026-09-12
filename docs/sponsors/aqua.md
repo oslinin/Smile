@@ -124,6 +124,50 @@ contract SmileSwapVMRouter is Simulator, SwapVM, AquaOpcodes, OptionPremiumInstr
 }
 ```
 
+The instruction itself, `_optionPremiumXD`, reads the swap direction, the taker's strike, the oracle spot with a staleness bound, and the live sigma from the Uniswap v4 hook, then prices the trade in whichever of the four exact-in / exact-out branches applies (the pricing branches are elided here; the full function is in the source file).
+
+`src/swapvm/OptionPremiumInstruction.sol`
+
+```solidity
+    /// The instruction is TWO-SIDED — direction selects the quote side:
+    ///   forward (premium in  → collateral out): buyer opens  → Ask (rounds against taker)
+    ///   reverse (collateral in → premium out):  holder closes → Bid (rounds against taker)
+    /// One shipped strategy therefore quotes a full two-sided market.
+    function _optionPremiumXD(Context memory ctx, bytes calldata args) internal view {
+        OptionTerms memory terms = _parseArgs(args);
+
+        QuoteVars memory v;
+        if (ctx.query.tokenIn == terms.premiumToken && ctx.query.tokenOut == terms.collateralToken) {
+            v.forward = true;
+        } else if (ctx.query.tokenIn == terms.collateralToken && ctx.query.tokenOut == terms.premiumToken) {
+            v.forward = false;
+        } else {
+            revert OptionPremiumWrongTokenPair(ctx.query.tokenIn, ctx.query.tokenOut);
+        }
+        require(block.timestamp < terms.expiry, OptionPremiumExpired(terms.expiry, block.timestamp));
+
+        v.strike = _takerStrike(ctx, terms);
+        (v.spot, v.ageSec) = _oracleSpotWad(terms.oracle, terms.maxStaleness);
+        v.timeToExpiry = terms.expiry - block.timestamp;
+        // Live vol surface: σ per tenor from the sigma source, skewed per strike.
+        uint256 sigmaTenor = terms.sigmaSource != address(0)
+            ? ISigmaSource(terms.sigmaSource).sigmaFor(v.timeToExpiry)
+            : DEFAULT_SIGMA;
+        // S5: LP-quoted vol — the maker's own multiplier on the tenor σ
+        // (1e4 = 1.0x; 0 = take the protocol surface as-is). Competing ranges
+        // with different multipliers form an order book in vol space.
+        if (terms.sigmaMulBps != 0) {
+            sigmaTenor = (sigmaTenor * terms.sigmaMulBps) / BPS_DENOM;
+        }
+        v.sigmaStrike = SmileMath.smileVol(v.spot, v.strike, sigmaTenor, terms.alpha, terms.beta);
+
+        if (v.forward) {
+            if (ctx.query.isExactIn) {
+        // ... four branches: forward exact-in / exact-out price at the Ask (rounds
+        // against the taker), reverse exact-in / exact-out price at the Bid.
+    }
+```
+
 The maker's packed arguments carry the oracle, the sigma source (the Uniswap v4 hook), the token pair, the strike range, the expiry, the smile parameters alpha and beta, and the adverse-selection defenses (a staleness-scaled spread, a size-convex impact term, and an LP vol multiplier). The taker selects the exact strike at swap time. The swap direction selects the side of the market: premium in and collateral out is an opening trade priced at the Ask, which rounds up; collateral in and premium out is a sellback priced at the Bid, which rounds down.
 
 The protocol fee on a call fill is an official SwapVM opcode placed in front of the pricing instruction, guarded by a jump so the fee applies only to the opening direction.
