@@ -41,6 +41,7 @@ The Graph's own Subgraph MCP server as well as any server the user adds.
 | Subgraph with `Authorization`, `Fill`, `Instrument`, `Position` entities | `subgraph/schema.graphql`, `subgraph/subgraph.yaml` | EthOnline 2026 |
 | Event handlers with bound contract calls that refresh `usedCollateral` from chain state | `subgraph/src/vault.ts` | EthOnline 2026 |
 | Studio deployments for Sepolia and Arc testnet | `subgraph/networks.json`; `frontend/lib/deployments.ts` | EthOnline 2026 |
+| Published to The Graph Network (Arbitrum One) and served through the gateway with an API key held server-side; the Sepolia subgraph id is `Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2` | `frontend/app/api/subgraph/route.ts` (`SUBGRAPH_URL_<chainId>`), `subgraph/README.md` | EthOnline 2026 (2026-09-12) |
 | Browser and server GraphQL client with per-chain endpoint resolution | `frontend/lib/subgraph.ts` | EthOnline 2026 |
 | Server-side proxy so a gateway API key never reaches the browser | `frontend/app/api/subgraph/route.ts` | EthOnline 2026 |
 | The tape: one shape for ranges, instruments, fills and positions; chain-id gate | `frontend/lib/tape.ts` | EthOnline 2026 |

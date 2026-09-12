@@ -22,7 +22,10 @@ const isServer = typeof window === "undefined";
 export function subgraphUrlFor(chainId?: number): string {
   const explicit = process.env.NEXT_PUBLIC_SUBGRAPH_URL ?? "";
   if (explicit) return explicit;
-  if (isServer && process.env.SUBGRAPH_URL) return process.env.SUBGRAPH_URL;
+  // Server only: a gateway URL carrying an API key, per chain
+  // (SUBGRAPH_URL_11155111) or for every chain (SUBGRAPH_URL).
+  const gateway = isServer ? process.env[`SUBGRAPH_URL_${chainId}`] || process.env.SUBGRAPH_URL : "";
+  if (gateway) return gateway;
   const recorded = chainId !== undefined ? DEPLOYMENTS[chainId]?.subgraph ?? "" : "";
   if (recorded) {
     // The browser goes through the proxy so a server-side gateway key (if

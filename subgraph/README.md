@@ -74,11 +74,17 @@ Sepolia and Arc are always indexed from the app's point of view. Overrides:
 
 - `NEXT_PUBLIC_SUBGRAPH_URL` — any endpoint, any chain (a local graph-node,
   a newer version).
-- `SUBGRAPH_URL` (server only) — a **gateway URL carrying an API key**
+- `SUBGRAPH_URL_<chainId>` / `SUBGRAPH_URL` (server only) — a **gateway URL carrying an API key**
   (`https://gateway.thegraph.com/api/<key>/subgraphs/id/<id>`). Browser
   queries go through `/api/subgraph`, so the key never reaches a browser.
 
 ## Publishing to the network (the production path)
+
+> **Done for Sepolia (2026-09-12):** `smile-sepolia` is published on
+> Arbitrum One — subgraph id `Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2`,
+> gateway URL `https://gateway.thegraph.com/api/<key>/subgraphs/id/Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2`. The Vercel app reads Sepolia through it
+> (`SUBGRAPH_URL_11155111`); `smile-arc-testnet` is not published and stays
+> on its Studio endpoint.
 
 The Studio query endpoints above are rate-limited dev endpoints. To serve
 through the decentralized network with an API key:

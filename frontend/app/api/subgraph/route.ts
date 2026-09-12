@@ -10,7 +10,11 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const chainId = Number(new URL(req.url).searchParams.get("chainId") ?? "0");
   const url =
-    process.env.NEXT_PUBLIC_SUBGRAPH_URL || process.env.SUBGRAPH_URL || DEPLOYMENTS[chainId]?.subgraph || "";
+    process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
+    process.env[`SUBGRAPH_URL_${chainId}`] ||
+    process.env.SUBGRAPH_URL ||
+    DEPLOYMENTS[chainId]?.subgraph ||
+    "";
   if (!url) return Response.json({ errors: [{ message: `no subgraph for chain ${chainId}` }] }, { status: 404 });
   const upstream = await fetch(url, {
     method: "POST",

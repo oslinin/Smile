@@ -158,7 +158,19 @@ a preset for The Graph's Subgraph MCP, and `subgraph/SKILL.md` +
 (the 100-trade Anvil tape) · [docs/copilot.md](copilot.md). Plan:
 [`plans/2026-09-09-theGraph.md`](plans/2026-09-09-theGraph.md), Phase 2.
 
-**Live.** `smile-sepolia` v0.0.4 —
+**Published to The Graph Network (2026-09-12).** `smile-sepolia` is
+published on Arbitrum One as subgraph
+`Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2` (deployment
+`QmRkbvKcWtMShTSDGXJhEUYkjahWGvKsWU1EcTM3wDHEua`) and served through the
+gateway: `https://gateway.thegraph.com/api/<key>/subgraphs/id/Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2`
+returns the real Sepolia instruments with `hasIndexingErrors: false`. The
+live app's server (`/api/subgraph`, the copilot's tape tools) reads Sepolia
+through that gateway URL with the key held server-side
+(`SUBGRAPH_URL_11155111`); the browser never sees it. The same key is the
+bearer token for The Graph's Subgraph MCP, which the live copilot carries
+on every request (`COPILOT_MCP_SERVERS`).
+
+**Live (Studio dev endpoints).** `smile-sepolia` v0.0.4 —
 https://thegraph.com/studio/subgraph/smile-sepolia, query
 `https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.4` — and
 `smile-arc-testnet` v0.0.1 —
