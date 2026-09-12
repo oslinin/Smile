@@ -29,3 +29,6 @@ frontend/.env.local
 # Circle Wallets kit state + entity-secret recovery file (keeper/backstop-wallet.mjs)
 keeper/.circle-wallet.json
 keeper/recovery_file_*.dat
+
+# The Graph gateway key (.mcp.json.example is the template)
+.mcp.json

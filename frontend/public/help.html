@@ -252,7 +252,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <tr>
 <td align="left"><strong>Market</strong></td>
 <td align="left"><code>OptionPricingHook</code> + <strong>Uniswap Trading API</strong></td>
-<td align="left">v4 Hook: <code>beforeSwap</code> vetoes mispriced trades; <code>afterSwap</code> shifts the vol surface. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer&#39;s ETH→USDC premium swap via the Universal Router on each trade.</td>
+<td align="left">v4 Hook: <code>beforeSwap</code> vetoes mispriced trades; <code>afterSwap</code> shifts the vol surface. Trading API used for (1) live ETH/USD spot price and (2) — when <code>NEXT_PUBLIC_UNISWAP_API_KEY</code> is set — quoting the buyer&#39;s ETH→USDC premium swap (Universal Router, mainnet route) ahead of the vault call; without a key, or on Sepolia/Arc, the buyer pays premium from USDC directly.</td>
 </tr>
 <tr>
 <td align="left"><strong>Settlement</strong></td>
@@ -729,7 +729,7 @@ addresses above run).</p>
     Aqua--&gt;&gt;LP: ✓ range live — one balance quotes the whole chain
 </code></pre>
 <h3>2. Primary Market Buy (Trader)</h3>
-<p>Premium payment is routed through the <strong>Uniswap Trading API</strong> (<code>EXACT_OUTPUT</code> ETH→USDC), giving an on-chain Uniswap tx before the vault call.</p>
+<p>With a Trading API key configured, premium payment is routed through the <strong>Uniswap Trading API</strong> (<code>EXACT_OUTPUT</code> ETH→USDC), giving an on-chain Uniswap tx before the vault call; otherwise the buyer&#39;s USDC is pulled directly.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Buyer
     participant UniAPI as 🩷 Uniswap Trading API
