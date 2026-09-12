@@ -20,6 +20,8 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 10. [EthOnline 2026 — Continuation Track](#-ethonline-2026--continuation-track)
 11. [Technical Stack](#technical-stack)
 
+**Live:** [smile-frontend-omega.vercel.app](https://smile-frontend-omega.vercel.app) — the full app with the AI copilot (server build, Sepolia + Arc) · [oslinin.github.io/Smile](https://oslinin.github.io/Smile/) — static build (no copilot) · [help site](https://smile-frontend-omega.vercel.app/help.html)
+
 More docs: [build notes & war stories](docs/build-notes.md) ·
 [verified CRE simulation transcript](docs/cre-simulation.md) ·
 [known limitations](docs/limitations.md) ·

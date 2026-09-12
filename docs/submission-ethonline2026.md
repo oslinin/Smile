@@ -256,6 +256,11 @@ full standalone terminal built on it, not a component.
 
 ## Where to look
 
+- **Live app with the copilot:** https://smile-frontend-omega.vercel.app
+  (Vercel server build from this branch — `/api/copilot` on OpenRouter,
+  `/api/subgraph` proxy; connect a wallet on Sepolia or Arc testnet). The
+  GitHub Pages build at https://oslinin.github.io/Smile/ is the static
+  export: same app, no copilot.
 - Status page: **Help → Continuation Track** in the app
   (`docs/continuation-track-reference.html`), one row per task, flipped as
   they landed.
