@@ -136,6 +136,8 @@ const before = await arcPub.readContract({ address: ARC.usdc, abi: ERC20, functi
 const mintHash = await arcWal.writeContract({ address: GATEWAY_MINTER, abi: MINTER, functionName: "gatewayMint", args: [transfer.attestation, transfer.signature], chain: null });
 ```
 
+Recorded run (2026-09-12): a 5 USDC Gateway balance already on the Sepolia domain carried a 3 USDC burn intent (Gateway requires value plus fee to fit the balance); Circle returned attestation `ee4b1e71-…` with a 0.000001 USDC fee, `GatewayMinter.gatewayMint` credited 2.997032 native USDC on Arc (`0xa5baa3e5…`) and `MarginVault.fundInsurance` took the fund from 4.003514 to 7.000546 USDC (`0xc5493a8e…`).
+
 The script is idempotent in the sense that a Gateway balance already credited on the source domain is spent before a new deposit is made, and it waits for source-chain finality (about nineteen minutes on Sepolia) by polling Circle's balance endpoint. It is run with `PRIVATE_KEY=0x… AMOUNT=5 node insurance-gateway.mjs` from the `keeper` directory.
 
 ### Circle Developer-Controlled Wallets: the treasury that funds the backstop
@@ -162,6 +164,8 @@ if (cmd === "deposit") {
   console.log(`USDC.approve(backstop) → ${EXPLORER}${a}`);
   const d = await exec(w.walletId, BACKSTOP, "deposit(uint256)", [amount.toString()]);
 ```
+
+Recorded run (2026-09-12): the treasury wallet `0x61bd6c481248f2e5bfd6d0aadf5215f353dc3368`, funded with 1.5 USDC by the deployer (`0x2c25a967…`), submitted `USDC.approve` (`0x95005ec6…`) and `MarginBackstop.deposit` of 1 USDC (`0xbfd2db0a…`), taking the pool from 30.002108 to 31.002108 USDC; both transactions were built, signed and broadcast by Circle. The Margin tab lists them under "Funded through Circle App Kits".
 
 The script has four commands: `setup` (generate and register the entity secret; a recovery file is written next to the script), `wallet` (create or show the Arc wallet), `deposit` (approve and deposit `AMOUNT` USDC into the backstop pool) and `withdraw` (request withdrawal of all shares; `withdraw()` opens after the pool's 24-hour delay). Wallet state lives in `keeper/.circle-wallet.json`; that file, the recovery file and the `.env` holding the API key and entity secret are all ignored by git. The treasury wallet created on 2026-09-12 is `0x61bd6c481248f2e5bfd6d0aadf5215f353dc3368`.
 
@@ -195,7 +199,7 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 
 - **FX options on Arc (USDC/EURC).** Mechanically the same engine pointed at a EUR/USD feed with EURC in the call-collateral slot. Task X1 of the Arc plan found the only oracle with a documented Arc testnet deployment to be Stork (`0xacC0a0cF13571d30B4b8637996F5D6D774d4fd62`), a pull-model oracle that requires an adapter in the shape of the existing `PythSpotAdapter`, an update-posting flow and an API key. It is recorded as the lead for the 2026-09-16 to 2026-09-30 window.
 - **Arc mainnet.** Task X6 of the plan is the mainnet deploy of the same script against Arc's mainnet RPC once Circle publishes it, treated with the care of a real-money deploy. The bounty's additional $2,000 for a mainnet deployment is a post-submission follow-up because mainnet launches after the submission deadline.
-- **Fund the treasury and record the runs.** Fund `0x61bd…3368` from the faucet or the deployer, run `backstop-wallet.mjs deposit`, run `insurance-gateway.mjs` from Sepolia, and add the resulting Arc transaction hashes to `docs/arc-testnet-deployment.md`.
+- **Keep the treasury funded and automate the top-ups.** Both keepers have run once (2026-09-12; hashes in `docs/arc-testnet-deployment.md` and on the Margin tab). The next step is scheduling them: a cron or CRE trigger that tops up the backstop from the Circle wallet when `totalAssets` falls below a floor and refills the insurance fund through Gateway when a haircut draws it down, so the treasury is an automated money flow rather than a manual keeper run.
 - **A real feed and real WETH when Arc provides them.** Replacing the two mocks is a one-branch change in `script/Deploy.s.sol`.
 - **Gateway onboarding in the application.** Task X4 scopes a frontend flow that lets a user with USDC on another chain act on Smile-on-Arc through Gateway's unified balance rather than a manual bridge step.
 
