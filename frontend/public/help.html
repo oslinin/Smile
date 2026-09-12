@@ -1996,18 +1996,18 @@ ETH candles.</p>
 </tr>
 <tr>
 <td><strong>IV</strong> e.g. <code>82.4%</code></td>
-<td>The implied volatility the smile assigns to that strike: σ = 0.80 × (1 + 2.0 × ln(K/S)²).</td>
-<td><code>smileVol()</code> in the browser with <code>SIGMA_GLOBAL = 0.80</code>, <code>ALPHA = 2.0</code> (the pre-event flat surface; the on-chain hook&#39;s per-tenor sigma and the β skew term are not read here).</td>
+<td>The implied volatility the smile assigns to that strike: σ = σ_tenor × max(0.1, 1 + α × ln(K/S)² + β × ln(K/S)), with σ_tenor and β read live from the on-chain hook for the selected expiry (α is the range default 2.0). A trailing <code>*</code> means the live read has not landed and the pre-event constants (0.80, 2.0, 0) are showing.</td>
+<td><code>useLiveSurface()</code> → <code>OptionPricingHook.sigmaFor(timeToExpiry)</code> and <code>beta()</code>; <code>smileSigma()</code> in <code>lib/options.ts</code>.</td>
 </tr>
 <tr>
 <td><strong>Δ</strong> e.g. <code>0.53</code> (calls) / <code>−0.47</code> (puts)</td>
-<td>Black-Scholes delta at the smile volatility: the option&#39;s price sensitivity to a $1 move in spot, and roughly the probability of expiring in the money. Put delta is call delta minus one.</td>
+<td>Black-Scholes delta at the live smile volatility: the option&#39;s price sensitivity to a $1 move in spot, and roughly the probability of expiring in the money. Put delta is call delta minus one.</td>
 <td><code>callDelta()</code> with the Abramowitz–Stegun normal CDF.</td>
 </tr>
 <tr>
 <td><strong>Bid↓sell</strong> (green) and <strong>Ask↑buy</strong> (red) e.g. <code>$121.30</code></td>
-<td>Per-unit premium. Bid is the Black-Scholes value × 0.99; Ask is × 1.01. Ask cells are dimmed and unclickable unless the strike is inside the active range on the matching side.</td>
-<td><code>priceWAD()</code> in <code>OptionMatrix.tsx</code>. Note that these are the browser&#39;s Black-Scholes approximation of the on-chain quote; the price actually charged is computed by the SwapVM opcode at fill time and is shown in the buy panel.</td>
+<td>Per-unit premium from the same formula the vault charges: intrinsic + spot × σ_strike × √T × min(S,K)/max(S,K) (README, Mathematical Specification §2), at the live sigma. Ask rounds up to the cent, Bid rounds down; the on-chain spread adds the staleness-scaled and size terms at fill time, and the 1% protocol fee is grossed up on top of the Ask. Ask cells are dimmed and unclickable unless the strike is inside the active range on the matching side.</td>
+<td><code>priceWAD()</code> → <code>protocolPremium()</code> in <code>lib/options.ts</code>.</td>
 </tr>
 <tr>
 <td><strong>Strike</strong> column, highlighted row</td>
@@ -2580,9 +2580,9 @@ ETH candles.</p>
 <td><code>useBalance</code>.</td>
 </tr>
 <tr>
-<td><strong>Active Positions</strong> <code>≥1</code> or <code>0</code> — <code>Options sold · collateral locked</code></td>
-<td>Whether any collateral is locked on the range. This is a yes/no derived from used collateral, not a count.</td>
-<td><code>usedCollateral &gt; 0</code>.</td>
+<td><strong>Active Positions</strong> e.g. <code>2</code> — <code>Instruments you wrote with open interest</code></td>
+<td>A count of the (strike, expiry) instruments this wallet has written that still have open interest. Shows <code>—</code> while the tape is loading and falls back to <code>≥1</code> only if the tape is unavailable.</td>
+<td><code>readTape()</code> instruments filtered by <code>lp</code> and <code>openInterest &gt; 0</code> (subgraph on Sepolia/Arc, event log on Anvil).</td>
 </tr>
 </tbody></table>
 <p>Per chain. On a public chain without a subgraph this tab shows no range; there is no RPC fallback there by design (limitations L12a).</p>

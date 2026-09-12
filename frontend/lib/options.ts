@@ -21,10 +21,14 @@ export const SIGMA_GLOBAL = 0.8;
 export const ALPHA = 2.0;
 export const BETA = 0.0;
 
-export function smileSigma(spot: number, strike: number): number {
+export type SmileParams = { sigma: number; alpha: number; beta: number };
+export const DEFAULT_SMILE: SmileParams = { sigma: SIGMA_GLOBAL, alpha: ALPHA, beta: BETA };
+
+/** σ_strike = σ_tenor · max(0.1, 1 + α·ln(K/S)² + β·ln(K/S)) — SmileMath.smileVol. */
+export function smileSigma(spot: number, strike: number, p: SmileParams = DEFAULT_SMILE): number {
   const lnKS = Math.log(strike / spot);
-  const multiplier = Math.max(0.1, 1 + ALPHA * lnKS * lnKS + BETA * lnKS);
-  return SIGMA_GLOBAL * multiplier;
+  const multiplier = Math.max(0.1, 1 + p.alpha * lnKS * lnKS + p.beta * lnKS);
+  return p.sigma * multiplier;
 }
 
 // ── Trader-native surface quotes (ATM vol / risk reversal / butterfly) ───────
@@ -87,9 +91,10 @@ export function protocolPremium(
   spot: number,
   strike: number,
   isCall: boolean,
-  tYears: number
+  tYears: number,
+  p: SmileParams = DEFAULT_SMILE
 ): number {
-  const sigma = smileSigma(spot, strike);
+  const sigma = smileSigma(spot, strike, p);
   const intrinsic = isCall ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
   const moneyFactor = Math.min(spot, strike) / Math.max(spot, strike);
   const timeValue = spot * sigma * Math.sqrt(Math.max(tYears, 0)) * moneyFactor;

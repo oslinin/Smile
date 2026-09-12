@@ -4,6 +4,8 @@ import { useAccount, useReadContract, useBalance, usePublicClient } from "wagmi"
 import { useState, useEffect, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
 import { fetchAuthorizationsByLp, isLocalChain, subgraphUrlFor } from "@/lib/subgraph";
+import { readTape } from "@/lib/tape";
+import type { PublicClient, Address } from "viem";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
 
 const VAULT_ABI = [
@@ -52,7 +54,22 @@ export function LPDashboard() {
   // authorization (any LP) for the buyer-facing option chain — see
   // docs/limitations.md L12a for why these can't share one piece of state.
   const [myAuth, setMyAuth] = useState<ActiveAuth | null>(null);
+  // Instruments this wallet has written that still have open interest — a
+  // real count from the tape (subgraph on public chains, event log on Anvil).
+  const [activeCount, setActiveCount] = useState<number | null>(null);
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    if (!address || !chainId) { setActiveCount(null); return; }
+    let cancelled = false;
+    readTape({ chainId, client: publicClient as PublicClient | undefined, vault: (CONTRACTS.aquaVault || undefined) as Address | undefined })
+      .then((tape) => {
+        if (cancelled) return;
+        const me = address.toLowerCase();
+        setActiveCount(tape.instruments.filter((i) => i.lp.toLowerCase() === me && i.openInterest > 0).length);
+      })
+      .catch(() => { if (!cancelled) setActiveCount(null); });
+    return () => { cancelled = true; };
+  }, [address, chainId, publicClient, myAuth]);
 
   const refreshMyAuth = useCallback(async () => {
     if (!publicClient || !address || !CONTRACTS.aquaVault) { setMyAuth(null); return; }
@@ -263,8 +280,8 @@ export function LPDashboard() {
         />
         <Stat
           label="Active Positions"
-          value={usedCollateral !== null && usedCollateral > 0 ? "≥1" : "0"}
-          sub="Options sold · collateral locked"
+          value={activeCount !== null ? String(activeCount) : usedCollateral !== null && usedCollateral > 0 ? "≥1" : "—"}
+          sub={activeCount !== null ? "Instruments you wrote with open interest" : "Options sold · collateral locked"}
         />
       </div>
     </div>
