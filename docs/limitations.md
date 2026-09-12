@@ -132,7 +132,8 @@ range.
 > `RfqVault`. Note that R1's per-authorization block cap lives in the main
 > vault only; the three sibling vaults have no per-block cap, so L4 applies
 > to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
-> that touch each protocol.
+> that touch each protocol. L14 records that the Uniswap v4 hook entrance
+> (`beforeSwap`/`afterSwap`) has never run outside tests.
 
 ### L1. Stale-quote sniping — the oracle latency gap
 
@@ -348,6 +349,26 @@ wrong, honestly:
   entire position in a series; partial-unit takeover is on the plan's cut
   list. Per-range `maxBlockNotional` (R1) is not implemented in this vault;
   the global ceiling bounds exposure instead.
+
+### L14. The Uniswap v4 hook path has never run live
+
+`OptionPricingHook` has two entrances. The one every trade uses is direct:
+the vault reads `sigmaFor()` to price and calls `bumpSigma()` after each
+fill and sellback (`AquaCollateralVault.sol:553`, `:830`), gated
+`only vault`. The other is the Uniswap v4 interface — `beforeSwap`
+(a 5% fair-value veto) and `afterSwap` (a surface-wide sigma bump) — gated
+`msg.sender == poolManager`. That path is exercised in
+`test/OptionPricingHook.t.sol` by pranking a fake pool-manager address and
+nowhere else: `script/Deploy.s.sol` passes `address(1)` as the pool manager
+on every network, no script creates a v4 pool, and Arc has no Uniswap
+deployment at all. Consequences: there is no on-chain secondary market for
+OptionTokens (holders exit only through `close()` at the Bid or by holding
+to expiry), and the "afterSwap shifts the whole surface" feedback described
+in the README's flow diagrams is a design, not a live mechanism. Nothing
+about pricing or the demand loop depends on it: the vault path carries the
+whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
+not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
+hook's `poolManager` set to the real one (see the Uniswap sponsor page).
 
 ### L12. The per-trade gas floor — and where it actually comes from
 

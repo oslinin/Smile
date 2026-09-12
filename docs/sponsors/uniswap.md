@@ -467,7 +467,7 @@ The numbered items refer to `docs/limitations.md`.
   expiry. Two expiries one day apart on either side of the 30-day edge can
   price off different buckets, and a trade can only move the bucket it landed
   in.
-- **Secondary market not deployed.** The v4 pool for OptionTokens is
+- **Secondary market not deployed (L14).** The v4 pool for OptionTokens is
   designed and tested but no live pool exists on Anvil, Sepolia or Arc; the
   pool manager is a placeholder in the deploy script. `afterSwap` is
   exercised in tests, not on a public network.

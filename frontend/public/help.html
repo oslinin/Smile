@@ -252,7 +252,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <tr>
 <td align="left"><strong>Market</strong></td>
 <td align="left"><code>OptionPricingHook</code> + <strong>Uniswap Trading API</strong></td>
-<td align="left">v4 Hook: <code>beforeSwap</code> vetoes mispriced trades; <code>afterSwap</code> shifts the vol surface. Trading API used for (1) live ETH/USD spot price and (2) — when <code>NEXT_PUBLIC_UNISWAP_API_KEY</code> is set — quoting the buyer&#39;s ETH→USDC premium swap (Universal Router, mainnet route) ahead of the vault call; without a key, or on Sepolia/Arc, the buyer pays premium from USDC directly.</td>
+<td align="left">The vol surface lives in a Uniswap v4 hook contract: every vault reads <code>sigmaFor()</code> to price and calls <code>bumpSigma()</code> after each fill (live on every chain). Its v4 entrance — <code>beforeSwap</code> vetoes mispriced secondary-market trades, <code>afterSwap</code> shifts the whole surface — awaits a live OptionToken pool (<a href="docs/limitations.md">L14</a>). Trading API used for (1) live ETH/USD spot price and (2) — when <code>NEXT_PUBLIC_UNISWAP_API_KEY</code> is set — quoting the buyer&#39;s ETH→USDC premium swap (Universal Router, mainnet route) ahead of the vault call; without a key, or on Sepolia/Arc, the buyer pays premium from USDC directly.</td>
 </tr>
 <tr>
 <td align="left"><strong>Settlement</strong></td>
@@ -1858,7 +1858,8 @@ price recorded in L13. L12a is lifted by the subgraph. R6 is built as
 <code>RfqVault</code>. Note that R1&#39;s per-authorization block cap lives in the main
 vault only; the three sibling vaults have no per-block cap, so L4 applies
 to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
-that touch each protocol.</p>
+that touch each protocol. L14 records that the Uniswap v4 hook entrance
+(<code>beforeSwap</code>/<code>afterSwap</code>) has never run outside tests.</p>
 </blockquote>
 <h3>L1. Stale-quote sniping — the oracle latency gap</h3>
 <p>The premium is computed from Chainlink&#39;s last published price
@@ -2048,6 +2049,24 @@ entire position in a series; partial-unit takeover is on the plan&#39;s cut
 list. Per-range <code>maxBlockNotional</code> (R1) is not implemented in this vault;
 the global ceiling bounds exposure instead.</li>
 </ul>
+<h3>L14. The Uniswap v4 hook path has never run live</h3>
+<p><code>OptionPricingHook</code> has two entrances. The one every trade uses is direct:
+the vault reads <code>sigmaFor()</code> to price and calls <code>bumpSigma()</code> after each
+fill and sellback (<code>AquaCollateralVault.sol:553</code>, <code>:830</code>), gated
+<code>only vault</code>. The other is the Uniswap v4 interface — <code>beforeSwap</code>
+(a 5% fair-value veto) and <code>afterSwap</code> (a surface-wide sigma bump) — gated
+<code>msg.sender == poolManager</code>. That path is exercised in
+<code>test/OptionPricingHook.t.sol</code> by pranking a fake pool-manager address and
+nowhere else: <code>script/Deploy.s.sol</code> passes <code>address(1)</code> as the pool manager
+on every network, no script creates a v4 pool, and Arc has no Uniswap
+deployment at all. Consequences: there is no on-chain secondary market for
+OptionTokens (holders exit only through <code>close()</code> at the Bid or by holding
+to expiry), and the &quot;afterSwap shifts the whole surface&quot; feedback described
+in the README&#39;s flow diagrams is a design, not a live mechanism. Nothing
+about pricing or the demand loop depends on it: the vault path carries the
+whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
+not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
+hook&#39;s <code>poolManager</code> set to the real one (see the Uniswap sponsor page).</p>
 <h3>L12. The per-trade gas floor — and where it actually comes from</h3>
 <p>Every fill pays a fixed gas overhead, which sets a minimum economical trade
 size: below it, gas dominates the premium. Measured (<code>test/GasProbe.t.sol</code>,
@@ -4102,7 +4121,7 @@ to the term.</li>
 expiry. Two expiries one day apart on either side of the 30-day edge can
 price off different buckets, and a trade can only move the bucket it landed
 in.</li>
-<li><strong>Secondary market not deployed.</strong> The v4 pool for OptionTokens is
+<li><strong>Secondary market not deployed (L14).</strong> The v4 pool for OptionTokens is
 designed and tested but no live pool exists on Anvil, Sepolia or Arc; the
 pool manager is a placeholder in the deploy script. <code>afterSwap</code> is
 exercised in tests, not on a public network.</li>
