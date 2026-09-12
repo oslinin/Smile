@@ -180,16 +180,19 @@ export default function Home() {
 
   useEffect(() => {
     if (!networkOpen) return;
+    // Bubble phase, not capture: a capture listener closes the menu (and
+    // React re-renders in the microtask after it) before the item's own
+    // onClick runs, so on mobile the tapped item vanished without firing.
     const close = () => setNetworkOpen(false);
-    window.addEventListener("click", close, { capture: true, once: true });
-    return () => window.removeEventListener("click", close, { capture: true });
+    window.addEventListener("click", close, { once: true });
+    return () => window.removeEventListener("click", close);
   }, [networkOpen]);
 
   useEffect(() => {
     if (!walletOpen) return;
     const close = () => setWalletOpen(false);
-    window.addEventListener("click", close, { capture: true, once: true });
-    return () => window.removeEventListener("click", close, { capture: true });
+    window.addEventListener("click", close, { once: true });
+    return () => window.removeEventListener("click", close);
   }, [walletOpen]);
 
   const TABS = [
