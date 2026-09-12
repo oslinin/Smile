@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract, useSwitchChain } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
-import { CONTRACTS, setActiveChainId } from "@/config/wagmi";
+import { CONTRACTS, setActiveChainId, arcMainnet } from "@/config/wagmi";
 
 const VAULT_ABI_MINI = [
   { name: "nextAuthId", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
@@ -73,8 +73,18 @@ async function switchToNetwork(chainId: number) {
 const NETWORKS = [
   { id: 11155111, name: "Sepolia" },
   { id: 5042002,  name: "Arc Testnet" },
+  ...(arcMainnet ? [{ id: arcMainnet.id, name: "Arc" }] : []),
   { id: 31337,    name: "Anvil" },
 ];
+if (arcMainnet) {
+  ADDABLE_CHAINS[arcMainnet.id] = {
+    chainId: "0x" + arcMainnet.id.toString(16),
+    chainName: "Arc",
+    nativeCurrency: arcMainnet.nativeCurrency,
+    rpcUrls: [arcMainnet.rpcUrls.default.http[0]],
+    ...(arcMainnet.blockExplorers ? { blockExplorerUrls: [arcMainnet.blockExplorers.default.url] } : {}),
+  };
+}
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -114,7 +124,7 @@ export default function Home() {
     setSwitchError(null);
     if (!isConnected) { switchToNetwork(id); return; }
     switchChain(
-      { chainId: id as 1 | 11155111 | 5042002 | 31337 | 1337 },
+      { chainId: id as never }, // one of the configured chains (NETWORKS ⊂ config.chains)
       { onError: (e) => setSwitchError(e.message.split("\n")[0]) },
     );
   };
@@ -230,7 +240,8 @@ export default function Home() {
 
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html`}
+            // Lands on the Screens page section for the tab in view.
+            href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html#screens/tab-${activeTab}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-semibold text-gray-400 hover:text-white transition-colors"

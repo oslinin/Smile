@@ -25,10 +25,30 @@ export const arcTestnet = defineChain({
   testnet: true,
 });
 
+// Arc mainnet: defined only once its chain id and RPC are set in env
+// (public launch 2026-09-16; docs/arc-mainnet-checklist.md). Addresses for it
+// come from the NEXT_PUBLIC_* env map below until docs/arc-mainnet-deployment.md
+// records them in DEPLOYED_ADDRESSES.
+const arcMainnetId = Number(process.env.NEXT_PUBLIC_ARC_MAINNET_CHAIN_ID ?? 0);
+const arcMainnetRpc = process.env.NEXT_PUBLIC_ARC_MAINNET_RPC ?? "";
+export const arcMainnet = arcMainnetId && arcMainnetRpc
+  ? defineChain({
+      id: arcMainnetId,
+      name: "Arc",
+      nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+      rpcUrls: { default: { http: [arcMainnetRpc] } },
+      ...(process.env.NEXT_PUBLIC_ARC_MAINNET_EXPLORER
+        ? { blockExplorers: { default: { name: "Arcscan", url: process.env.NEXT_PUBLIC_ARC_MAINNET_EXPLORER } } }
+        : {}),
+    })
+  : undefined;
+
 const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
 
 export const config = createConfig({
-  chains: [mainnet, sepolia, arcTestnet, hardhat, localhost1337],
+  chains: arcMainnet
+    ? [mainnet, sepolia, arcTestnet, arcMainnet, hardhat, localhost1337]
+    : [mainnet, sepolia, arcTestnet, hardhat, localhost1337],
   connectors: [
     injected(),
     ...(projectId ? [walletConnect({ projectId })] : []),
@@ -37,6 +57,7 @@ export const config = createConfig({
     [mainnet.id]:        http(),
     [sepolia.id]:        http(),
     [arcTestnet.id]:     http(),
+    ...(arcMainnet ? { [arcMainnet.id]: http() } : {}),
     [hardhat.id]:        http("http://127.0.0.1:8545"),
     [localhost1337.id]:  http("http://127.0.0.1:8545"),
   },

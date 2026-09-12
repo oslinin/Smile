@@ -14,6 +14,7 @@ const outFile = join(here, "..", "lib", "copilot", "knowledge.generated.json");
 const DOCS = [
   { source: "README.md", prefix: "readme" },
   { source: "docs/guide.md", prefix: "guide" },
+  { source: "docs/screens.md", prefix: "screens" },
   { source: "docs/limitations.md", prefix: "limitations" },
   { source: "docs/solutions.md", prefix: "solutions" },
   { source: "docs/copilot.md", prefix: "copilot" },

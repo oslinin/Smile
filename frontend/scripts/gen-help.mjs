@@ -73,6 +73,7 @@ const readDoc = (relPath) => readFileSync(join(repoRoot, relPath), "utf8");
 const pages = [
   { id: "overview", label: "Overview", source: "README.md", mermaid: true },
   { id: "guide", label: "User Guide", source: "docs/guide.md", mermaid: false },
+  { id: "screens", label: "Screens", source: "docs/screens.md", mermaid: false },
   { id: "limitations", label: "Limitations", source: "docs/limitations.md", mermaid: false },
   { id: "solutions", label: "Solutions", source: "docs/solutions.md", mermaid: false },
   { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
@@ -194,6 +195,7 @@ const html = `<!doctype html>
   .page { display: none; }
   .page.active { display: block; }
   .doc { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  .doc a[id^="tab-"] { display: block; scroll-margin-top: 16px; }
   .page-reference { height: 100vh; }
   .page-reference iframe { width: 100%; height: 100%; border: none; display: block; }
   h1, h2, h3, h4 { color: #fff; font-weight: 700; line-height: 1.25; margin: 1.8em 0 0.6em; }
@@ -282,7 +284,9 @@ const html = `<!doctype html>
       catch (e) { console.error("mermaid render failed", e); }
     }
 
-    function showPage(id) {
+    // Hash forms: "#page" or "#page/anchor" — the app's Help link uses
+    // "#screens/tab-<id>" to land on the section for the tab in view.
+    function showPage(id, anchor) {
       if (VALID_PAGES.indexOf(id) === -1) id = VALID_PAGES[0];
       document.querySelectorAll(".page").forEach(function (el) { el.classList.remove("active"); });
       document.querySelectorAll(".nav-link").forEach(function (el) { el.classList.remove("active"); });
@@ -290,14 +294,25 @@ const html = `<!doctype html>
       section.classList.add("active");
       document.querySelector('.nav-link[data-page="' + id + '"]').classList.add("active");
       renderMermaidIn(section);
-      history.replaceState(null, "", "#" + id);
+      history.replaceState(null, "", "#" + id + (anchor ? "/" + anchor : ""));
+      if (anchor) {
+        var target = document.getElementById(anchor);
+        if (target) requestAnimationFrame(function () { target.scrollIntoView({ block: "start" }); });
+      } else {
+        window.scrollTo(0, 0);
+      }
+    }
+    function showHash(hash) {
+      var parts = (hash || "#overview").slice(1).split("/");
+      showPage(parts[0], parts[1]);
     }
 
     document.querySelectorAll(".nav-link").forEach(function (btn) {
       btn.addEventListener("click", function () { showPage(btn.dataset.page); });
     });
 
-    showPage((location.hash || "#overview").slice(1));
+    showHash(location.hash);
+    window.addEventListener("hashchange", function () { showHash(location.hash); });
 
     // Best-effort mermaid load — never blocks navigation or page rendering.
     mermaidReady = import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")

@@ -125,6 +125,9 @@ contract Deploy is Script, StdCheats {
         // Second Anvil account — acts as a buyer in manual testing
         address buyer       = vm.envOr("BUYER_ADDRESS", address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8));
         bool    forkMainnet = vm.envOr("FORK_MAINNET", false);
+        // Arc mainnet chain id is not published as of 2026-09-12; it must be
+        // supplied, never guessed (docs/arc-mainnet-checklist.md).
+        uint256 arcMainnetId = vm.envOr("ARC_MAINNET_CHAIN_ID", uint256(0));
 
         address usdcAddr;
         address wethAddr;
@@ -150,6 +153,29 @@ contract Deploy is Script, StdCheats {
             usdcAddr   = 0x3600000000000000000000000000000000000000; // Arc USDC (docs.arc.io contract addresses)
             wethAddr   = address(arcWeth);
             oracleAddr = address(arcOracle);
+        } else if (arcMainnetId != 0 && block.chainid == arcMainnetId) {
+            // ── Arc mainnet (public from 2026-09-16): everything from env —
+            //    docs/arc-mainnet-checklist.md. Real USDC (the native asset's
+            //    ERC-20 view, overridable), canonical WETH and a Chainlink
+            //    ETH/USD feed if Arc has them on day one; mocks only when
+            //    ARC_MAINNET_ALLOW_MOCKS=true, never silently. ─────────────
+            usdcAddr   = vm.envOr("ARC_MAINNET_USDC", address(0x3600000000000000000000000000000000000000));
+            wethAddr   = vm.envOr("ARC_MAINNET_WETH", address(0));
+            oracleAddr = vm.envOr("ARC_MAINNET_ETH_USD_FEED", address(0));
+            aquaAddr   = vm.envOr("ARC_MAINNET_AQUA", address(0)); // official 1inch Aqua if deployed there, else ours below
+            bool allowMocks = vm.envOr("ARC_MAINNET_ALLOW_MOCKS", false);
+            require(wethAddr != address(0) || allowMocks, "Arc mainnet: set ARC_MAINNET_WETH or ARC_MAINNET_ALLOW_MOCKS=true");
+            require(oracleAddr != address(0) || allowMocks, "Arc mainnet: set ARC_MAINNET_ETH_USD_FEED or ARC_MAINNET_ALLOW_MOCKS=true");
+            if (wethAddr == address(0) || oracleAddr == address(0)) {
+                vm.startBroadcast(deployerKey);
+                if (wethAddr == address(0)) {
+                    MockERC20 mainnetWeth = new MockERC20("Wrapped Ether", "WETH", 18);
+                    mainnetWeth.mint(deployer, 100e18);
+                    wethAddr = address(mainnetWeth);
+                }
+                if (oracleAddr == address(0)) oracleAddr = address(new MockV3Aggregator(8, 3000e8));
+                vm.stopBroadcast();
+            }
         } else if (forkMainnet) {
             // ── Mainnet fork: real tokens, real Chainlink feed, and the
             //    OFFICIAL production Aqua deployment ─────────────────────────

@@ -221,6 +221,16 @@ test locally.
 
 ## X6: Deploy to Arc mainnet — the $2,000-gated task, cannot cut
 
+> **Status 2026-09-12: scaffolded, blocked on the launch.** Mainnet is not
+> public until 2026-09-16 and its chain id / RPC are not in Circle's docs
+> yet, so nothing is hardcoded. `script/Deploy.s.sol` has an env-driven Arc
+> mainnet branch (`ARC_MAINNET_CHAIN_ID`, `_USDC`, `_WETH`, `_ETH_USD_FEED`,
+> `_AQUA`, `_ALLOW_MOCKS` — mocks only by explicit opt-in), the frontend adds
+> an "Arc" network when `NEXT_PUBLIC_ARC_MAINNET_CHAIN_ID` / `_RPC` are set,
+> `.env.arc-mainnet.example` lists every variable, and
+> `docs/arc-mainnet-checklist.md` is the launch-day runbook (facts to confirm,
+> fund, deploy, fills, record, subgraph, Vercel, App Kits, paperwork).
+
 **Files:** none new; runs X2's deploy script against Arc mainnet once it's
 live (September 16).
 
