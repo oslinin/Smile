@@ -56,6 +56,10 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
       { label: "SpreadVault.buy · 3000/3200 call credit", hash: "0x73a8e48888b4fe77969fdcc05b6cb51c529d0ab80c4f40ff6f2f1991fe0996a5", note: "0.000625 WETH pulled — 16× less than a naked leg" },
       { label: "MarginVault.buy · 0.001 × $3,000 put", hash: "0x0938c5be639e8daf30b88d15b82d5ec80dd5d3a68096e5b796051f00791a4d02", note: "1.50 USDC of initial margin, not the 3.00 USDC strike" },
       { label: "RfqVault.fill · LP-signed quote", hash: "0x257a8fd1c638dc8590dac048abc12ef85ce78249a3f3df7a6a36d725b89bad29", note: "0.688860 vs a 0.695819 formula Ask · 0.001 WETH pulled JIT" },
+      // Circle App Kits (2026-09-12): the treasury funds the margin tier with no private key in the repo.
+      { label: "Treasury · Wallets kit → MarginBackstop.deposit 1 USDC", hash: "0xbfd2db0a0b5f3be1bd8b0bd240859fe95608ee5656420ff5b1312a35706a4d95", note: "Circle-custodied wallet 0x61bd…3368 signs through Circle's API · pool 30.00 → 31.00 USDC" },
+      { label: "Treasury · Gateway → GatewayMinter.gatewayMint 2.997 USDC", hash: "0xa5baa3e5880b59b68c4561298cbf8f107d40591ee8cf9b3d0ec71aadf35fc057", note: "Sepolia USDC → signed BurnIntent → Circle attestation → native USDC on Arc" },
+      { label: "Treasury · Gateway → MarginVault.fundInsurance 2.997 USDC", hash: "0xc5493a8e121b52b7e9c6c52ef894ce96cc5a1b3d42e343bfd687b872ec6ac61b", note: "insurance fund 4.00 → 7.00 USDC" },
     ],
   },
 };

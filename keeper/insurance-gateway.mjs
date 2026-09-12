@@ -48,12 +48,15 @@ const srcWal = createWalletClient({ account, transport: http(src.rpc) });
 const arcPub = createPublicClient({ transport: http(ARC.rpc) });
 const arcWal = createWalletClient({ account, transport: http(ARC.rpc) });
 const usd = (v) => (Number(v) / 1e6).toFixed(6);
+// Gateway's API returns USDC amounts as decimal strings ("5.000000"); on-chain
+// values are integer micro-units. Accept either.
+const micro = (v) => (typeof v === "string" && v.includes(".") ? BigInt(Math.round(Number(v) * 1e6)) : BigInt(v));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function gatewayBalance() {
   const r = await fetch(`${GATEWAY_API}/v1/balances`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: "USDC", sources: [{ depositor: account.address, domain: src.domain }] }) });
   const j = await r.json();
-  return BigInt(j.balances?.[0]?.balance ?? "0");
+  return micro(j.balances?.[0]?.balance ?? "0");
 }
 
 // ── 1. deposit on the source chain (skipped if the Gateway already holds enough) ──
@@ -99,7 +102,7 @@ const json = (v) => JSON.stringify(v, (_, x) => (typeof x === "bigint" ? x.toStr
 // Fee + expiry from Circle's estimate; the fee is taken out of `value`.
 const est = await fetch(`${GATEWAY_API}/v1/estimate`, { method: "POST", headers: { "content-type": "application/json" }, body: json([{ spec }]) }).then((r) => r.json());
 const estimated = est.body?.[0]?.burnIntent;
-const maxFee = BigInt(estimated?.maxFee ?? 2_010000);
+const maxFee = micro(estimated?.maxFee ?? 2_010000);
 const maxBlockHeight = BigInt(estimated?.maxBlockHeight ?? (1n << 256n) - 1n);
 console.log(`estimate: maxFee ${usd(maxFee)} USDC, maxBlockHeight ${maxBlockHeight}`);
 const types = {
@@ -117,7 +120,7 @@ const signature = await account.signTypedData({ domain: { name: "GatewayWallet",
 const res = await fetch(`${GATEWAY_API}/v1/transfer`, { method: "POST", headers: { "content-type": "application/json" }, body: json([{ burnIntent, signature }]) });
 const transfer = await res.json();
 if (!transfer.attestation) { console.error("transfer failed:", transfer); process.exit(1); }
-console.log(`attestation ${transfer.transferId} · fees ${usd(transfer.fees?.total ?? 0)} USDC`);
+console.log(`attestation ${transfer.transferId} · fees ${usd(micro(transfer.fees?.total ?? 0))} USDC`);
 
 // ── 3. mint on Arc, fund the insurance pool ──────────────────────────────────
 const before = await arcPub.readContract({ address: ARC.usdc, abi: ERC20, functionName: "balanceOf", args: [account.address] });

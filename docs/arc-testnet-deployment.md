@@ -114,6 +114,24 @@ of naked notional sits well under it. Sizes are faucet-sized: the deployer
 had 39 USDC at the start (half of it the first, mis-routed faucet drop) and
 3.17 after seeding, gas and fills.
 
+### Circle App Kits fund the margin tier (2026-09-12)
+
+Two keepers, no treasury private key in the repo (`keeper/backstop-wallet.mjs`,
+`keeper/insurance-gateway.mjs`; see `docs/sponsors/arc.md`).
+
+| Step | Tx |
+|---|---|
+| Deployer → Circle developer-controlled wallet `0x61bd6c48…dc3368`, 1.5 USDC (native transfer, gas + deposit) | `0x2c25a9677d539c1053e419312be679bc85bd470562177c0f7c2ccb223dddcaa4` |
+| Wallets kit: `USDC.approve(MarginBackstop)` signed by Circle | `0x95005ec62e608ac6bcf04444409623d9be6b32b7ae33401baf310bc431abc84f` |
+| Wallets kit: `MarginBackstop.deposit` 1 USDC — pool 30.002108 → 31.002108 | `0xbfd2db0a0b5f3be1bd8b0bd240859fe95608ee5656420ff5b1312a35706a4d95` |
+| Gateway: `GatewayMinter.gatewayMint` on Arc, +2.997032 USDC (3 USDC burn intent from a 5 USDC Gateway balance on the Sepolia domain, attestation `ee4b1e71-…`, fee 0.000001) | `0xa5baa3e5880b59b68c4561298cbf8f107d40591ee8cf9b3d0ec71aadf35fc057` |
+| Gateway: `MarginVault.fundInsurance` 2.997032 — fund 4.003514 → 7.000546 | `0xc5493a8e121b52b7e9c6c52ef894ce96cc5a1b3d42e343bfd687b872ec6ac61b` |
+
+Gotcha: Circle's Gateway API reports amounts as decimal strings
+(`"5.000000"`), and `/v1/transfer` requires `value + fee ≤ balance`
+(a 5 USDC balance could not carry a 5 USDC intent: "required 6"). The
+keeper now parses both forms and the run used `AMOUNT=3`.
+
 ## Gotchas learned here
 
 - Arc's RPC returns `"Blocked address"` for at least one well-known

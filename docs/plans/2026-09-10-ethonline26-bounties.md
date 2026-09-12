@@ -317,14 +317,18 @@ than a slide.
 }
 ```
 
-### Circle Gateway — cut for Sept 13
+### Circle App Kits — built after all (2026-09-11/12)
 
-Explicitly out of scope for the 3-day submission — Gateway's Arc
-availability isn't even confirmed yet. Revisit only in the Sept 16-30
-window if the mainnet bonus is being pursued with spare time; the story is
-still in `docs/plans/2026-09-10-arc-bounty.md` (X4). The RFQ tier that used
-to share this section was built and belongs to the 1inch track — see
-**Part C — RfqVault** above; nothing in it is Arc-specific.
+Written off above as "cut for Sept 13"; built once the rest had landed.
+`keeper/insurance-gateway.mjs` (Gateway: Sepolia deposit → signed
+BurnIntent → attestation → `gatewayMint` on Arc → `fundInsurance`) and
+`keeper/backstop-wallet.mjs` (a Circle developer-controlled wallet on
+ARC-TESTNET that approves and deposits into `MarginBackstop` through
+Circle's API — no treasury key in the repo). Both ran for real on
+2026-09-12: insurance fund 4 → 7 USDC, backstop 30 → 31 USDC; hashes in
+`docs/arc-testnet-deployment.md`, receipts on the Margin tab, story in
+`docs/sponsors/arc.md`. The RFQ tier that used to share this section
+belongs to the 1inch track — see **Part C — RfqVault** above.
 
 ---
 

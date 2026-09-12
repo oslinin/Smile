@@ -219,6 +219,16 @@ quote filled at 0.688860 vs a 0.695819 formula Ask with 0.001 WETH pulled
 JIT (`0x257a8fd1…`). The whole capital-efficiency ladder now settles in
 Circle's native dollar on Arc.
 
+**Circle App Kits (2026-09-12).** The margin tier's safety funds are
+topped up with no treasury key in the repository: Circle **Gateway** took
+USDC deposited on Sepolia, attested a signed burn intent, minted native USDC
+on Arc (`0xa5baa3e5…`) and funded `MarginVault.fundInsurance` (`0xc5493a8e…`,
+fund 4 → 7 USDC); a Circle **developer-controlled wallet** on ARC-TESTNET
+(`0x61bd…3368`, signed through Circle's API) deposited into `MarginBackstop`
+(`0xbfd2db0a…`, pool 30 → 31 USDC). `keeper/insurance-gateway.mjs`,
+`keeper/backstop-wallet.mjs`; the Margin tab lists the receipts under
+"Funded through Circle App Kits".
+
 **Gotchas that became docs.** `forge script` cannot simulate calls to Arc's
 native-asset USDC (`StackUnderflow` in revm) → `cast send` only; Arc's RPC
 blocks well-known dev keys; faucet USDC is both gas and premium balance.

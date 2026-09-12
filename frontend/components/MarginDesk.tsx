@@ -13,6 +13,7 @@
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
+import { DEPLOYMENTS } from "@/lib/deployments";
 
 const MARGIN_ABI = [
   {
@@ -111,7 +112,11 @@ function fmtUsdc(v: bigint | undefined, digits = 2) {
 }
 
 export function MarginDesk({ spot }: { spot: number }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  // How the pools were funded on this chain (Circle App Kits on Arc) — the
+  // receipts tagged "Treasury ·" in lib/deployments.ts.
+  const dep = chainId ? DEPLOYMENTS[chainId] : undefined;
+  const treasury = dep?.demo.filter((t) => t.label.startsWith("Treasury ·")) ?? [];
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const mv = (CONTRACTS.marginVault || ZERO) as `0x${string}`;
@@ -446,6 +451,17 @@ export function MarginDesk({ spot }: { spot: number }) {
             <div className="flex justify-between"><span className="text-gray-400">Backstop pool</span><span className="font-mono text-white">{fmtUsdc(poolAssets, 0)}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Insurance fund</span><span className="font-mono text-white">{fmtUsdc(insurance, 0)}</span></div>
             <div className="text-gray-500 pt-1">Waterfall: writer margin → free balance → takeover bidder → backstop → insurance → (haircut, loudly).</div>
+            {treasury.length > 0 && dep && (
+              <div className="pt-2 border-t border-gray-700 space-y-0.5">
+                <div className="text-gray-400">Funded through Circle App Kits</div>
+                {treasury.map((t) => (
+                  <div key={t.hash} className="flex justify-between gap-2">
+                    <span className="text-gray-500">{t.label.replace("Treasury · ", "")}{t.note ? ` — ${t.note}` : ""}</span>
+                    <a href={`${dep.explorer}/tx/${t.hash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:underline shrink-0">{t.hash.slice(0, 10)}…</a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <p className="text-gray-600 text-xs">
