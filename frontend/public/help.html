@@ -120,6 +120,7 @@
         <button class="nav-link" data-page="uniswap">Uniswap</button>
         <button class="nav-link" data-page="thegraph">The Graph</button>
         <button class="nav-link" data-page="arc">Circle · Arc</button>
+        <button class="nav-link" data-page="frontend">Frontend</button>
         <button class="nav-link" data-page="reference">Reference Table</button>
         <button class="nav-link" data-page="continuation-track">Continuation Track</button>
     </nav>
@@ -149,7 +150,7 @@
 <a href="docs/limitations.md">known limitations</a> ·
 <a href="docs/solutions.md">solutions &amp; phased roadmap</a> ·
 <a href="docs/reference-table.html">reference table — every L/R/S/P, one-liner + status</a> ·
-sponsor pages — <a href="docs/sponsors/aqua.md">1inch Aqua</a>, <a href="docs/sponsors/chainlink.md">Chainlink</a>, <a href="docs/sponsors/uniswap.md">Uniswap</a>, <a href="docs/sponsors/thegraph.md">The Graph</a>, <a href="docs/sponsors/arc.md">Circle · Arc</a></p>
+sponsor pages — <a href="docs/sponsors/aqua.md">1inch Aqua</a>, <a href="docs/sponsors/chainlink.md">Chainlink</a>, <a href="docs/sponsors/uniswap.md">Uniswap</a>, <a href="docs/sponsors/thegraph.md">The Graph</a>, <a href="docs/sponsors/arc.md">Circle · Arc</a>, <a href="docs/sponsors/frontend.md">Frontend</a></p>
 <blockquote>
 <p>This README is also published as a wiki-style help page — with a sidebar
 linking Overview (this doc), Limitations, Solutions, and the Reference
@@ -4263,10 +4264,13 @@ publishes as a matter of course and which an on-chain venue otherwise does
 not have.</p>
 <p>Two subgraphs are live on Subgraph Studio, The Graph&#39;s hosted deployment
 service: <code>smile-sepolia</code> (version 0.0.4) for the Sepolia testnet and
-<code>smile-arc-testnet</code> (version 0.0.1) for Circle&#39;s Arc testnet. On those
-public networks the application and the AI copilot read positions,
-liquidity and trade history from The Graph only; no RPC scan exists as a
-fallback. The copilot is built on that tape as a trading agent: it screens
+<code>smile-arc-testnet</code> (version 0.0.1) for Circle&#39;s Arc testnet. On
+2026-09-12 both were also published to The Graph Network, the
+decentralised network of indexers, and the live application reads them
+through the network&#39;s gateway with an API key that never leaves the
+server. On those public networks the application and the AI copilot read
+positions, liquidity and trade history from The Graph only; no RPC scan
+exists as a fallback. The copilot is built on that tape as a trading agent: it screens
 every live strike against the listed reference market, maps where
 liquidity is scarce, computes the greeks of a wallet&#39;s whole book, sizes a
 hedge, and prepares the range an LP might write or the quote a market
@@ -4338,9 +4342,14 @@ The Graph&#39;s own Subgraph MCP server as well as any server the user adds.</p>
 <td>EthOnline 2026</td>
 </tr>
 <tr>
-<td>MCP servers per user with a preset for The Graph&#39;s Subgraph MCP</td>
-<td><code>frontend/lib/copilot/mcp.ts</code>, <code>frontend/components/copilot/CopilotSettings.tsx</code></td>
-<td>EthOnline 2026</td>
+<td>MCP servers: operator-seeded (<code>COPILOT_MCP_SERVERS</code>) and per-user (settings gear, <code>x-copilot-mcp</code> header), opened per request; The Graph&#39;s Subgraph MCP seeded on the live deployment and verified end to end</td>
+<td><code>frontend/lib/copilot/mcp.ts</code>, <code>frontend/components/copilot/CopilotSettings.tsx</code>, <code>frontend/app/api/copilot/route.ts</code></td>
+<td>EthOnline 2026 (verified 2026-09-12)</td>
+</tr>
+<tr>
+<td>The copilot itself: one server route, four providers (operator env or bring-your-own-key header), a system prompt assembled from the knowledge pack, the tab briefing and the active skills, nineteen built-in tools</td>
+<td><code>frontend/app/api/copilot/route.ts</code>, <code>frontend/lib/copilot/provider.ts</code>, <code>systemPrompt.ts</code>, <code>tools.ts</code>, <code>knowledge.ts</code></td>
+<td>Pre-existing (route, providers, docs tools); EthOnline 2026 (tape tools, tabs, skills, MCP, OpenRouter)</td>
 </tr>
 <tr>
 <td>Agent-facing subgraph documentation and client configuration</td>
@@ -4538,16 +4547,24 @@ call throws rather than scanning.</p>
 </code></pre>
 <p>Every <code>Tape</code> carries a <code>source</code> field, <code>&quot;subgraph&quot;</code> or <code>&quot;anvil-logs&quot;</code>, and
 the copilot is instructed to state where its numbers came from.</p>
-<h3>The proxy</h3>
-<p>A gateway URL that carries an API key is configured server-side as
-<code>SUBGRAPH_URL</code>. Browser callers reach it through <code>/api/subgraph</code>, which
-forwards the request body unchanged and falls back to the recorded Studio
-endpoint when no server-side URL is set.</p>
+<h3>The proxy and the per-chain gateway URL</h3>
+<p>A gateway URL carries the API key in its path, so it must never reach a
+browser. It is configured server-side, per chain, and the browser reaches
+it through <code>/api/subgraph</code>, which forwards the request body unchanged.
+Resolution order in the route: an explicit <code>NEXT_PUBLIC_SUBGRAPH_URL</code>
+override, then <code>SUBGRAPH_URL_&lt;chainId&gt;</code>, then a chain-agnostic
+<code>SUBGRAPH_URL</code>, then the recorded Studio endpoint for the chain. The live
+deployment sets <code>SUBGRAPH_URL_11155111</code> and <code>SUBGRAPH_URL_5042002</code>, so
+Sepolia and Arc reads go through the network while Anvil has no entry.</p>
 <p><code>frontend/app/api/subgraph/route.ts</code>:</p>
 <pre><code class="language-typescript">export async function POST(req: Request) {
   const chainId = Number(new URL(req.url).searchParams.get(&quot;chainId&quot;) ?? &quot;0&quot;);
   const url =
-    process.env.NEXT_PUBLIC_SUBGRAPH_URL || process.env.SUBGRAPH_URL || DEPLOYMENTS[chainId]?.subgraph || &quot;&quot;;
+    process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
+    process.env[`SUBGRAPH_URL_${chainId}`] ||
+    process.env.SUBGRAPH_URL ||
+    DEPLOYMENTS[chainId]?.subgraph ||
+    &quot;&quot;;
   if (!url) return Response.json({ errors: [{ message: `no subgraph for chain ${chainId}` }] }, { status: 404 });
   const upstream = await fetch(url, {
     method: &quot;POST&quot;,
@@ -4560,10 +4577,178 @@ endpoint when no server-side URL is set.</p>
   });
 }
 </code></pre>
-<h3>A copilot tool</h3>
-<p><code>find_opportunities</code> loads the tape and the Deribit reference in parallel,
-reads the vault&#39;s live volatility per expiry, and prices every grid strike
-of every active range.</p>
+<p>The same resolution lives in <code>subgraphUrlFor</code> in <code>frontend/lib/subgraph.ts</code>
+for server-side callers such as the copilot&#39;s tape tools; in the browser
+that function returns the proxy path when the build has a server, and the
+Studio endpoint directly on the static GitHub Pages export, which has no
+server and therefore no key.</p>
+<h3>Published to The Graph Network</h3>
+<p>A subgraph on The Graph exists in two places with different guarantees. A
+<strong>Studio deployment</strong> is served by The Graph&#39;s own upgrade indexer from a
+rate-limited development endpoint with no key. <strong>Publishing</strong> records the
+subgraph on the protocol&#39;s contracts, which live on Arbitrum One
+regardless of the chain the subgraph indexes, and makes it available
+through the <strong>gateway</strong>, the query endpoint that routes each request to an
+indexer and bills it to an <strong>API key</strong>. No curation signal is required:
+the upgrade indexer keeps serving a published subgraph until independent
+indexers pick it up.</p>
+<p>Both subgraphs were published on 2026-09-12. The publish transaction is a
+wallet step in Studio; the API key is created under Studio → API Keys.</p>
+<table>
+<thead>
+<tr>
+<th>Network</th>
+<th>Subgraph id (network)</th>
+<th>Deployment id (IPFS hash)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Sepolia</td>
+<td><code>Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2</code></td>
+<td><code>QmRkbvKcWtMShTSDGXJhEUYkjahWGvKsWU1EcTM3wDHEua</code></td>
+</tr>
+<tr>
+<td>Arc testnet</td>
+<td><code>9ZcFMvnhbWygRg7oB29NL8smoVysqCbdQpqNMhWtHbmq</code></td>
+<td><code>QmTA9unF8d66AwATQz6MYxM6zvEW6LAj3kned4E48txoc3</code></td>
+</tr>
+</tbody></table>
+<p>The gateway URL has the form
+<code>https://gateway.thegraph.com/api/&lt;key&gt;/subgraphs/id/&lt;subgraph id&gt;</code>. Both
+answered with the testnets&#39; real instruments and <code>hasIndexingErrors: false</code> within minutes of publishing (the Arc subgraph took about two
+minutes to appear). A subgraph id names the subgraph across versions; a
+deployment id names one built version, and the gateway can also be
+addressed by it (<code>/deployments/id/&lt;hash&gt;</code>).</p>
+<p>The Studio development endpoints remain recorded in <code>lib/deployments.ts</code>
+as the fallback for the browser on the static export and for any
+environment without the key. The same key is the bearer token for The
+Graph&#39;s Subgraph MCP server (next sections), so one credential covers both
+the data path and the agent path.</p>
+<h3>The copilot</h3>
+<p>The copilot is a chat panel in the application and one server route,
+<code>POST /api/copilot/</code>. The route exists only on server builds (the Vercel
+deployment); the static GitHub Pages export has no server, so the widget
+hides itself there (<code>NEXT_PUBLIC_COPILOT</code>). Each request carries the chat
+history and a context object the client assembles from what is on screen,
+so the copilot&#39;s numbers match the visible interface.</p>
+<p><code>frontend/app/api/copilot/route.ts</code>:</p>
+<pre><code class="language-typescript">const ctx: CopilotContext = {
+  spot: typeof context?.spot === &quot;number&quot; &amp;&amp; context.spot &gt; 0 ? context.spot : 3420,
+  chainId: context?.chainId,
+  address: context?.address,
+  tab: isTabId(context?.tab) ? context.tab : undefined,
+  skills: Array.isArray(context?.skills) ? context.skills.filter((s) =&gt; typeof s === &quot;string&quot;) : undefined,
+  customSkills: Array.isArray(context?.customSkills) ? context.customSkills : undefined,
+};
+</code></pre>
+<p><strong>Model providers.</strong> <code>lib/copilot/provider.ts</code> supports four providers,
+<code>anthropic</code>, <code>openai</code>, <code>google</code> and <code>openrouter</code>, with defaults
+<code>claude-opus-4-8</code>, <code>gpt-5-mini</code>, <code>gemini-2.5-pro</code> and <code>openrouter/auto</code>.
+The operator chooses one with <code>COPILOT_PROVIDER</code> and the matching key
+variable (<code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>,
+<code>GOOGLE_GENERATIVE_AI_API_KEY</code>, <code>OPENROUTER_API_KEY</code>), optionally
+overriding the model with <code>COPILOT_MODEL</code>. A user may instead bring their
+own key: the settings gear stores provider, key and model in the browser&#39;s
+local storage only, and the panel sends them per request in the
+<code>x-copilot-provider</code>, <code>x-copilot-api-key</code> and <code>x-copilot-model</code> headers;
+the route builds that request&#39;s model client from them and never stores
+or logs them. The live deployment runs <code>openrouter</code> with
+<code>COPILOT_MODEL=openrouter/free</code>, a free routed model, so judges need no
+key of their own; the tool-routing rules in the prompt were written with a
+weak model in mind.</p>
+<p><strong>The system prompt.</strong> <code>lib/copilot/systemPrompt.ts</code> is one auditable
+template with, in order: the current context (spot, chain, wallet); the
+briefing for the tab on screen; the pricing model (the smile formula, the
+current sigma, alpha and beta, how the spread arises, how ranges and the
+just-in-time pull work); the tool rules (never do options mathematics in
+the head, which tool answers which question, that trades are never
+executed); the data-source rule (say whether numbers came from the
+subgraph or the local event log); the active skills, in full; rules for
+rolls, output style, teach mode and quiz mode; and, from the build-time
+knowledge pack, a table of contents of every documentation section and the
+glossary from the limitations page. The knowledge pack
+(<code>lib/copilot/knowledge.generated.json</code>, built by
+<code>scripts/gen-knowledge.mjs</code> from the README, the User Guide, the
+limitations, solutions and copilot pages and the five sponsor pages)
+holds the full section bodies for the <code>read_docs</code> tool, capped at six
+thousand characters per section.</p>
+<p><strong>Tab awareness.</strong> <code>lib/copilot/tabs.ts</code> describes every application tab:
+what is on screen, which documentation sections to read first, the best
+first move, and three starter prompts. The panel sends the active tab in
+the context; the prompt gains a &quot;where the user is&quot; block so that &quot;explain
+this&quot; means the tab on screen, and the panel shows that tab&#39;s starters.</p>
+<p><strong>Skills.</strong> The eight built-in skills are markdown files in the <code>SKILL.md</code>
+convention (frontmatter <code>name</code>, <code>description</code>, <code>starter</code>, then the
+procedure), bundled into the knowledge pack at build time: Trading
+opportunities, Risk management, Delta hedging, Explain margin, LP market
+making, RFQ quoting, Macro context and Calendar spreads. The Skills menu
+in the panel header toggles them and accepts user-written skills; both
+lists live in local storage and ride each request in the context (custom
+skills are capped at five of four thousand characters). Enabled skill
+bodies are appended to the prompt under &quot;Active skills&quot;.</p>
+<p><strong>Built-in tools.</strong> <code>lib/copilot/tools.ts</code> defines nineteen tools; the model
+may take up to ten tool steps per turn. Grouped by what they read:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does and what it reads</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>read_docs</code></td>
+<td>Returns one section of the documentation from the knowledge pack by section id; the model is told to cite the id.</td>
+</tr>
+<tr>
+<td><code>get_market_state</code></td>
+<td>Spot, the smile parameters, ATM vol, expected move, 25-delta risk reversal and butterfly from the same code as the interface (<code>lib/options.ts</code>).</td>
+</tr>
+<tr>
+<td><code>price_strategy</code>, <code>suggest_strategies</code>, <code>scenario_analysis</code>, <code>analyze_adjustment</code></td>
+<td>Price a multi-leg strategy at the protocol&#39;s smile (entry, max profit and loss, probability of profit, breakevens, greeks), propose strategies for a stated view, run a spot and vol stress grid, and price a roll or adjustment before and after. Client-side mathematics, no chain read.</td>
+</tr>
+<tr>
+<td><code>get_onchain_quote</code></td>
+<td>Calls the deployed pricing engine for a live call quote and cross-checks it against the front-end formula.</td>
+</tr>
+<tr>
+<td><code>get_positions</code>, <code>portfolio_risk</code></td>
+<td>The connected wallet&#39;s balances, written ranges and long positions, and their aggregate risk. Positions come from the tape (<code>lib/copilot/chain.ts</code> reads the subgraph on public networks).</td>
+</tr>
+<tr>
+<td><code>find_opportunities</code></td>
+<td>Every live strike on every active range priced at the vault&#39;s live volatility per expiry, expressed as implied volatility and compared with the nearest listed Deribit instrument and with the last fill of the same instrument; ranked cheap to expensive. Reads the tape and Deribit.</td>
+</tr>
+<tr>
+<td><code>liquidity_map</code></td>
+<td>Every active range with capacity, utilisation, open interest, fills and days since the last trade, flagged scarce, empty, stale or expiring, plus a per-strike heat map. Reads the tape.</td>
+</tr>
+<tr>
+<td><code>portfolio_greeks</code></td>
+<td>The wallet&#39;s whole book from the tape, long positions with cost basis from its own fills and the written side from open interest on its ranges, with net delta, gamma, theta and vega.</td>
+</tr>
+<tr>
+<td><code>hedge_suggestion</code></td>
+<td>The quantity of spot ETH, or of calls or puts at a strike, that brings a book to a target delta, with greeks before and after. The prompt forbids computing a hedge any other way.</td>
+</tr>
+<tr>
+<td><code>reference_market</code></td>
+<td>Deribit&#39;s public API: index price, the DVOL index, ATM implied volatility at the nearest listed expiry, and the nearest listed instrument to a strike and expiry. Cached for sixty seconds.</td>
+</tr>
+<tr>
+<td><code>macro_calendar</code></td>
+<td>Scheduled FOMC, CPI and listed-expiry dates within a horizon from a static 2026 table, with event-volatility heuristics.</td>
+</tr>
+<tr>
+<td><code>prepare_lp_range</code>, <code>prepare_rfq_quote</code>, <code>propose_trade</code></td>
+<td>Interface tools: each renders a card whose button prefills the Write a Range form, the RFQ signer or the Payoff Builder. The user reviews and signs in the wallet; the copilot cannot send a transaction and never holds a key.</td>
+</tr>
+<tr>
+<td><code>quiz_question</code></td>
+<td>Renders one multiple-choice question as clickable choices; the pick returns as the tool result.</td>
+</tr>
+</tbody></table>
+<p><code>find_opportunities</code> is representative of the tape tools:</p>
 <p><code>frontend/lib/copilot/graphTools.ts</code>:</p>
 <pre><code class="language-typescript">export async function findOpportunities(
   chainId: number | undefined,
@@ -4578,36 +4763,36 @@ of every active range.</p>
       const smileIv = impliedVol(ask, spot, k, t, a.isCall);
       const near = ref ? nearestReference(ref, k, a.expiry, a.isCall) : null;
 </code></pre>
-<p>The other tape tools follow the same pattern. <code>liquidity_map</code> buckets
-ranges into bands and flags scarce (at least eighty percent used), empty,
-stale (no trade for more than three days) and expiring ranges.
+<p><code>liquidity_map</code> treats a range as scarce at eighty percent used, stale
+after three days without a trade and expiring within three days.
 <code>portfolio_greeks</code> combines <code>Position</code> rows for the holder with open
-interest on the holder&#39;s own ranges. <code>reference_market</code> calls Deribit&#39;s
-public API with a sixty-second cache. <code>macro_calendar</code> reads a static
-table. The two <code>prepare_*</code> tools are user-interface tools that render
-cards.</p>
-<h3>Skills</h3>
-<p>Each skill is a markdown file with frontmatter. Enabled skills ride each
-request and are appended to the system prompt.</p>
-<p><code>frontend/skills/trading-opportunities.md</code>:</p>
-<pre><code class="language-markdown">---
-name: Trading opportunities
-description: Screen live Smile instruments for mispriced options versus the Deribit reference vol and recent trades, then confirm and propose.
-starter: Find me the three cheapest options on the book right now and explain why they&#39;re cheap.
----
-</code></pre>
-<p>The eight built-in skills are <code>trading-opportunities</code>, <code>risk-management</code>,
-<code>delta-hedging</code>, <code>explain-margin</code>, <code>lp-market-making</code>, <code>rfq-quoting</code>,
-<code>macro-context</code> and <code>calendar-spreads</code>.</p>
-<h3>MCP</h3>
+interest on the holder&#39;s own ranges. Every tape tool returns the tape&#39;s
+<code>source</code> field, <code>&quot;subgraph&quot;</code> on public networks or <code>&quot;anvil-logs&quot;</code> on the
+local chain.</p>
+<h3>MCP servers</h3>
 <p>The Model Context Protocol (MCP) is an open standard by which an AI model
-connects to external tool servers. The copilot opens every configured
-server per request, merges its tools with the built-in ones, and closes
-them when the stream ends. The settings panel offers one preset.</p>
-<p><code>frontend/components/copilot/CopilotSettings.tsx</code>:</p>
-<pre><code class="language-typescript">const THEGRAPH_MCP: McpServer = { name: &quot;thegraph&quot;, url: &quot;https://subgraphs.mcp.thegraph.com/sse&quot;, transport: &quot;sse&quot; };
-</code></pre>
+connects to external tool servers over HTTP. In Smile, MCP is how the
+copilot&#39;s toolset grows without a rebuild.</p>
+<p><strong>How the plumbing works.</strong> <code>lib/copilot/mcp.ts</code> takes two lists of
+servers: the operator&#39;s, from the <code>COPILOT_MCP_SERVERS</code> environment
+variable, and the user&#39;s, sent from the browser in the <code>x-copilot-mcp</code>
+header the same way the bring-your-own-key headers are. Both are JSON
+arrays of <code>{ name, url, token?, transport? }</code>; only <code>https://</code> URLs are
+accepted, the transport is <code>http</code> or <code>sse</code>, and the lists are merged by
+name with the user&#39;s entry winning, capped at five servers. On every
+request the route opens each server (with an eight-second handshake
+timeout), asks it for its tools, and merges them after the built-in tools
+so that a built-in name always wins; a colliding name between two servers
+is prefixed with the server&#39;s name. The servers are closed when the stream
+finishes or errors. A server that fails to connect is logged and skipped,
+so a dead server cannot break the chat.</p>
 <p><code>frontend/lib/copilot/mcp.ts</code>:</p>
+<pre><code class="language-typescript">export function mergeMcpConfigs(env: McpServerConfig[], header: McpServerConfig[]): McpServerConfig[] {
+  const byName = new Map(env.map((c) =&gt; [c.name, c]));
+  for (const c of header) byName.set(c.name, c);
+  return [...byName.values()].slice(0, MAX_SERVERS);
+}
+</code></pre>
 <pre><code class="language-typescript">const client = await createMCPClient({
   transport: {
     type: c.transport ?? &quot;http&quot;,
@@ -4618,9 +4803,28 @@ them when the stream ends. The settings panel offers one preset.</p>
   initializationOptions: { timeout: 8000 },
 });
 </code></pre>
-<p>A server that fails to connect is logged and skipped so that a dead server
-cannot break the chat. The same server is available to developers as a
-client configuration:</p>
+<p><strong>What it has today.</strong> The Graph&#39;s Subgraph MCP server,
+<code>https://subgraphs.mcp.thegraph.com/sse</code>, authenticated with a Gateway
+API key as the bearer token. It is seeded operator-side on the live
+deployment through <code>COPILOT_MCP_SERVERS</code>, so every copilot request there
+carries its tools with no setup by the user; it is also the one preset in
+the settings gear (the user pastes their own key). The server exposes
+nine tools: <code>search_subgraphs_by_keyword</code>, <code>get_top_subgraph_deployments</code>,
+<code>get_schema_by_subgraph_id</code>, <code>get_schema_by_deployment_id</code>,
+<code>get_schema_by_ipfs_hash</code>, <code>execute_query_by_subgraph_id</code>,
+<code>execute_query_by_deployment_id</code>, <code>execute_query_by_ipfs_hash</code> and
+<code>get_deployment_30day_query_counts</code>. With them the copilot can find any
+indexed subgraph on The Graph Network, read its schema and query it in
+natural language, not only Smile&#39;s own. It was verified end to end on
+2026-09-12: asked to search subgraphs for &quot;uniswap&quot;, the deployed copilot
+called <code>search_subgraphs_by_keyword</code> through the seeded server and
+answered with a real subgraph name.</p>
+<p>The same server is available to developers outside the application:
+<code>.mcp.json.example</code> at the repository root is a one-file client
+configuration for Claude Code or Cursor, and <code>subgraph/SKILL.md</code> describes
+Smile&#39;s entities, canonical queries, endpoints and units so that an AI
+environment can query <code>smile-sepolia</code> or <code>smile-arc-testnet</code> without
+reading the schema.</p>
 <p><code>.mcp.json.example</code>:</p>
 <pre><code class="language-json">{
   &quot;mcpServers&quot;: {
@@ -4634,6 +4838,20 @@ client configuration:</p>
   }
 }
 </code></pre>
+<p><strong>What it can have.</strong> Any MCP server reachable over HTTPS: the settings
+gear takes a name, a URL, an optional bearer token and the transport.
+Servers that fit a trading coach include a market-data server for Deribit
+or another listed venue (replacing the built-in sixty-second Deribit
+cache with the user&#39;s own feed), a price-oracle server for Chainlink or
+Pyth rounds, a transaction-simulation server so a proposed trade can be
+dry-run before the user signs, and another project&#39;s subgraph server for
+cross-protocol positions. Limits: five servers per request, HTTPS only,
+one merged toolset (a server tool with a built-in&#39;s name is shadowed, and
+a name shared by two servers is prefixed), an eight-second connect
+budget per server, and the routing quality of the model in use; the free
+routed model on the live deployment follows explicit tool rules well and
+open-ended tool choice less well, so a server with many similar tools
+benefits from a skill that names which one to call.</p>
 <h3>The seeded tape</h3>
 <p>A chart and a screener need trades to look at. <code>script/seed-tape.sh</code>
 writes three ranges (two call expiries and one put) and one hundred trades
@@ -4660,13 +4878,17 @@ subgraph. <code>lib/tape.ts</code> rebuilds the same entities from <code>eth_get
 there, gated on chain id, and that path does not exist on public
 networks. The subgraph&#39;s matchstick unit tests are written but run only
 on x86.</li>
-<li><strong>The Graph&#39;s Subgraph MCP is untested end to end.</strong> Connecting to it
-requires a Gateway API key from Studio, which is a wallet-side step. The
-copilot&#39;s MCP plumbing is verified against a bogus server (skipped
-without error), not against the live Graph server.</li>
-<li><strong>Studio endpoints are rate-limited development endpoints.</strong> Production
-use requires publishing the subgraph to the decentralised network and
-querying the gateway with an API key.</li>
+<li><strong>The gateway path depends on one key and one deployment.</strong> The
+server-side gateway URLs are set on the Vercel deployment and in the
+local environment file; the static GitHub Pages export has no server and
+falls back to the Studio development endpoints, which are rate-limited.
+The key is a shared operator credential subject to The Graph&#39;s
+per-key query quota, not a per-user one.</li>
+<li><strong>The MCP toolset is only as good as the model routing it.</strong> The Graph&#39;s
+server is verified with an explicit request; whether the free routed
+model reaches for it unprompted on an open question is not guaranteed.
+Servers are opened on every request, which adds their handshake time to
+each turn.</li>
 <li><strong>The screener is a model, not a market.</strong> <code>find_opportunities</code> prices
 Smile&#39;s ask with the vault&#39;s own formula at the hook&#39;s live volatility
 and inverts a Black-Scholes price for the implied volatility. Deribit&#39;s
@@ -4679,11 +4901,12 @@ the reference comparison and the last-fill comparison agree.</li>
 <p>The phase-two status table and cut list in
 <code>docs/plans/2026-09-09-theGraph.md</code> record what remains.</p>
 <ul>
-<li><strong>Publish and key (P8).</strong> Publish <code>smile-sepolia</code> and
-<code>smile-arc-testnet</code> from Studio to the decentralised network (the publish
-transaction is on Arbitrum One; the indexed chain is unchanged), create a
-Gateway API key, and set <code>SUBGRAPH_URL</code> server-side. A wizard for the
-two wallet steps is in <code>subgraph/README.md</code>.</li>
+<li><strong>Publish and key (P8): done 2026-09-12.</strong> Both subgraphs are published
+on Arbitrum One and served through the gateway; the live deployment reads
+them with <code>SUBGRAPH_URL_11155111</code> and <code>SUBGRAPH_URL_5042002</code>. What
+remains is operational: rotate the key, watch the query allowance, and
+add curation signal if independent indexers are wanted beyond the
+upgrade indexer.</li>
 <li><strong>Dynamic data sources (G6).</strong> A data-source template per <code>OptionToken</code>
 so that ERC-20 transfers of option tokens update <code>Position</code>.</li>
 <li><strong>The sibling vaults.</strong> The subgraph indexes <code>AquaCollateralVault</code> only.
@@ -4691,25 +4914,41 @@ so that ERC-20 transfers of option tokens update <code>Position</code>.</li>
 would need their own data sources for the tape to cover spreads, margined
 puts and signed-quote fills.</li>
 <li><strong>A live macro feed</strong> in place of the static table.</li>
-<li><strong>Verify the Graph MCP</strong> against the live server once a Gateway key is
-in hand.</li>
+<li><strong>More MCP servers as presets.</strong> The settings gear has one preset; a
+Deribit market-data server and a transaction-simulation server are the
+natural next two, each with a skill naming when to call it.</li>
 </ul>
 <h2>Glossary</h2>
 <ul>
+<li><strong>API key (Gateway).</strong> The credential created in Studio that authorises
+queries to the gateway and against which they are metered. In Smile it is
+embedded in the server-side gateway URL and reused as the bearer token
+for The Graph&#39;s Subgraph MCP; it never reaches a browser.</li>
 <li><strong>Agent (copilot).</strong> An AI model that answers by calling tools rather
 than from memory. Smile&#39;s copilot calls pricing, tape and preparation
 tools; it prepares transactions but never signs or sends one.</li>
+<li><strong>Bearer token.</strong> A credential sent in an HTTP <code>Authorization</code> header.
+The copilot&#39;s MCP client sends a server&#39;s token this way on every request.</li>
 <li><strong>Bound call.</strong> In a subgraph mapping, a read-only call to the indexed
 contract at the block being processed, used here to refresh
 <code>usedCollateral</code> and <code>collateralToken</code> from chain state.</li>
+<li><strong>Bring your own key (BYOK).</strong> The settings-gear option by which a user
+supplies their own model-provider key from the browser, sent per request
+in headers and never stored by the server.</li>
+<li><strong>Curation signal.</strong> GRT staked on a published subgraph to attract
+independent indexers. Not required for Smile&#39;s subgraphs, which the
+upgrade indexer serves.</li>
+<li><strong>Deployment id.</strong> The IPFS hash of one built version of a subgraph
+(<code>Qm…</code>). The gateway can be addressed by it as well as by the subgraph id.</li>
 <li><strong>Deribit.</strong> The largest centralised crypto options exchange, used by the
 copilot as the listed reference market for implied volatility.</li>
 <li><strong>DVOL.</strong> Deribit&#39;s thirty-day implied volatility index for ETH.</li>
 <li><strong>Entity.</strong> A table in a subgraph&#39;s schema. Smile has four:
 <code>Authorization</code>, <code>Fill</code>, <code>Instrument</code>, <code>Position</code>.</li>
 <li><strong>Gateway.</strong> The Graph&#39;s query endpoint for subgraphs published to the
-decentralised network, authenticated by an API key. In Smile the key
-stays server-side behind <code>/api/subgraph</code>.</li>
+decentralised network, authenticated by an API key; it routes each query
+to an indexer. In Smile the key stays server-side behind <code>/api/subgraph</code>,
+configured per chain as <code>SUBGRAPH_URL_&lt;chainId&gt;</code>.</li>
 <li><strong>GraphQL.</strong> A query language in which the client names the fields it
 wants and receives exactly those.</li>
 <li><strong>Greeks.</strong> The sensitivities of an option&#39;s price: delta (to the
@@ -4734,8 +4973,13 @@ at that moment.</li>
 <li><strong>L12a.</strong> The limitation entry in <code>docs/limitations.md</code> describing the
 fifty-range cap that the subgraph lifted.</li>
 <li><strong>MCP (Model Context Protocol).</strong> An open standard for connecting an AI
-model to external tool servers. The Graph&#39;s Subgraph MCP exposes any
-indexed subgraph to a model.</li>
+model to external tool servers over HTTP. The copilot opens the
+operator&#39;s and the user&#39;s servers on every request and merges their tools
+with its own. The Graph&#39;s Subgraph MCP exposes any indexed subgraph to a
+model through nine tools.</li>
+<li><strong>Publish.</strong> Registering a subgraph on The Graph Network&#39;s contracts on
+Arbitrum One so that it can be served through the gateway and indexed by
+the network. The indexed chain is unchanged by publishing.</li>
 <li><strong>Open interest.</strong> The number of option units outstanding in an
 instrument: bought minus closed minus redeemed.</li>
 <li><strong>Range (authorisation).</strong> An LP&#39;s standing offer to write options
@@ -4744,11 +4988,18 @@ between two strikes up to one expiry, backed by a maximum collateral.</li>
 description, starter, procedure) that teaches the copilot a workflow.</li>
 <li><strong>Subgraph.</strong> The unit of indexing on The Graph: a manifest naming the
 contract and events, a schema of entities, and the handlers.</li>
+<li><strong>Subgraph id.</strong> The identifier of a published subgraph on the network
+(<code>Bf9T…</code> for Sepolia, <code>9ZcF…</code> for Arc testnet), stable across versions.</li>
 <li><strong>Subgraph Studio.</strong> The Graph&#39;s hosted service for deploying and testing
 subgraphs before publishing them to the network.</li>
+<li><strong>System prompt.</strong> The instructions the copilot receives before the
+conversation: context, the pricing model, tool rules, the tab briefing,
+active skills, the documentation table of contents and the glossary.</li>
 <li><strong>Tape.</strong> The running record of ranges, instruments, fills and positions.
 On public networks it is the subgraph; on the local chain it is rebuilt
 from the event log.</li>
+<li><strong>Upgrade indexer.</strong> The indexer The Graph operates to serve Studio
+deployments and newly published subgraphs that have no curation signal.</li>
 <li><strong>WAD.</strong> A fixed-point number with eighteen decimals, the unit for
 strikes, option amounts and WETH collateral in the schema.</li>
 </ul>
@@ -5010,6 +5261,337 @@ if (cmd === &quot;deposit&quot;) {
 </ul>
 </article>
     </section>
+    <section id="page-frontend" class="page" data-mermaid="false">
+      <article class="doc"><h1>The Smile Frontend</h1>
+<p>This page describes the Smile web application: what it is, where it runs, what was added to it at EthOnline 2026, and how the TradingView-engine price chart works. It is written for a reader who has used a trading application before but has not read the rest of the documentation. Every term of art is defined where it first appears, and a glossary closes the page.</p>
+<h2>Summary</h2>
+<p>The frontend is a Next.js application in <code>frontend/</code> that puts every Smile vault on one screen: buying options from the on-chain price surface, writing ranges as a liquidity provider (LP), the three sibling vaults built at the event (Spreads, Margin, RFQ), a risk monitor for the margin tier, a strategy builder, a vol-surface view, and an AI copilot. One build serves three networks: the local Anvil chain, Ethereum Sepolia, and Circle&#39;s Arc testnet. The application reads its contract addresses from the connected chain (<code>frontend/lib/deployments.ts</code> and <code>frontend/config/wagmi.ts</code>), so switching networks in the wallet switches the whole app.</p>
+<p>The same code ships in two shapes. The <strong>static export</strong> at <code>https://oslinin.github.io/Smile/</code> is built by GitHub Actions with a base path and has no server, so it carries no copilot. The <strong>server build</strong> at <code>https://smile-frontend-omega.vercel.app</code> runs on Vercel and adds the copilot route (<code>/api/copilot</code>) and the subgraph proxy (<code>/api/subgraph</code>), through which the application reads The Graph with a gateway key that never reaches the browser. Locally, <code>./local.sh</code> starts Anvil, deploys every contract, seeds a 100-trade tape, and runs the server build against it.</p>
+<p>Before EthOnline 2026 the app had the option matrix, range authorization, a payoff builder, an LP dashboard, the vol surface, and the copilot. The event added the Overview landing tab, the Spreads, Margin, RFQ and Risk Monitor tabs, a TradingView-engine price chart with the strategy and the traded tape drawn on it, an OptionStrat-grade builder, recorded testnet receipts, the multi-chain address map, a User Guide, the sponsor help pages, and a copilot that trades off The Graph with skills, MCP servers and preparation cards.</p>
+<h2>Features used</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Where in the code</th>
+<th>Pre-existing or EthOnline 2026</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Wallet stack: wagmi + viem, injected connector, WalletConnect when a project id is set; no Privy, no embedded wallets</td>
+<td><code>frontend/config/wagmi.ts</code>, <code>frontend/app/providers.tsx</code></td>
+<td>Pre-existing</td>
+</tr>
+<tr>
+<td>One build for Anvil / Sepolia / Arc: recorded addresses per chain, env addresses as the Anvil fallback, <code>CONTRACTS</code> follows the connected chain</td>
+<td><code>frontend/config/wagmi.ts</code> (<code>DEPLOYED_ADDRESSES</code>, <code>contractsFor</code>, <code>CONTRACTS</code> proxy), <code>frontend/lib/deployments.ts</code></td>
+<td>EthOnline 2026 (<code>33cb2d3</code>)</td>
+</tr>
+<tr>
+<td>Arc Testnet network entry and <code>wallet_addEthereumChain</code> payload</td>
+<td><code>frontend/config/wagmi.ts</code> (<code>arcTestnet</code>), <code>frontend/app/page.tsx</code> (<code>ADDABLE_CHAINS</code>)</td>
+<td>EthOnline 2026 (<code>108e25d</code>)</td>
+</tr>
+<tr>
+<td>Overview tab: capital-efficiency ladder as live bars, live counters across vaults, recorded testnet receipts</td>
+<td><code>frontend/components/Story.tsx</code></td>
+<td>EthOnline 2026 (<code>33cb2d3</code>)</td>
+</tr>
+<tr>
+<td>Tabs in user language: Overview · Trade · Earn · One-Click · Earn · Write a Range · Spreads · Margin · Risk Monitor · RFQ · My Positions · Vol Surface · Receipts</td>
+<td><code>frontend/app/page.tsx</code> (<code>TABS</code>)</td>
+<td>EthOnline 2026 (<code>33cb2d3</code>)</td>
+</tr>
+<tr>
+<td>Spreads tab: open, ship and fill a credit spread on <code>SpreadVault</code></td>
+<td><code>frontend/components/SpreadDesk.tsx</code></td>
+<td>EthOnline 2026 (<code>a5c17eb</code>)</td>
+</tr>
+<tr>
+<td>Margin tab: margined put ranges, pool and fund dials, and the Circle App Kits receipts</td>
+<td><code>frontend/components/MarginDesk.tsx</code></td>
+<td>EthOnline 2026 (<code>1cfcc39</code>, <code>a412b5f</code>)</td>
+</tr>
+<tr>
+<td>RFQ tab: LP signs EIP-712 quotes in the wallet, taker fills</td>
+<td><code>frontend/components/RfqDesk.tsx</code> (<code>useSignTypedData</code>)</td>
+<td>EthOnline 2026 (<code>1006a2d</code>)</td>
+</tr>
+<tr>
+<td>Risk Monitor: health bars per position, vault risk dials, liquidation timeline rebuilt from events, &quot;Explain with the copilot&quot;</td>
+<td><code>frontend/components/RiskMonitor.tsx</code></td>
+<td>EthOnline 2026 (<code>de5b3c2</code>)</td>
+</tr>
+<tr>
+<td>Strategy builder: today / halfway / expiry curves, price × date P&amp;L heat map, breakevens, greeks, per-vault writer collateral</td>
+<td><code>frontend/components/PayoffBuilder.tsx</code>, <code>frontend/lib/options.ts</code> (<code>pnlSeries</code>, <code>pnlMatrix</code>, <code>writerCollateral</code>, <code>strategyStats</code>)</td>
+<td>Pre-existing builder; EthOnline 2026 upgrade (<code>0c35e99</code>)</td>
+</tr>
+<tr>
+<td>Price chart: TradingView Lightweight Charts 5.2.1, ETH/USD hourly candles (Coinbase, Kraken fallback), strategy overlay, per-instrument premium and implied vol from the tape</td>
+<td><code>frontend/components/PriceChart.tsx</code></td>
+<td>EthOnline 2026 (<code>5098a25</code>, <code>9235276</code>)</td>
+</tr>
+<tr>
+<td>The tape: ranges, instruments, fills and positions from The Graph on public chains, from event logs on Anvil</td>
+<td><code>frontend/lib/tape.ts</code>, <code>frontend/lib/subgraph.ts</code></td>
+<td>EthOnline 2026 (<code>38f8922</code>)</td>
+</tr>
+<tr>
+<td>Subgraph proxy so a gateway key stays server-side; per-chain gateway URLs</td>
+<td><code>frontend/app/api/subgraph/route.ts</code></td>
+<td>EthOnline 2026 (<code>38f8922</code>, <code>e9feda6</code>)</td>
+</tr>
+<tr>
+<td>LP Dashboard shows the connected wallet&#39;s own active range, read from the subgraph</td>
+<td><code>frontend/components/LPDashboard.tsx</code></td>
+<td>EthOnline 2026 fix (<code>dfc964a</code>, <code>b818634</code>)</td>
+</tr>
+<tr>
+<td>Copilot panel: tab-aware context, per-tab starter prompts, Skills menu, MCP servers with The Graph preset, preparation cards</td>
+<td><code>frontend/components/copilot/CopilotPanel.tsx</code>, <code>SkillsMenu.tsx</code>, <code>CopilotSettings.tsx</code>, <code>PrepareCard.tsx</code>, <code>frontend/lib/copilot/tabs.ts</code></td>
+<td>EthOnline 2026 (<code>5f1b9b5</code>, <code>39e9a41</code>, <code>00cbbe3</code>, <code>16ad3f5</code>)</td>
+</tr>
+<tr>
+<td>OpenRouter as a fourth copilot provider</td>
+<td><code>frontend/lib/copilot/provider.ts</code></td>
+<td>EthOnline 2026 (<code>ede13fd</code>)</td>
+</tr>
+<tr>
+<td>Live spot: Uniswap Trading API when a key is set, Chainlink feed read otherwise, static fallback last</td>
+<td><code>frontend/hooks/useUniswapSpot.ts</code></td>
+<td>Pre-existing</td>
+</tr>
+<tr>
+<td>Help site generator with a Sponsors group; knowledge pack for the copilot</td>
+<td><code>frontend/scripts/gen-help.mjs</code>, <code>frontend/scripts/gen-knowledge.mjs</code></td>
+<td>Pre-existing generators; Sponsors group and pages 2026-09-12 (<code>1cb0cae</code>)</td>
+</tr>
+<tr>
+<td>User Guide in the help sidebar and in the copilot&#39;s knowledge</td>
+<td><code>docs/guide.md</code></td>
+<td>EthOnline 2026 (<code>0c35e99</code>)</td>
+</tr>
+<tr>
+<td>GitHub Pages static export and the Vercel server build</td>
+<td><code>.github/workflows/pages.yml</code>, <code>frontend/next.config.ts</code></td>
+<td>Pages pre-existing; continuation-branch deploys and Vercel 2026-09-12</td>
+</tr>
+</tbody></table>
+<h2>Why it is necessary</h2>
+<p><strong>Judges see three minutes.</strong> The numbers that make Smile&#39;s case are concrete: a 3000/3200 call credit spread escrows 0.0625 WETH instead of 1 WETH, a margined put locks 1,500 USDC instead of 3,000, and holders stay whole after a 40% gap. A README can state those numbers; only a screen can show them being true on the connected chain. The Overview tab exists to put the ladder on screen as live bars, with the vault counters and the recorded receipts beside it, before the viewer clicks anything.</p>
+<p><strong>A venue needs a tape and a chart.</strong> An options venue whose trades are only visible as transaction hashes has no market. The subgraph gives Smile a tape (every range, instrument, fill and position), and the price chart draws that tape as premium and implied volatility over time next to the underlying&#39;s candles. Without the chart, the σ feedback loop and the price history are invisible; with it, a viewer can watch a fill move the surface.</p>
+<p><strong>A margin tier needs a monitor.</strong> <code>MarginVault</code> is the one place a written option can fail to pay in full. A liquidation waterfall (margin call, grace period, takeover auction, backstop pool, insurance fund, haircut) that runs only in a shell script is not something a writer can trust. The Risk Monitor shows each position&#39;s health against the live mark and replays the waterfall as it happens.</p>
+<p><strong>Three new vaults need three new desks.</strong> Each sibling vault has a different write path (a two-leg structure, a margined range, a signed quote) and a different number to show (netted escrow, initial margin, price improvement). A single &quot;Trade&quot; form cannot express them; the Spreads, Margin and RFQ tabs each exist to show their one number next to the action that produces it.</p>
+<h2>Market value add</h2>
+<p><strong>For a trader</strong>, the application is the OptionStrat and Deribit workflow on a non-custodial venue. The builder shows a strategy&#39;s payoff at expiry, its value today and halfway to expiry, a price × date profit-and-loss heat map, the breakevens, and the greeks, with the premium quoted from Smile&#39;s own surface rather than a guess. The chart draws the strikes and breakevens over real candles so a trade is placed against the market&#39;s actual history. The tape shows what the last fill paid and what implied volatility it implied.</p>
+<p><strong>For a liquidity provider</strong>, the Earn tabs and the Spreads, Margin and RFQ desks show the capital each tier locks for the same trade, and the LP Dashboard and Risk Monitor show what happens to that capital afterwards. A writer can compare a naked put, a credit spread, and a margined put on one screen before choosing a rung.</p>
+<p><strong>For a judge or an integrator</strong>, the Overview tab&#39;s receipts and the Receipts tab link every recorded testnet transaction to its explorer, per chain. The Vercel build carries the copilot, so the AI trading agent described on The Graph page can be tried without any setup.</p>
+<h2>Technical details</h2>
+<h3>The chart: TradingView Lightweight Charts</h3>
+<p><strong>What it is.</strong> Lightweight Charts is TradingView&#39;s open-source charting engine, published as the <code>lightweight-charts</code> npm package under the Apache-2.0 licence. It is the renderer behind TradingView&#39;s charts, not the TradingView website or its embeddable widget: it draws candles, lines and price lines on a canvas from data the application supplies, with no account, no data feed and no network calls of its own. Smile pins version 5.2.1 (<code>frontend/package.json</code>).</p>
+<p><strong>Why this library.</strong> The submission notes record the search: there is no open-source OptionStrat, and the nearest React project draws expiry payoffs only, so the builder stayed in-house. For charting, a component was needed rather than a product; OpenCharts, an MIT-licensed terminal built on the same engine, is a full standalone application, not a component to embed. Using TradingView&#39;s engine directly gives a trader the chart they already know, in a component the page controls.</p>
+<p><strong>What is drawn.</strong> Hourly ETH/USD candles from Coinbase Exchange&#39;s public candles endpoint, with Kraken&#39;s OHLC endpoint as the fallback; the protocol&#39;s spot as a dotted line; every leg&#39;s strike as a solid line, green for long and red for short; each breakeven as a dashed yellow line; and, in the lower third, one selected instrument&#39;s traded premium per unit and the implied volatility that premium means, computed in the browser by inverting Black-Scholes against the candle close at that hour. Market data is context for the trade; the protocol prices off its oracle, not off these candles.</p>
+<p><code>frontend/components/PriceChart.tsx</code></p>
+<pre><code class="language-ts">async function fetchCandles(): Promise&lt;{ candles: Candle[]; source: string }&gt; {
+  try {
+    const r = await fetch(&quot;https://api.exchange.coinbase.com/products/ETH-USD/candles?granularity=3600&quot;);
+    if (!r.ok) throw new Error(String(r.status));
+    const rows = (await r.json()) as number[][]; // [time, low, high, open, close, volume], newest first
+    const candles = rows.map((c) =&gt; ({ time: c[0] as UTCTimestamp, low: c[1], high: c[2], open: c[3], close: c[4] })).sort((a, b) =&gt; a.time - b.time);
+    return { candles, source: &quot;Coinbase ETH-USD · 1h&quot; };
+  } catch {
+    const r = await fetch(&quot;https://api.kraken.com/0/public/OHLC?pair=ETHUSD&amp;interval=60&quot;);
+    const j = (await r.json()) as { result: Record&lt;string, (string | number)[][]&gt; };
+    const key = Object.keys(j.result).find((k) =&gt; k !== &quot;last&quot;) ?? &quot;&quot;;
+    const candles = (j.result[key] ?? []).map((c) =&gt; ({ time: Number(c[0]) as UTCTimestamp, open: Number(c[1]), high: Number(c[2]), low: Number(c[3]), close: Number(c[4]) }));
+    return { candles, source: &quot;Kraken ETH/USD · 1h&quot; };
+  }
+}
+</code></pre>
+<p>The chart is created once, with the candles on the right price scale and the two tape lines on their own scales in the lower third of the canvas:</p>
+<pre><code class="language-ts">    const s = c.addSeries(CandlestickSeries, { upColor: &quot;#22c55e&quot;, downColor: &quot;#ef4444&quot;, borderVisible: false, wickUpColor: &quot;#22c55e&quot;, wickDownColor: &quot;#ef4444&quot; });
+    // Tape lines live in the lower third: premium on the (left) price axis,
+    // IV on an overlay scale with the same margins.
+    premSeries.current = c.addSeries(LineSeries, { color: &quot;#a78bfa&quot;, lineWidth: 2, priceScaleId: &quot;left&quot;, priceFormat: { type: &quot;price&quot;, precision: 2, minMove: 0.01 }, title: &quot;premium&quot; });
+    ivSeries.current = c.addSeries(LineSeries, { color: &quot;#f472b6&quot;, lineWidth: 2, priceScaleId: &quot;iv&quot;, priceFormat: { type: &quot;percent&quot;, precision: 1, minMove: 0.1 }, title: &quot;IV&quot; });
+    c.priceScale(&quot;iv&quot;).applyOptions({ scaleMargins: { top: 0.68, bottom: 0.02 } });
+</code></pre>
+<p>The strategy overlay is redrawn whenever the builder&#39;s legs or the spot change, using the engine&#39;s price lines:</p>
+<pre><code class="language-ts">    const add = (price: number, color: string, title: string, style = LineStyle.Solid, width: 1 | 2 = 1) =&gt;
+      lines.current.push(s.createPriceLine({ price, color, title, lineStyle: style, lineWidth: width, axisLabelVisible: true }));
+    add(spot, &quot;#60a5fa&quot;, &quot;Smile spot&quot;, LineStyle.Dotted, 1);
+    for (const leg of legs) {
+      add(leg.strike, leg.direction === &quot;buy&quot; ? &quot;#22c55e&quot; : &quot;#ef4444&quot;, `${leg.direction === &quot;buy&quot; ? &quot;long&quot; : &quot;short&quot;} ${leg.isCall ? &quot;call&quot; : &quot;put&quot;} ${leg.amount}×`, LineStyle.Solid, 2);
+    }
+    if (legs.length &gt; 0) {
+      for (const be of findBreakevens(pnlSeries(legs, spot))) add(Math.round(be), &quot;#fbbf24&quot;, &quot;breakeven&quot;, LineStyle.Dashed, 1);
+    }
+</code></pre>
+<p>Implied volatility is recovered from each fill by bisection, since the Black-Scholes price is monotone in volatility; a premium below intrinsic value yields <code>null</code> and is left off the line:</p>
+<pre><code class="language-ts">function impliedVol(premium: number, spot: number, strike: number, tYears: number, isCall: boolean): number | null {
+  const type = isCall ? &quot;call&quot; : &quot;put&quot;;
+  let lo = 0.01, hi = 5;
+  if (blackScholes(spot, strike, tYears, lo, RISK_FREE_RATE, type) &gt; premium) return null;
+  for (let i = 0; i &lt; 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (blackScholes(spot, strike, tYears, mid, RISK_FREE_RATE, type) &gt; premium) hi = mid; else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+</code></pre>
+<p>The legend names the tape&#39;s source (&quot;The Graph&quot; or &quot;Anvil event log&quot;) so a viewer knows where the fills came from.</p>
+<h3>One build, three chains</h3>
+<p>Recorded testnet addresses live in <code>DEPLOYED_ADDRESSES</code>; the environment supplies the Anvil addresses that <code>./local.sh</code> writes. <code>CONTRACTS</code> is a proxy that resolves each key against the chain the page has set, so every component reads the right vault without knowing which chain it is on:</p>
+<p><code>frontend/config/wagmi.ts</code></p>
+<pre><code class="language-ts">let activeChainId = 0;
+export function setActiveChainId(id: number) { activeChainId = id; }
+export function contractsFor(chainId: number): ContractMap { return DEPLOYED_ADDRESSES[chainId] ?? ENV_CONTRACTS; }
+
+export const CONTRACTS = new Proxy(ENV_CONTRACTS, {
+  get(target, key: string) {
+    const table = DEPLOYED_ADDRESSES[activeChainId];
+    return (table ?? target)[key as ContractKey];
+  },
+}) as Omit&lt;ContractMap, &quot;usdc&quot; | &quot;weth&quot;&gt; &amp; { usdc: Addr; weth: Addr };
+</code></pre>
+<p><code>frontend/lib/deployments.ts</code> holds the same chains&#39; explorer URLs, contract lists, subgraph endpoints, a one-line &quot;what is real money here&quot; note, and the demo receipts. The Overview and Receipts tabs render the receipts, and the Margin tab filters the ones whose label begins with &quot;Treasury ·&quot; into its &quot;Funded through Circle App Kits&quot; block:</p>
+<p><code>frontend/lib/deployments.ts</code></p>
+<pre><code class="language-ts">export type DemoTx = { label: string; hash: string; note?: string };
+export type Deployment = {
+  chainId: number;
+  name: string;
+  explorer: string;
+  contracts: { label: string; address: string }[];
+  demo: DemoTx[];
+  subgraph?: string;
+  realMoney: string;
+};
+</code></pre>
+<p><code>frontend/components/MarginDesk.tsx</code></p>
+<pre><code class="language-tsx">  const dep = chainId ? DEPLOYMENTS[chainId] : undefined;
+  const treasury = dep?.demo.filter((t) =&gt; t.label.startsWith(&quot;Treasury ·&quot;)) ?? [];
+</code></pre>
+<h3>The Overview ladder</h3>
+<p>The landing tab computes the at-the-money strike from the live spot and reads <code>MarginVault.marginRequirement</code> for it, then draws four rungs whose bar widths are the collateral each tier locks for the same trade:</p>
+<p><code>frontend/components/Story.tsx</code></p>
+<pre><code class="language-ts">  const ladder = [
+    { title: &quot;Naked put&quot;, sub: &quot;the main vault · cash-secured&quot;, value: k, note: `${usd0(k)} USDC locked per unit`, color: &quot;bg-blue-700&quot;, cta: &quot;Trade&quot;, tab: &quot;chain&quot; as TabId, tone: &quot;old&quot; as const },
+    { title: &quot;Credit spread&quot;, sub: `SpreadVault · <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi>u</mi><mi>s</mi><mi>d</mi><mn>0</mn><mo stretchy="false">(</mo><mi>k</mi><mo stretchy="false">)</mo></mrow><mi mathvariant="normal">/</mi></mrow><annotation encoding="application/x-tex">{usd0(k)}/</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span><span class="mord mathnormal">d</span><span class="mord">0</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mclose">)</span></span><span class="mord">/</span></span></span></span>{usd0(k2)}`, value: k2 - k, note: `${usd0(k2 - k)} USDC — the true max loss, ${(k / (k2 - k)).toFixed(0)}× less`, color: &quot;bg-green-600&quot;, cta: &quot;Spreads&quot;, tab: &quot;spreads&quot; as TabId, tone: &quot;new&quot; as const },
+    { title: &quot;Margined put&quot;, sub: &quot;MarginVault · opt-in, IM off the worst-of-hour mark&quot;, value: imUsd, note: `${usd0(imUsd)} USDC initial margin — ${(k / Math.max(imUsd, 1)).toFixed(1)}× less, liquidation-backed`, color: &quot;bg-emerald-600&quot;, cta: &quot;Margin&quot;, tab: &quot;margin&quot; as TabId, tone: &quot;new&quot; as const },
+    { title: &quot;Signed quote&quot;, sub: &quot;RfqVault · LP-signed price, same collateral rules&quot;, value: k, note: &quot;any price the LP signs — the custody model never changes&quot;, color: &quot;bg-teal-700&quot;, cta: &quot;RFQ&quot;, tab: &quot;rfq&quot; as TabId, tone: &quot;new&quot; as const },
+  ];
+</code></pre>
+<h3>The tape and its chain-id gate</h3>
+<p>Every read of ranges, instruments, fills or positions goes through <code>readTape</code>. On a chain with a subgraph endpoint the tape comes from The Graph; on the local Anvil chain, where no graph-node runs on this project&#39;s arm64 host, the same entities are rebuilt from <code>eth_getLogs</code>; on any other chain without a subgraph the call throws rather than falling back to a capped scan:</p>
+<p><code>frontend/lib/tape.ts</code></p>
+<pre><code class="language-ts">export class SubgraphRequiredError extends Error {
+  constructor(chainId?: number) {
+    super(`No subgraph configured for chain ${chainId ?? &quot;unknown&quot;} — on public networks The Graph is the only position source (no RPC scan exists).`);
+  }
+}
+
+/** Ranges, instruments and fills for the chain. Subgraph on public chains, event logs on Anvil. */
+export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
+  const url = subgraphUrlFor(opts.chainId);
+  if (url) return tapeFromSubgraph(url, opts.since ?? 0);
+  if (isLocalChain(opts.chainId) &amp;&amp; opts.client &amp;&amp; opts.vault) return (await stateFromLogs(opts.client, opts.vault)).tape;
+  throw new SubgraphRequiredError(opts.chainId);
+}
+</code></pre>
+<p>In the browser on the server build, <code>subgraphUrlFor</code> returns the proxy path <code>/api/subgraph/?chainId=…</code>; the route resolves a per-chain gateway URL (<code>SUBGRAPH_URL_11155111</code>, <code>SUBGRAPH_URL_5042002</code>) or a global one from server-side environment variables and otherwise forwards to the recorded Studio endpoint. The static export has no route and calls the Studio endpoint directly.</p>
+<h3>The builder&#39;s heat map</h3>
+<p>The strategy builder draws three profit-and-loss curves with Recharts and a price × date heat map as a table whose cell colour scales with the profit or loss at that price on that day. The matrix comes from <code>pnlMatrix</code> in <code>frontend/lib/options.ts</code> (fifteen prices by eight dates by default):</p>
+<p><code>frontend/components/PayoffBuilder.tsx</code></p>
+<pre><code class="language-tsx">function HeatMap({ legs, spot }: { legs: Leg[]; spot: number }) {
+  const m = useMemo(() =&gt; pnlMatrix(legs, spot), [legs, spot]);
+  const scale = useMemo(() =&gt; Math.max(1, ...m.pnl.flat().map((v) =&gt; Math.abs(v))), [m]);
+  const cell = (v: number) =&gt; {
+    const a = Math.min(1, Math.abs(v) / scale) * 0.85 + 0.08;
+    return v &gt;= 0 ? `rgba(34,197,94,<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo stretchy="false">)</mo><mi mathvariant="normal">‘</mi><mo>:</mo><mi mathvariant="normal">‘</mi><mi>r</mi><mi>g</mi><mi>b</mi><mi>a</mi><mo stretchy="false">(</mo><mn>239</mn><mo separator="true">,</mo><mn>68</mn><mo separator="true">,</mo><mn>68</mn><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">{a})` : `rgba(239,68,68,</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">a</span></span><span class="mclose">)</span><span class="mord">‘</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">‘</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mord mathnormal">ba</span><span class="mopen">(</span><span class="mord">239</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">68</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">68</span><span class="mpunct">,</span></span></span></span>{a})`;
+  };
+</code></pre>
+<p>The builder&#39;s greeks (delta, gamma, theta per day, vega) come from <code>strategyStats</code>, which uses the <code>black-scholes</code> and <code>greeks</code> npm packages; the per-leg &quot;what the writer locks on each vault&quot; panel comes from <code>writerCollateral</code>, which reports the naked, netted and margined collateral for every leg.</p>
+<h3>The Risk Monitor</h3>
+<p>The monitor reads every <code>MarginVault</code> event (<code>MarginLocked</code>, <code>Flagged</code>, <code>AuctionStarted</code>, <code>TakenOver</code>, <code>Absorbed</code>, <code>PositionSettled</code>, <code>SeriesFinalized</code>, <code>HolderHaircut</code>, and others) every five seconds, derives the set of positions from them, and reads each position&#39;s <code>health</code> from the vault. A bar shows the locked margin against the maintenance and initial thresholds:</p>
+<p><code>frontend/components/RiskMonitor.tsx</code></p>
+<pre><code class="language-tsx">        &lt;div className={`absolute inset-y-0 left-0 ${healthy ? (locked &gt;= im ? &quot;bg-green-600&quot; : &quot;bg-yellow-600&quot;) : &quot;bg-red-600&quot;} transition-all duration-700`} style={{ width: pct(locked) }} /&gt;
+        &lt;div className=&quot;absolute inset-y-0 w-0.5 bg-white/70&quot; style={{ left: pct(mm) }} title=&quot;maintenance&quot; /&gt;
+        &lt;div className=&quot;absolute inset-y-0 w-0.5 bg-white/30&quot; style={{ left: pct(im) }} title=&quot;initial&quot; /&gt;
+</code></pre>
+<p>The timeline renders each event as a sentence a writer can act on; the &quot;Explain with the copilot&quot; button, shown only when the copilot is enabled, hands the recent events to the chat.</p>
+<h3>The RFQ desk</h3>
+<p>The LP signs a quote as EIP-712 typed data in the wallet, with no gas, through wagmi&#39;s <code>useSignTypedData</code>; the taker&#39;s fill is an ordinary contract call:</p>
+<p><code>frontend/components/RfqDesk.tsx</code></p>
+<pre><code class="language-ts">  const { signTypedDataAsync, isPending: signing, error: signError } = useSignTypedData();
+</code></pre>
+<pre><code class="language-ts">    const signature = await signTypedDataAsync({
+      types: QUOTE_TYPES, primaryType: &quot;Quote&quot;, message: quote,
+</code></pre>
+<h3>The copilot panel</h3>
+<p>The floating panel sends the visible spot, chain id, wallet address and the active tab with every request so the server prices exactly what the screen shows. A per-tab briefing (<code>frontend/lib/copilot/tabs.ts</code>) tells the model what is on screen, which guide sections explain it, and which tools fit; the panel shows that tab&#39;s starter prompts. The Skills menu toggles the eight built-in trader skills and accepts user-written ones; the settings gear holds a bring-your-own-key provider choice and the list of MCP servers, with a one-click preset for The Graph&#39;s Subgraph MCP:</p>
+<p><code>frontend/components/copilot/CopilotSettings.tsx</code></p>
+<pre><code class="language-ts">const THEGRAPH_MCP: McpServer = { name: &quot;thegraph&quot;, url: &quot;https://subgraphs.mcp.thegraph.com/sse&quot;, transport: &quot;sse&quot; };
+</code></pre>
+<p>The two preparation cards (<code>prepare_lp_range</code>, <code>prepare_rfq_quote</code>) hand the agent&#39;s proposed numbers to the matching form, where the user reviews and signs; the copilot never holds a key. The Graph page documents the tools, skills and MCP in full.</p>
+<h3>The help site and the knowledge pack</h3>
+<p><code>frontend/scripts/gen-help.mjs</code> renders the README, the User Guide, Limitations, Solutions, the copilot page and the six sponsor pages (the Sponsors group in the sidebar) into <code>public/help.html</code>, with KaTeX for the README&#39;s formulae and Mermaid for its diagrams; the Reference Table and Continuation Track pages are embedded as standalone documents. <code>frontend/scripts/gen-knowledge.mjs</code> compiles the same documents into a token-cheap table of contents for the copilot&#39;s system prompt and full sections served on demand through its <code>read_docs</code> tool. Both run on <code>predev</code> and <code>prebuild</code>, so the site and the pack are never stale relative to the docs.</p>
+<h3>Two builds</h3>
+<p><code>frontend/next.config.ts</code> switches on one variable: when <code>NEXT_PUBLIC_BASE_PATH</code> is set (the GitHub Pages workflow sets it to <code>/Smile</code>), the build is a static export served from a subpath, and route handlers are excluded; when it is unset, the build is a normal server build that carries <code>/api/copilot</code> and <code>/api/subgraph</code>. The Pages workflow runs on pushes to <code>main</code> and the continuation branch and on documentation changes; the Vercel project builds the continuation branch as production with the copilot provider, model, keys and MCP seed held as server-side environment variables.</p>
+<h2>Limitations</h2>
+<ul>
+<li><strong>The static export has no copilot.</strong> GitHub Pages serves files only, so the copilot button is hidden there (<code>NEXT_PUBLIC_COPILOT</code> unset) and the subgraph is read directly from the Studio endpoint. The Vercel build is the one with the agent.</li>
+<li><strong>The premium swap is key-gated and mainnet-routed.</strong> The Uniswap Trading API is used for the displayed spot and, only when <code>NEXT_PUBLIC_UNISWAP_API_KEY</code> is set, to quote an ETH→USDC swap for the premium; that quote targets mainnet, so on Sepolia and Arc the buyer pays premium from USDC held already.</li>
+<li><strong>Market data is context, not pricing.</strong> The candles come from Coinbase or Kraken; the protocol prices off its oracle. The two can disagree, and the chart says so in its legend.</li>
+<li><strong>Implied vol on the chart is a browser estimate.</strong> It inverts Black-Scholes with the candle close at the fill&#39;s hour as spot and the builder&#39;s risk-free rate; the protocol&#39;s own sigma is the hook&#39;s, not this number.</li>
+<li><strong>The Risk Monitor and the Anvil tape scan logs.</strong> On Anvil both rebuild state from <code>eth_getLogs</code> every few seconds, which is fine for a local chain and would not scale to a busy public one; on public chains the tape comes from the subgraph, but the Risk Monitor&#39;s event timeline is still a log scan of <code>MarginVault</code>.</li>
+<li><strong>Transfers of option tokens are not on the tape.</strong> The subgraph does not index ERC-20 transfers of OptionTokens, so a position sold on to another wallet still shows on the original buyer until closed or redeemed (see The Graph page).</li>
+<li><strong>A weak default model.</strong> The live deployment runs the copilot on <code>openrouter/free</code>; the tool-routing rules in the system prompt carry more weight than they would with a stronger model, and the settings gear lets a user bring their own key.</li>
+<li><strong>Layout is desktop-first.</strong> The tab bar wraps on narrow screens and tables scroll horizontally, but the builder, chart and desks are designed for a wide viewport.</li>
+</ul>
+<h2>Plans</h2>
+<ul>
+<li><strong>A live secondary market on the chart.</strong> When an OptionToken v4 pool exists (Limitations L14), its trades belong on the same chart as the primary tape.</li>
+<li><strong>Per-chain spot sources.</strong> The Trading API quote is mainnet-only; a chain-aware spot source (a feed adapter per chain, or Pyth for quoting per R5) would let the displayed spot and the protocol&#39;s spot agree on every network.</li>
+<li><strong>Index OptionToken transfers.</strong> A data-source template per OptionToken in the subgraph would make the tape&#39;s positions transfer-aware, and the My Positions tab correct after a resale.</li>
+<li><strong>Mobile layouts for the desks.</strong> The Overview and Trade tabs read well on a phone; the builder&#39;s heat map and the desks would benefit from stacked layouts.</li>
+<li><strong>Recorded liquidation on a public chain.</strong> The Risk Monitor&#39;s waterfall has been shown on Anvil only, because public testnets cannot be time-warped; a scheduled, long-dated demo on Sepolia or Arc would put a real timeline on screen.</li>
+</ul>
+<h2>Glossary</h2>
+<ul>
+<li><strong>Next.js.</strong> The React framework the app is built with; it can produce a static site or a server that also runs API routes.</li>
+<li><strong>Static export.</strong> A Next.js build that emits plain HTML, CSS and JavaScript with no server, deployable to GitHub Pages; API routes cannot exist in it.</li>
+<li><strong>Server build.</strong> A Next.js build that runs on a Node.js server (here Vercel) and can serve route handlers such as <code>/api/copilot</code>.</li>
+<li><strong>Base path.</strong> The URL prefix (<code>/Smile</code>) under which the static export is served on GitHub Pages; assets must be prefixed with it or they fail to load.</li>
+<li><strong>Route handler / proxy route.</strong> A server-side endpoint inside the app. <code>/api/subgraph</code> forwards the browser&#39;s query to The Graph with a key the browser never sees.</li>
+<li><strong>wagmi and viem.</strong> The React hooks library and the low-level Ethereum client the app uses to connect wallets, read contracts and send transactions.</li>
+<li><strong>Injected connector.</strong> A wallet available as a browser extension (MetaMask and similar) that injects a provider into the page.</li>
+<li><strong>WalletConnect.</strong> A protocol for connecting mobile wallets by QR code; enabled only when a project id is configured.</li>
+<li><strong>Lightweight Charts.</strong> TradingView&#39;s open-source charting engine, an npm package under Apache-2.0 that draws candles, lines and price lines on a canvas from application-supplied data.</li>
+<li><strong>Candle / OHLC.</strong> One bar of price history: the open, high, low and close over an interval, here one hour.</li>
+<li><strong>Price line.</strong> A horizontal line the chart engine draws at a given price with a label; used for strikes, breakevens and the spot.</li>
+<li><strong>Tape.</strong> The record of every range, instrument, fill and position on the venue, read from The Graph on public chains and rebuilt from event logs on Anvil.</li>
+<li><strong>Instrument.</strong> One (strike, expiry, call-or-put) series, identified by its OptionToken address.</li>
+<li><strong>Premium per unit.</strong> What one option unit cost at a fill, fee included, in USD.</li>
+<li><strong>Implied volatility (IV).</strong> The volatility that, put into Black-Scholes, reproduces an observed premium; on the chart it is recovered by bisection.</li>
+<li><strong>Payoff diagram.</strong> The profit or loss of a strategy as a function of the underlying&#39;s price at expiry.</li>
+<li><strong>Today / halfway curves.</strong> The strategy&#39;s model value at the current time and at half the time to expiry, drawn with the expiry payoff.</li>
+<li><strong>Breakeven.</strong> A price at which the strategy&#39;s profit and loss is zero.</li>
+<li><strong>Heat map.</strong> A grid of profit or loss by price (rows) and date (columns), coloured by sign and magnitude.</li>
+<li><strong>Greeks.</strong> Delta (sensitivity to the underlying&#39;s price), gamma (delta&#39;s sensitivity), theta (time decay per day) and vega (sensitivity to volatility).</li>
+<li><strong>Writer collateral.</strong> What a writer locks for a leg on each vault: the naked amount on the main vault, the netted max loss on <code>SpreadVault</code>, the initial margin on <code>MarginVault</code>.</li>
+<li><strong>Ladder.</strong> The Overview tab&#39;s four rungs, from naked collateral to a signed quote, drawn as bars sized by the collateral each locks.</li>
+<li><strong>Receipts.</strong> The recorded testnet transactions per chain, with explorer links, on the Overview, Receipts and Margin tabs.</li>
+<li><strong>Health.</strong> A margined position&#39;s locked margin against its maintenance and initial requirements, read from <code>MarginVault.health</code>.</li>
+<li><strong>Liquidation timeline.</strong> The sequence of <code>MarginVault</code> events for a position: flagged, auction, taken over or absorbed, settled, finalized, and if necessary haircut.</li>
+<li><strong>EIP-712.</strong> The standard for signing structured typed data in a wallet; the RFQ desk uses it for quotes.</li>
+<li><strong>Copilot.</strong> The AI chat panel; on the server build it calls tools that read the tape, price strategies, and prepare ranges and quotes for the user to sign.</li>
+<li><strong>Skill.</strong> A markdown file of trading know-how that the copilot loads into its prompt when enabled.</li>
+<li><strong>MCP (Model Context Protocol).</strong> A standard through which the copilot connects to external tool servers, such as The Graph&#39;s Subgraph MCP.</li>
+<li><strong>Knowledge pack.</strong> The compiled table of contents and sections of the documentation that the copilot&#39;s <code>read_docs</code> tool serves.</li>
+</ul>
+</article>
+    </section>
     <section id="page-reference" class="page page-reference">
       <iframe src="/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
     </section>
@@ -5023,7 +5605,7 @@ if (cmd === &quot;deposit&quot;) {
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ["overview","guide","limitations","solutions","copilot","aqua","chainlink","uniswap","thegraph","arc","reference","continuation-track"];
+    var VALID_PAGES = ["overview","guide","limitations","solutions","copilot","aqua","chainlink","uniswap","thegraph","arc","frontend","reference","continuation-track"];
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 

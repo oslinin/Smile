@@ -22,6 +22,7 @@ const DOCS = [
   { source: "docs/sponsors/uniswap.md", prefix: "uniswap" },
   { source: "docs/sponsors/thegraph.md", prefix: "thegraph" },
   { source: "docs/sponsors/arc.md", prefix: "arc" },
+  { source: "docs/sponsors/frontend.md", prefix: "frontend" },
 ];
 
 const slug = (s) =>

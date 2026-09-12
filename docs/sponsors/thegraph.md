@@ -23,10 +23,13 @@ not have.
 
 Two subgraphs are live on Subgraph Studio, The Graph's hosted deployment
 service: `smile-sepolia` (version 0.0.4) for the Sepolia testnet and
-`smile-arc-testnet` (version 0.0.1) for Circle's Arc testnet. On those
-public networks the application and the AI copilot read positions,
-liquidity and trade history from The Graph only; no RPC scan exists as a
-fallback. The copilot is built on that tape as a trading agent: it screens
+`smile-arc-testnet` (version 0.0.1) for Circle's Arc testnet. On
+2026-09-12 both were also published to The Graph Network, the
+decentralised network of indexers, and the live application reads them
+through the network's gateway with an API key that never leaves the
+server. On those public networks the application and the AI copilot read
+positions, liquidity and trade history from The Graph only; no RPC scan
+exists as a fallback. The copilot is built on that tape as a trading agent: it screens
 every live strike against the listed reference market, maps where
 liquidity is scarce, computes the greeks of a wallet's whole book, sizes a
 hedge, and prepares the range an LP might write or the quote a market
@@ -49,7 +52,8 @@ The Graph's own Subgraph MCP server as well as any server the user adds.
 | Copilot trading tools: `find_opportunities`, `liquidity_map`, `portfolio_greeks`, `hedge_suggestion`, `reference_market`, `macro_calendar`, `prepare_lp_range`, `prepare_rfq_quote` | `frontend/lib/copilot/graphTools.ts`, `deribit.ts`, `macro.ts`, `tools.ts` | EthOnline 2026 |
 | Tab-aware briefing in the copilot prompt | `frontend/lib/copilot/systemPrompt.ts`, `tabs.ts` | EthOnline 2026 |
 | Eight trader skills and a Skills menu with user-added skills | `frontend/skills/*.md`, `frontend/components/copilot/SkillsMenu.tsx` | EthOnline 2026 |
-| MCP servers per user with a preset for The Graph's Subgraph MCP | `frontend/lib/copilot/mcp.ts`, `frontend/components/copilot/CopilotSettings.tsx` | EthOnline 2026 |
+| MCP servers: operator-seeded (`COPILOT_MCP_SERVERS`) and per-user (settings gear, `x-copilot-mcp` header), opened per request; The Graph's Subgraph MCP seeded on the live deployment and verified end to end | `frontend/lib/copilot/mcp.ts`, `frontend/components/copilot/CopilotSettings.tsx`, `frontend/app/api/copilot/route.ts` | EthOnline 2026 (verified 2026-09-12) |
+| The copilot itself: one server route, four providers (operator env or bring-your-own-key header), a system prompt assembled from the knowledge pack, the tab briefing and the active skills, nineteen built-in tools | `frontend/app/api/copilot/route.ts`, `frontend/lib/copilot/provider.ts`, `systemPrompt.ts`, `tools.ts`, `knowledge.ts` | Pre-existing (route, providers, docs tools); EthOnline 2026 (tape tools, tabs, skills, MCP, OpenRouter) |
 | Agent-facing subgraph documentation and client configuration | `subgraph/SKILL.md`, `.mcp.json.example` | EthOnline 2026 |
 | Traded premium and implied volatility per instrument on the price chart | `frontend/components/PriceChart.tsx` | EthOnline 2026 |
 | A seeded tape of one hundred trades on the local chain | `script/SeedTape.s.sol`, `script/seed-tape.sh`, `local.sh` | EthOnline 2026 |
@@ -255,12 +259,16 @@ export async function readTape(opts: TapeOpts): Promise<Tape> {
 Every `Tape` carries a `source` field, `"subgraph"` or `"anvil-logs"`, and
 the copilot is instructed to state where its numbers came from.
 
-### The proxy
+### The proxy and the per-chain gateway URL
 
-A gateway URL that carries an API key is configured server-side as
-`SUBGRAPH_URL`. Browser callers reach it through `/api/subgraph`, which
-forwards the request body unchanged and falls back to the recorded Studio
-endpoint when no server-side URL is set.
+A gateway URL carries the API key in its path, so it must never reach a
+browser. It is configured server-side, per chain, and the browser reaches
+it through `/api/subgraph`, which forwards the request body unchanged.
+Resolution order in the route: an explicit `NEXT_PUBLIC_SUBGRAPH_URL`
+override, then `SUBGRAPH_URL_<chainId>`, then a chain-agnostic
+`SUBGRAPH_URL`, then the recorded Studio endpoint for the chain. The live
+deployment sets `SUBGRAPH_URL_11155111` and `SUBGRAPH_URL_5042002`, so
+Sepolia and Arc reads go through the network while Anvil has no entry.
 
 `frontend/app/api/subgraph/route.ts`:
 
@@ -268,7 +276,11 @@ endpoint when no server-side URL is set.
 export async function POST(req: Request) {
   const chainId = Number(new URL(req.url).searchParams.get("chainId") ?? "0");
   const url =
-    process.env.NEXT_PUBLIC_SUBGRAPH_URL || process.env.SUBGRAPH_URL || DEPLOYMENTS[chainId]?.subgraph || "";
+    process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
+    process.env[`SUBGRAPH_URL_${chainId}`] ||
+    process.env.SUBGRAPH_URL ||
+    DEPLOYMENTS[chainId]?.subgraph ||
+    "";
   if (!url) return Response.json({ errors: [{ message: `no subgraph for chain ${chainId}` }] }, { status: 404 });
   const upstream = await fetch(url, {
     method: "POST",
@@ -282,11 +294,137 @@ export async function POST(req: Request) {
 }
 ```
 
-### A copilot tool
+The same resolution lives in `subgraphUrlFor` in `frontend/lib/subgraph.ts`
+for server-side callers such as the copilot's tape tools; in the browser
+that function returns the proxy path when the build has a server, and the
+Studio endpoint directly on the static GitHub Pages export, which has no
+server and therefore no key.
 
-`find_opportunities` loads the tape and the Deribit reference in parallel,
-reads the vault's live volatility per expiry, and prices every grid strike
-of every active range.
+### Published to The Graph Network
+
+A subgraph on The Graph exists in two places with different guarantees. A
+**Studio deployment** is served by The Graph's own upgrade indexer from a
+rate-limited development endpoint with no key. **Publishing** records the
+subgraph on the protocol's contracts, which live on Arbitrum One
+regardless of the chain the subgraph indexes, and makes it available
+through the **gateway**, the query endpoint that routes each request to an
+indexer and bills it to an **API key**. No curation signal is required:
+the upgrade indexer keeps serving a published subgraph until independent
+indexers pick it up.
+
+Both subgraphs were published on 2026-09-12. The publish transaction is a
+wallet step in Studio; the API key is created under Studio → API Keys.
+
+| Network | Subgraph id (network) | Deployment id (IPFS hash) |
+|---|---|---|
+| Sepolia | `Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2` | `QmRkbvKcWtMShTSDGXJhEUYkjahWGvKsWU1EcTM3wDHEua` |
+| Arc testnet | `9ZcFMvnhbWygRg7oB29NL8smoVysqCbdQpqNMhWtHbmq` | `QmTA9unF8d66AwATQz6MYxM6zvEW6LAj3kned4E48txoc3` |
+
+The gateway URL has the form
+`https://gateway.thegraph.com/api/<key>/subgraphs/id/<subgraph id>`. Both
+answered with the testnets' real instruments and `hasIndexingErrors:
+false` within minutes of publishing (the Arc subgraph took about two
+minutes to appear). A subgraph id names the subgraph across versions; a
+deployment id names one built version, and the gateway can also be
+addressed by it (`/deployments/id/<hash>`).
+
+The Studio development endpoints remain recorded in `lib/deployments.ts`
+as the fallback for the browser on the static export and for any
+environment without the key. The same key is the bearer token for The
+Graph's Subgraph MCP server (next sections), so one credential covers both
+the data path and the agent path.
+
+### The copilot
+
+The copilot is a chat panel in the application and one server route,
+`POST /api/copilot/`. The route exists only on server builds (the Vercel
+deployment); the static GitHub Pages export has no server, so the widget
+hides itself there (`NEXT_PUBLIC_COPILOT`). Each request carries the chat
+history and a context object the client assembles from what is on screen,
+so the copilot's numbers match the visible interface.
+
+`frontend/app/api/copilot/route.ts`:
+
+```typescript
+const ctx: CopilotContext = {
+  spot: typeof context?.spot === "number" && context.spot > 0 ? context.spot : 3420,
+  chainId: context?.chainId,
+  address: context?.address,
+  tab: isTabId(context?.tab) ? context.tab : undefined,
+  skills: Array.isArray(context?.skills) ? context.skills.filter((s) => typeof s === "string") : undefined,
+  customSkills: Array.isArray(context?.customSkills) ? context.customSkills : undefined,
+};
+```
+
+**Model providers.** `lib/copilot/provider.ts` supports four providers,
+`anthropic`, `openai`, `google` and `openrouter`, with defaults
+`claude-opus-4-8`, `gpt-5-mini`, `gemini-2.5-pro` and `openrouter/auto`.
+The operator chooses one with `COPILOT_PROVIDER` and the matching key
+variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENROUTER_API_KEY`), optionally
+overriding the model with `COPILOT_MODEL`. A user may instead bring their
+own key: the settings gear stores provider, key and model in the browser's
+local storage only, and the panel sends them per request in the
+`x-copilot-provider`, `x-copilot-api-key` and `x-copilot-model` headers;
+the route builds that request's model client from them and never stores
+or logs them. The live deployment runs `openrouter` with
+`COPILOT_MODEL=openrouter/free`, a free routed model, so judges need no
+key of their own; the tool-routing rules in the prompt were written with a
+weak model in mind.
+
+**The system prompt.** `lib/copilot/systemPrompt.ts` is one auditable
+template with, in order: the current context (spot, chain, wallet); the
+briefing for the tab on screen; the pricing model (the smile formula, the
+current sigma, alpha and beta, how the spread arises, how ranges and the
+just-in-time pull work); the tool rules (never do options mathematics in
+the head, which tool answers which question, that trades are never
+executed); the data-source rule (say whether numbers came from the
+subgraph or the local event log); the active skills, in full; rules for
+rolls, output style, teach mode and quiz mode; and, from the build-time
+knowledge pack, a table of contents of every documentation section and the
+glossary from the limitations page. The knowledge pack
+(`lib/copilot/knowledge.generated.json`, built by
+`scripts/gen-knowledge.mjs` from the README, the User Guide, the
+limitations, solutions and copilot pages and the five sponsor pages)
+holds the full section bodies for the `read_docs` tool, capped at six
+thousand characters per section.
+
+**Tab awareness.** `lib/copilot/tabs.ts` describes every application tab:
+what is on screen, which documentation sections to read first, the best
+first move, and three starter prompts. The panel sends the active tab in
+the context; the prompt gains a "where the user is" block so that "explain
+this" means the tab on screen, and the panel shows that tab's starters.
+
+**Skills.** The eight built-in skills are markdown files in the `SKILL.md`
+convention (frontmatter `name`, `description`, `starter`, then the
+procedure), bundled into the knowledge pack at build time: Trading
+opportunities, Risk management, Delta hedging, Explain margin, LP market
+making, RFQ quoting, Macro context and Calendar spreads. The Skills menu
+in the panel header toggles them and accepts user-written skills; both
+lists live in local storage and ride each request in the context (custom
+skills are capped at five of four thousand characters). Enabled skill
+bodies are appended to the prompt under "Active skills".
+
+**Built-in tools.** `lib/copilot/tools.ts` defines nineteen tools; the model
+may take up to ten tool steps per turn. Grouped by what they read:
+
+| Tool | What it does and what it reads |
+|---|---|
+| `read_docs` | Returns one section of the documentation from the knowledge pack by section id; the model is told to cite the id. |
+| `get_market_state` | Spot, the smile parameters, ATM vol, expected move, 25-delta risk reversal and butterfly from the same code as the interface (`lib/options.ts`). |
+| `price_strategy`, `suggest_strategies`, `scenario_analysis`, `analyze_adjustment` | Price a multi-leg strategy at the protocol's smile (entry, max profit and loss, probability of profit, breakevens, greeks), propose strategies for a stated view, run a spot and vol stress grid, and price a roll or adjustment before and after. Client-side mathematics, no chain read. |
+| `get_onchain_quote` | Calls the deployed pricing engine for a live call quote and cross-checks it against the front-end formula. |
+| `get_positions`, `portfolio_risk` | The connected wallet's balances, written ranges and long positions, and their aggregate risk. Positions come from the tape (`lib/copilot/chain.ts` reads the subgraph on public networks). |
+| `find_opportunities` | Every live strike on every active range priced at the vault's live volatility per expiry, expressed as implied volatility and compared with the nearest listed Deribit instrument and with the last fill of the same instrument; ranked cheap to expensive. Reads the tape and Deribit. |
+| `liquidity_map` | Every active range with capacity, utilisation, open interest, fills and days since the last trade, flagged scarce, empty, stale or expiring, plus a per-strike heat map. Reads the tape. |
+| `portfolio_greeks` | The wallet's whole book from the tape, long positions with cost basis from its own fills and the written side from open interest on its ranges, with net delta, gamma, theta and vega. |
+| `hedge_suggestion` | The quantity of spot ETH, or of calls or puts at a strike, that brings a book to a target delta, with greeks before and after. The prompt forbids computing a hedge any other way. |
+| `reference_market` | Deribit's public API: index price, the DVOL index, ATM implied volatility at the nearest listed expiry, and the nearest listed instrument to a strike and expiry. Cached for sixty seconds. |
+| `macro_calendar` | Scheduled FOMC, CPI and listed-expiry dates within a horizon from a static 2026 table, with event-volatility heuristics. |
+| `prepare_lp_range`, `prepare_rfq_quote`, `propose_trade` | Interface tools: each renders a card whose button prefills the Write a Range form, the RFQ signer or the Payoff Builder. The user reviews and signs in the wallet; the copilot cannot send a transaction and never holds a key. |
+| `quiz_question` | Renders one multiple-choice question as clickable choices; the pick returns as the tool result. |
+
+`find_opportunities` is representative of the tape tools:
 
 `frontend/lib/copilot/graphTools.ts`:
 
@@ -305,48 +443,42 @@ export async function findOpportunities(
       const near = ref ? nearestReference(ref, k, a.expiry, a.isCall) : null;
 ```
 
-The other tape tools follow the same pattern. `liquidity_map` buckets
-ranges into bands and flags scarce (at least eighty percent used), empty,
-stale (no trade for more than three days) and expiring ranges.
+`liquidity_map` treats a range as scarce at eighty percent used, stale
+after three days without a trade and expiring within three days.
 `portfolio_greeks` combines `Position` rows for the holder with open
-interest on the holder's own ranges. `reference_market` calls Deribit's
-public API with a sixty-second cache. `macro_calendar` reads a static
-table. The two `prepare_*` tools are user-interface tools that render
-cards.
+interest on the holder's own ranges. Every tape tool returns the tape's
+`source` field, `"subgraph"` on public networks or `"anvil-logs"` on the
+local chain.
 
-### Skills
-
-Each skill is a markdown file with frontmatter. Enabled skills ride each
-request and are appended to the system prompt.
-
-`frontend/skills/trading-opportunities.md`:
-
-```markdown
----
-name: Trading opportunities
-description: Screen live Smile instruments for mispriced options versus the Deribit reference vol and recent trades, then confirm and propose.
-starter: Find me the three cheapest options on the book right now and explain why they're cheap.
----
-```
-
-The eight built-in skills are `trading-opportunities`, `risk-management`,
-`delta-hedging`, `explain-margin`, `lp-market-making`, `rfq-quoting`,
-`macro-context` and `calendar-spreads`.
-
-### MCP
+### MCP servers
 
 The Model Context Protocol (MCP) is an open standard by which an AI model
-connects to external tool servers. The copilot opens every configured
-server per request, merges its tools with the built-in ones, and closes
-them when the stream ends. The settings panel offers one preset.
+connects to external tool servers over HTTP. In Smile, MCP is how the
+copilot's toolset grows without a rebuild.
 
-`frontend/components/copilot/CopilotSettings.tsx`:
-
-```typescript
-const THEGRAPH_MCP: McpServer = { name: "thegraph", url: "https://subgraphs.mcp.thegraph.com/sse", transport: "sse" };
-```
+**How the plumbing works.** `lib/copilot/mcp.ts` takes two lists of
+servers: the operator's, from the `COPILOT_MCP_SERVERS` environment
+variable, and the user's, sent from the browser in the `x-copilot-mcp`
+header the same way the bring-your-own-key headers are. Both are JSON
+arrays of `{ name, url, token?, transport? }`; only `https://` URLs are
+accepted, the transport is `http` or `sse`, and the lists are merged by
+name with the user's entry winning, capped at five servers. On every
+request the route opens each server (with an eight-second handshake
+timeout), asks it for its tools, and merges them after the built-in tools
+so that a built-in name always wins; a colliding name between two servers
+is prefixed with the server's name. The servers are closed when the stream
+finishes or errors. A server that fails to connect is logged and skipped,
+so a dead server cannot break the chat.
 
 `frontend/lib/copilot/mcp.ts`:
+
+```typescript
+export function mergeMcpConfigs(env: McpServerConfig[], header: McpServerConfig[]): McpServerConfig[] {
+  const byName = new Map(env.map((c) => [c.name, c]));
+  for (const c of header) byName.set(c.name, c);
+  return [...byName.values()].slice(0, MAX_SERVERS);
+}
+```
 
 ```typescript
 const client = await createMCPClient({
@@ -360,9 +492,29 @@ const client = await createMCPClient({
 });
 ```
 
-A server that fails to connect is logged and skipped so that a dead server
-cannot break the chat. The same server is available to developers as a
-client configuration:
+**What it has today.** The Graph's Subgraph MCP server,
+`https://subgraphs.mcp.thegraph.com/sse`, authenticated with a Gateway
+API key as the bearer token. It is seeded operator-side on the live
+deployment through `COPILOT_MCP_SERVERS`, so every copilot request there
+carries its tools with no setup by the user; it is also the one preset in
+the settings gear (the user pastes their own key). The server exposes
+nine tools: `search_subgraphs_by_keyword`, `get_top_subgraph_deployments`,
+`get_schema_by_subgraph_id`, `get_schema_by_deployment_id`,
+`get_schema_by_ipfs_hash`, `execute_query_by_subgraph_id`,
+`execute_query_by_deployment_id`, `execute_query_by_ipfs_hash` and
+`get_deployment_30day_query_counts`. With them the copilot can find any
+indexed subgraph on The Graph Network, read its schema and query it in
+natural language, not only Smile's own. It was verified end to end on
+2026-09-12: asked to search subgraphs for "uniswap", the deployed copilot
+called `search_subgraphs_by_keyword` through the seeded server and
+answered with a real subgraph name.
+
+The same server is available to developers outside the application:
+`.mcp.json.example` at the repository root is a one-file client
+configuration for Claude Code or Cursor, and `subgraph/SKILL.md` describes
+Smile's entities, canonical queries, endpoints and units so that an AI
+environment can query `smile-sepolia` or `smile-arc-testnet` without
+reading the schema.
 
 `.mcp.json.example`:
 
@@ -379,6 +531,21 @@ client configuration:
   }
 }
 ```
+
+**What it can have.** Any MCP server reachable over HTTPS: the settings
+gear takes a name, a URL, an optional bearer token and the transport.
+Servers that fit a trading coach include a market-data server for Deribit
+or another listed venue (replacing the built-in sixty-second Deribit
+cache with the user's own feed), a price-oracle server for Chainlink or
+Pyth rounds, a transaction-simulation server so a proposed trade can be
+dry-run before the user signs, and another project's subgraph server for
+cross-protocol positions. Limits: five servers per request, HTTPS only,
+one merged toolset (a server tool with a built-in's name is shadowed, and
+a name shared by two servers is prefixed), an eight-second connect
+budget per server, and the routing quality of the model in use; the free
+routed model on the live deployment follows explicit tool rules well and
+open-ended tool choice less well, so a server with many similar tools
+benefits from a skill that names which one to call.
 
 ### The seeded tape
 
@@ -408,13 +575,17 @@ sellbacks across fifty-four simulated hours.
   there, gated on chain id, and that path does not exist on public
   networks. The subgraph's matchstick unit tests are written but run only
   on x86.
-- **The Graph's Subgraph MCP is untested end to end.** Connecting to it
-  requires a Gateway API key from Studio, which is a wallet-side step. The
-  copilot's MCP plumbing is verified against a bogus server (skipped
-  without error), not against the live Graph server.
-- **Studio endpoints are rate-limited development endpoints.** Production
-  use requires publishing the subgraph to the decentralised network and
-  querying the gateway with an API key.
+- **The gateway path depends on one key and one deployment.** The
+  server-side gateway URLs are set on the Vercel deployment and in the
+  local environment file; the static GitHub Pages export has no server and
+  falls back to the Studio development endpoints, which are rate-limited.
+  The key is a shared operator credential subject to The Graph's
+  per-key query quota, not a per-user one.
+- **The MCP toolset is only as good as the model routing it.** The Graph's
+  server is verified with an explicit request; whether the free routed
+  model reaches for it unprompted on an open question is not guaranteed.
+  Servers are opened on every request, which adds their handshake time to
+  each turn.
 - **The screener is a model, not a market.** `find_opportunities` prices
   Smile's ask with the vault's own formula at the hook's live volatility
   and inverts a Black-Scholes price for the implied volatility. Deribit's
@@ -428,11 +599,12 @@ sellbacks across fifty-four simulated hours.
 The phase-two status table and cut list in
 `docs/plans/2026-09-09-theGraph.md` record what remains.
 
-- **Publish and key (P8).** Publish `smile-sepolia` and
-  `smile-arc-testnet` from Studio to the decentralised network (the publish
-  transaction is on Arbitrum One; the indexed chain is unchanged), create a
-  Gateway API key, and set `SUBGRAPH_URL` server-side. A wizard for the
-  two wallet steps is in `subgraph/README.md`.
+- **Publish and key (P8): done 2026-09-12.** Both subgraphs are published
+  on Arbitrum One and served through the gateway; the live deployment reads
+  them with `SUBGRAPH_URL_11155111` and `SUBGRAPH_URL_5042002`. What
+  remains is operational: rotate the key, watch the query allowance, and
+  add curation signal if independent indexers are wanted beyond the
+  upgrade indexer.
 - **Dynamic data sources (G6).** A data-source template per `OptionToken`
   so that ERC-20 transfers of option tokens update `Position`.
 - **The sibling vaults.** The subgraph indexes `AquaCollateralVault` only.
@@ -440,25 +612,41 @@ The phase-two status table and cut list in
   would need their own data sources for the tape to cover spreads, margined
   puts and signed-quote fills.
 - **A live macro feed** in place of the static table.
-- **Verify the Graph MCP** against the live server once a Gateway key is
-  in hand.
+- **More MCP servers as presets.** The settings gear has one preset; a
+  Deribit market-data server and a transaction-simulation server are the
+  natural next two, each with a skill naming when to call it.
 
 ## Glossary
 
+- **API key (Gateway).** The credential created in Studio that authorises
+  queries to the gateway and against which they are metered. In Smile it is
+  embedded in the server-side gateway URL and reused as the bearer token
+  for The Graph's Subgraph MCP; it never reaches a browser.
 - **Agent (copilot).** An AI model that answers by calling tools rather
   than from memory. Smile's copilot calls pricing, tape and preparation
   tools; it prepares transactions but never signs or sends one.
+- **Bearer token.** A credential sent in an HTTP `Authorization` header.
+  The copilot's MCP client sends a server's token this way on every request.
 - **Bound call.** In a subgraph mapping, a read-only call to the indexed
   contract at the block being processed, used here to refresh
   `usedCollateral` and `collateralToken` from chain state.
+- **Bring your own key (BYOK).** The settings-gear option by which a user
+  supplies their own model-provider key from the browser, sent per request
+  in headers and never stored by the server.
+- **Curation signal.** GRT staked on a published subgraph to attract
+  independent indexers. Not required for Smile's subgraphs, which the
+  upgrade indexer serves.
+- **Deployment id.** The IPFS hash of one built version of a subgraph
+  (`Qm…`). The gateway can be addressed by it as well as by the subgraph id.
 - **Deribit.** The largest centralised crypto options exchange, used by the
   copilot as the listed reference market for implied volatility.
 - **DVOL.** Deribit's thirty-day implied volatility index for ETH.
 - **Entity.** A table in a subgraph's schema. Smile has four:
   `Authorization`, `Fill`, `Instrument`, `Position`.
 - **Gateway.** The Graph's query endpoint for subgraphs published to the
-  decentralised network, authenticated by an API key. In Smile the key
-  stays server-side behind `/api/subgraph`.
+  decentralised network, authenticated by an API key; it routes each query
+  to an indexer. In Smile the key stays server-side behind `/api/subgraph`,
+  configured per chain as `SUBGRAPH_URL_<chainId>`.
 - **GraphQL.** A query language in which the client names the fields it
   wants and receives exactly those.
 - **Greeks.** The sensitivities of an option's price: delta (to the
@@ -483,8 +671,13 @@ The phase-two status table and cut list in
 - **L12a.** The limitation entry in `docs/limitations.md` describing the
   fifty-range cap that the subgraph lifted.
 - **MCP (Model Context Protocol).** An open standard for connecting an AI
-  model to external tool servers. The Graph's Subgraph MCP exposes any
-  indexed subgraph to a model.
+  model to external tool servers over HTTP. The copilot opens the
+  operator's and the user's servers on every request and merges their tools
+  with its own. The Graph's Subgraph MCP exposes any indexed subgraph to a
+  model through nine tools.
+- **Publish.** Registering a subgraph on The Graph Network's contracts on
+  Arbitrum One so that it can be served through the gateway and indexed by
+  the network. The indexed chain is unchanged by publishing.
 - **Open interest.** The number of option units outstanding in an
   instrument: bought minus closed minus redeemed.
 - **Range (authorisation).** An LP's standing offer to write options
@@ -493,10 +686,17 @@ The phase-two status table and cut list in
   description, starter, procedure) that teaches the copilot a workflow.
 - **Subgraph.** The unit of indexing on The Graph: a manifest naming the
   contract and events, a schema of entities, and the handlers.
+- **Subgraph id.** The identifier of a published subgraph on the network
+  (`Bf9T…` for Sepolia, `9ZcF…` for Arc testnet), stable across versions.
 - **Subgraph Studio.** The Graph's hosted service for deploying and testing
   subgraphs before publishing them to the network.
+- **System prompt.** The instructions the copilot receives before the
+  conversation: context, the pricing model, tool rules, the tab briefing,
+  active skills, the documentation table of contents and the glossary.
 - **Tape.** The running record of ranges, instruments, fills and positions.
   On public networks it is the subgraph; on the local chain it is rebuilt
   from the event log.
+- **Upgrade indexer.** The indexer The Graph operates to serve Studio
+  deployments and newly published subgraphs that have no curation signal.
 - **WAD.** A fixed-point number with eighteen decimals, the unit for
   strikes, option amounts and WETH collateral in the schema.

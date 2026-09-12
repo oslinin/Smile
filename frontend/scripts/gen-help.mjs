@@ -83,6 +83,7 @@ const pages = [
   { id: "uniswap", label: "Uniswap", source: "docs/sponsors/uniswap.md", mermaid: false },
   { id: "thegraph", label: "The Graph", source: "docs/sponsors/thegraph.md", mermaid: false },
   { id: "arc", label: "Circle · Arc", source: "docs/sponsors/arc.md", mermaid: false },
+  { id: "frontend", label: "Frontend", source: "docs/sponsors/frontend.md", mermaid: false },
 ];
 
 // Every doc (not just the README) goes through extractMath first, so KaTeX

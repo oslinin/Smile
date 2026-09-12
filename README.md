@@ -27,7 +27,7 @@ More docs: [build notes & war stories](docs/build-notes.md) ·
 [known limitations](docs/limitations.md) ·
 [solutions & phased roadmap](docs/solutions.md) ·
 [reference table — every L/R/S/P, one-liner + status](docs/reference-table.html) ·
-sponsor pages — [1inch Aqua](docs/sponsors/aqua.md), [Chainlink](docs/sponsors/chainlink.md), [Uniswap](docs/sponsors/uniswap.md), [The Graph](docs/sponsors/thegraph.md), [Circle · Arc](docs/sponsors/arc.md)
+sponsor pages — [1inch Aqua](docs/sponsors/aqua.md), [Chainlink](docs/sponsors/chainlink.md), [Uniswap](docs/sponsors/uniswap.md), [The Graph](docs/sponsors/thegraph.md), [Circle · Arc](docs/sponsors/arc.md), [Frontend](docs/sponsors/frontend.md)
 
 > This README is also published as a wiki-style help page — with a sidebar
 > linking Overview (this doc), Limitations, Solutions, and the Reference
