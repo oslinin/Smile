@@ -8,6 +8,12 @@ minutes including setup.
 
 ## Before recording (10 minutes)
 
+0. **Two stacks, pick per segment.** Anvil (`./local.sh`) for the
+   crash-and-liquidation segment (it needs time warps). The live app —
+   https://smile-frontend-omega.vercel.app — for the Sepolia / Arc / copilot
+   segments: copilot, The Graph MCP and the gateway path are already wired
+   there, nothing to configure. (The GitHub Pages build has no copilot.)
+
 1. **Stack.** In a terminal at the repo root:
    ```bash
    ./local.sh                      # Anvil + all contracts (incl. Spread/Margin/RFQ vaults) + app on :3000
@@ -128,33 +134,57 @@ playground — run
 
 > **"Deployed on Sepolia with Circle USDC and the Chainlink feed; The
 > Graph indexed the fill one block after the buy — on Sepolia and Arc the
-> app and the copilot read only from it."**
+> app and the copilot read only from it. Both subgraphs are published to
+> The Graph Network and served through the gateway; the live app's server
+> queries them with an API key the browser never sees."**
+
+(Optional 5 s, Tab B: the gateway URL from `docs/submission-ethonline2026.md`
+in the playground — same data, decentralized network. Or record this
+whole segment on the live app, https://smile-frontend-omega.vercel.app,
+where the copilot and the gateway path are already wired — no `.env` to
+show.)
 
 Then the copilot, on the tape (Sepolia or Anvil with the seeded 100
 trades): open it, click **Skills** (show the list and the "add a skill"
-box for two seconds), then type **"what's cheap right now?"** — it calls
+box for two seconds), then the **gear → MCP servers** (The Graph Subgraph
+MCP is already there on the live app — two seconds), then type
+**"what's cheap right now?"** — it calls
 `find_opportunities`, cites *The Graph* as the source and Deribit as the
 reference, and proposes a trade card. Follow with **"where is liquidity
 thin?"** → the liquidity map and a **Write a Range** card; click its
 button: the Earn form opens prefilled. Last, **"hedge my book"** →
-`portfolio_greeks` then `hedge_suggestion`. On the Trade tab point at the
-price chart: the premium and IV lines of the most-traded instrument under
-the ETH candles.
+`portfolio_greeks` then `hedge_suggestion`. If there is time, one more:
+**"search subgraphs for uniswap"** — the copilot calls
+`search_subgraphs_by_keyword` on The Graph's own Subgraph MCP and names
+one (verified on the live app). On the Trade tab point at the price chart:
+the premium and IV lines of the most-traded instrument under the ETH
+candles (TradingView Lightweight Charts).
 
 > **"The subgraph is Smile's tape. The copilot screens every strike
 > against Deribit, maps liquidity, reads the whole book, and prepares the
-> range or the quote — I sign. No cap, no RPC scan."**
+> range or the quote — I sign. No cap, no RPC scan. Its know-how ships as
+> skills, and it talks to The Graph's Subgraph MCP — or any MCP server you
+> add."**
 
 Switch MetaMask to **Arc Testnet**; Overview flips to the Arc receipts;
-click the MarginVault fill → arcscan.
+click the MarginVault fill → arcscan. Then the **Margin** tab: scroll to
+the pool panel — **"Funded through Circle App Kits"** lists three
+receipts (Wallets-kit deposit into the backstop, Gateway mint, Gateway →
+insurance fund); click one → arcscan.
 
 > **"And on Circle's Arc, with native USDC as premium, margin, backstop
 > and gas: a margined put locking 1.50 USDC instead of 3.00, and a signed
-> RFQ fill. The whole ladder settles in Circle's dollar."**
+> RFQ fill. The whole ladder settles in Circle's dollar. The safety pools
+> are funded by Circle's App Kits — a developer-controlled wallet Circle
+> signs for, and Gateway bringing USDC in from Sepolia — no treasury key
+> in the repo."**
 
 ### 4:20 — Close (15 s)
 
-Back to **Overview**; open **Help ↗ → Continuation Track** and scroll it.
+Back to **Overview**; open **Help ↗ → Continuation Track** and scroll it;
+flick past the **Sponsors** group in the sidebar (1inch Aqua, Chainlink,
+Uniswap, The Graph, Circle · Arc, Frontend — one page each: features,
+why, value, code, limitations, plans).
 
 > **"Two hundred Foundry tests, one task per commit, every milestone in
 > the plan reached except the ones that needed hardware we don't have.
@@ -181,12 +211,17 @@ Back to **Overview**; open **Help ↗ → Continuation Track** and scroll it.
 - **1inch**: "official Aqua contracts, unmodified", "JIT pull at the
   fill", "three Aqua apps: SpreadVault, MarginVault, RfqVault", "one task
   per commit".
-- **The Graph**: "Studio subgraph smile-sepolia", "indexed the fill one
-  block later", "the LP dashboard and the AI copilot read it, RPC
-  fallback".
+- **The Graph**: "subgraphs smile-sepolia and smile-arc-testnet,
+  published to The Graph Network, served through the gateway", "indexed
+  the fill one block later", "the app and the AI copilot read only from
+  it on public networks — no RPC scan", "skills + The Graph's Subgraph
+  MCP in the copilot".
 - **Circle / Arc**: "Arc testnet", "native USDC as gas, premium,
-  collateral, margin, backstop", "Sepolia with Circle USDC too"; be honest
-  that FX/EURC was cut because Arc testnet has no EUR/USD feed.
+  collateral, margin, backstop", "Sepolia with Circle USDC too", "Circle
+  Gateway and a developer-controlled wallet funded the insurance fund and
+  the backstop — no treasury key in the repo"; be honest that FX/EURC was
+  cut because Arc testnet has no EUR/USD feed and that WETH and the price
+  feed are mocks on Arc.
 
 ## Editing notes
 
