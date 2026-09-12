@@ -3187,6 +3187,10 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <li><strong>L8, full collateralization is capital-inefficient on purpose.</strong> The main vault locks 1 WETH per call unit and the full strike per put unit. Aqua softens this because the collateral is unrehypothecated and keeps earning until the fill, but it does not remove it. <code>SpreadVault</code> and <code>MarginVault</code> are the two rungs of the capital-efficiency ladder built to address it.</li>
 <li><strong>L11, Aqua liquidity is soft.</strong> Because the balance behind a quote sits in the LP&#39;s own wallet, it can be spent or de-approved before the fill, and the JIT pull then reverts. Displayed depth is indicative, not firm. <code>FirmEscrow</code> (S4, MVP scope) makes a range firm by becoming the LP&#39;s wallet from Aqua&#39;s point of view; honest depth display and firmness bonds are the other mitigations (S1 through S3).</li>
 <li><strong>L7, the demand-feedback loop is nudgeable.</strong> Sigma moves with every trade. This is why <code>MarginVault</code> reads margin off the oracle only and has no <code>close()</code>: a buyback priced off sigma and paid from margin would let a manipulated sigma drain margin.</li>
+<li><strong>L4, one transaction can drain a whole range.</strong> No vault imposes a per-trade or per-block size cap, so a single fill can pull an authorization&#39;s entire remaining collateral at one price. Per-range block caps were on <code>MarginVault</code>&#39;s plan and were cut; the loss per event is bounded by the range&#39;s <code>maxCollateral</code>.</li>
+<li><strong>L5, on-chain rules cannot reject informed traders.</strong> Every check a vault performs is public and can be simulated before submission, so no vault can filter informed flow; the remedy is pricing (R1 through R4), which is why the formula tier carries a spread and a staleness charge rather than an allow-list.</li>
+<li><strong>L10, the off-chain alternative has its own price.</strong> <code>RfqVault</code> is the R6 hybrid precisely because a pure RFQ market gives up the passive-LP thesis, composability, and permissionless quoting: a signed quote is frozen for its time-to-live while the market moves, and makers respond with shorter TTLs and last look. <code>RfqVault</code> keeps quotes single-use, keeps the formula tier as the always-live floor, and offers no <code>close()</code> so holders are never captive to a market maker&#39;s uptime; it does not make the quote-fading problem disappear for the maker who signs.</li>
+<li><strong>L12, the per-trade gas floor.</strong> A repeat fill costs about 198,000 gas, in the range of an ordinary Uniswap v3 swap; the first fill in a series costs about 1,040,000 because it deploys that series&#39; ERC-20 token. The premium arithmetic is a rounding error inside that; the floor is series bootstrapping, and EIP-1167 clones or keeper pre-deployment are the mitigations. Aqua&#39;s pull adds one external call per fill and does not change this picture.</li>
 <li><strong>L13, bad debt in the opt-in margin tier.</strong> The haircut path exists. The seven-times ceiling and the gap-40 test bound it, they do not eliminate it: a gap larger than 40% from the maintenance point within one heartbeat can exceed the pool. The credit line is consent, not collateral. Takeover and absorb move whole positions only.</li>
 <li><strong>Scope cuts recorded in the code.</strong> <code>SpreadVault</code> validates iron-condor strikes but does not price or fill them. <code>MarginVault</code> covers puts only; a call shortfall is in WETH and has no USDC waterfall yet. A full liquidation run has been demonstrated on Anvil only, since public testnets cannot be time-warped; the fill itself is live on Sepolia and Arc.</li>
 </ul>
@@ -4009,6 +4013,27 @@ gamma is small, so the attack is a bounded nuisance rather than a free
 lunch, but the loop is not manipulation-proof. <code>SmilePremiumLib</code> adds a
 <code>MIN_QUOTE_SIGMA</code> floor of 20% so a two-leg spread quote cannot collapse to
 zero on the way down.</li>
+<li><strong>L1 and L2, the oracle latency gap.</strong> The surface prices off the last
+Chainlink round, so between heartbeats the quote is stale relative to
+the live market (L1) and drift smaller than the feed&#39;s deviation
+threshold leaves no on-chain signal at all (L2). A sniper who watches the
+live market buys the stale quote before the feed catches up; the hook&#39;s
+bump arrives after that trade (L3). The Pyth adapter (R5) narrows the
+window for quoting; it does not close it.</li>
+<li><strong>L4, one transaction can drain a whole range.</strong> There is no per-trade or
+per-block size limit, so a single <code>buy()</code> can consume an authorization&#39;s
+entire remaining collateral at one stale price, and the sigma bump fires
+only afterwards. The loss per staleness event is bounded by the range&#39;s
+<code>maxCollateral</code>, not by anything smaller.</li>
+<li><strong>L5, on-chain rules cannot reject informed traders.</strong> Every rule the hook
+or the vault could apply is public, so a sniper simulates it and submits
+only trades that pass. Rules can filter mechanically definable patterns
+(staleness, size, rate) but never informedness, which is not observable on
+chain. Rejection is therefore the wrong frame and pricing is the right
+one: the recommendations R1 through R4 make toxic flow pay for its toxicity
+through the spread rather than trying to identify it. Part 1 of
+<code>docs/limitations.md</code> explains adverse selection from zero for readers new
+to the term.</li>
 <li><strong>Bucket-edge discontinuities.</strong> Sigma is a step function of time to
 expiry. Two expiries one day apart on either side of the 30-day edge can
 price off different buckets, and a trade can only move the bucket it landed
@@ -4850,6 +4875,7 @@ if (cmd === &quot;deposit&quot;) {
 <li><strong>Gateway on Arc has no recorded run in this repository.</strong> The script targets Arc as Gateway domain 26, but the plan (<code>docs/plans/2026-09-10-arc-bounty.md</code>, X4) records that Gateway&#39;s Arc availability had not been confirmed when it was written, and no transaction hash from <code>insurance-gateway.mjs</code> is recorded in the docs. It should be treated as built but unproven on Arc until a run is documented.</li>
 <li><strong>The treasury wallet is unfunded.</strong> <code>0x61bd…3368</code> holds 0 USDC; <code>deposit</code> refuses to run until it holds the deposit amount plus about 0.2 USDC of gas headroom.</li>
 <li><strong><code>RfqVault</code> is on Arc but not on Sepolia.</strong> The Sepolia address map leaves <code>rfqVault</code> empty.</li>
+<li><strong>The gas floor is Arc&#39;s to set (L12).</strong> Every first fill in a series pays roughly 1,040,000 gas to deploy the series token and every repeat fill roughly 198,000; on Arc that gas is denominated in USDC, so the minimum economical trade size is a direct function of Arc&#39;s gas price. The ~0.46 USDC full-stack deploy suggests the floor is small on testnet; mainnet pricing is unknown until 2026-09-16.</li>
 <li><strong>Arc mainnet is not live.</strong> Arc mainnet launches on 2026-09-16; every figure on this page is testnet.</li>
 </ul>
 <h2>Plans</h2>

@@ -441,6 +441,27 @@ The numbered items refer to `docs/limitations.md`.
   lunch, but the loop is not manipulation-proof. `SmilePremiumLib` adds a
   `MIN_QUOTE_SIGMA` floor of 20% so a two-leg spread quote cannot collapse to
   zero on the way down.
+- **L1 and L2, the oracle latency gap.** The surface prices off the last
+  Chainlink round, so between heartbeats the quote is stale relative to
+  the live market (L1) and drift smaller than the feed's deviation
+  threshold leaves no on-chain signal at all (L2). A sniper who watches the
+  live market buys the stale quote before the feed catches up; the hook's
+  bump arrives after that trade (L3). The Pyth adapter (R5) narrows the
+  window for quoting; it does not close it.
+- **L4, one transaction can drain a whole range.** There is no per-trade or
+  per-block size limit, so a single `buy()` can consume an authorization's
+  entire remaining collateral at one stale price, and the sigma bump fires
+  only afterwards. The loss per staleness event is bounded by the range's
+  `maxCollateral`, not by anything smaller.
+- **L5, on-chain rules cannot reject informed traders.** Every rule the hook
+  or the vault could apply is public, so a sniper simulates it and submits
+  only trades that pass. Rules can filter mechanically definable patterns
+  (staleness, size, rate) but never informedness, which is not observable on
+  chain. Rejection is therefore the wrong frame and pricing is the right
+  one: the recommendations R1 through R4 make toxic flow pay for its toxicity
+  through the spread rather than trying to identify it. Part 1 of
+  `docs/limitations.md` explains adverse selection from zero for readers new
+  to the term.
 - **Bucket-edge discontinuities.** Sigma is a step function of time to
   expiry. Two expiries one day apart on either side of the 30-day edge can
   price off different buckets, and a trade can only move the bucket it landed

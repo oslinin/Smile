@@ -189,6 +189,7 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 - **Gateway on Arc has no recorded run in this repository.** The script targets Arc as Gateway domain 26, but the plan (`docs/plans/2026-09-10-arc-bounty.md`, X4) records that Gateway's Arc availability had not been confirmed when it was written, and no transaction hash from `insurance-gateway.mjs` is recorded in the docs. It should be treated as built but unproven on Arc until a run is documented.
 - **The treasury wallet is unfunded.** `0x61bd…3368` holds 0 USDC; `deposit` refuses to run until it holds the deposit amount plus about 0.2 USDC of gas headroom.
 - **`RfqVault` is on Arc but not on Sepolia.** The Sepolia address map leaves `rfqVault` empty.
+- **The gas floor is Arc's to set (L12).** Every first fill in a series pays roughly 1,040,000 gas to deploy the series token and every repeat fill roughly 198,000; on Arc that gas is denominated in USDC, so the minimum economical trade size is a direct function of Arc's gas price. The ~0.46 USDC full-stack deploy suggests the floor is small on testnet; mainnet pricing is unknown until 2026-09-16.
 - **Arc mainnet is not live.** Arc mainnet launches on 2026-09-16; every figure on this page is testnet.
 
 ## Plans
