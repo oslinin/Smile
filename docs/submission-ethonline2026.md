@@ -166,7 +166,10 @@ gateway: `https://gateway.thegraph.com/api/<key>/subgraphs/id/Bf9T8wuSLwvNSR9oTx
 returns the real Sepolia instruments with `hasIndexingErrors: false`. The
 live app's server (`/api/subgraph`, the copilot's tape tools) reads Sepolia
 through that gateway URL with the key held server-side
-(`SUBGRAPH_URL_11155111`); the browser never sees it. The same key is the
+(`SUBGRAPH_URL_11155111`); the browser never sees it. `smile-arc-testnet`
+is published too — subgraph `9ZcFMvnhbWygRg7oB29NL8smoVysqCbdQpqNMhWtHbmq`
+(deployment `QmTA9unF8d66AwATQz6MYxM6zvEW6LAj3kned4E48txoc3`), served by the
+gateway the same way (`SUBGRAPH_URL_5042002`). The same key is the
 bearer token for The Graph's Subgraph MCP, which the live copilot carries
 on every request (`COPILOT_MCP_SERVERS`).
 
