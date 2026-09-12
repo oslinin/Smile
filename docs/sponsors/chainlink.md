@@ -20,6 +20,7 @@ Chainlink was part of Smile before EthOnline 2026 and is reused, unchanged, by e
 | Worst-of-hour margin mark from the feed's round history | `src/periphery/MarginVault.sol` (`markSpot`, `_worstOf`, `isMarkStale`) | EthOnline 2026 |
 | Keeper that finds the covering round and settles, then unwinds | `keeper/roll.mjs` (`roundCovering`, `settleAndUnwind`) | Pre-existing |
 | Optional Pyth pull-oracle adapter behind the same interface, quoting only | `src/oracles/PythSpotAdapter.sol` | Pre-existing (R5) |
+| Frontend: the displayed ETH/USD spot falls back to a direct `latestRoundData` read of the Sepolia feed when no Uniswap Trading API key is configured; the Margin and Risk Monitor tabs show `MarginVault.markSpot` (the worst-of-hour Chainlink mark) and its staleness | `frontend/hooks/useUniswapSpot.ts` (`CHAINLINK_FEEDS`), `frontend/components/MarginDesk.tsx`, `RiskMonitor.tsx` | Pre-existing (spot); EthOnline 2026 (mark) |
 | Chainlink feed on Sepolia; mock aggregator on Arc and Anvil | `script/Deploy.s.sol`, `docs/sepolia-deployment.md`, `docs/arc-testnet-deployment.md` | Sepolia redeploy and Arc: EthOnline 2026 |
 
 The Sepolia deployment reads the canonical Chainlink ETH/USD feed at `0x694AA1769357215DE4FAC081bf1f309aDC325306`. The CRE workflow configuration points at the same feed.

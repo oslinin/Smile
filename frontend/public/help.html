@@ -3381,6 +3381,11 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <td>Pre-existing (R5)</td>
 </tr>
 <tr>
+<td>Frontend: the displayed ETH/USD spot falls back to a direct <code>latestRoundData</code> read of the Sepolia feed when no Uniswap Trading API key is configured; the Margin and Risk Monitor tabs show <code>MarginVault.markSpot</code> (the worst-of-hour Chainlink mark) and its staleness</td>
+<td><code>frontend/hooks/useUniswapSpot.ts</code> (<code>CHAINLINK_FEEDS</code>), <code>frontend/components/MarginDesk.tsx</code>, <code>RiskMonitor.tsx</code></td>
+<td>Pre-existing (spot); EthOnline 2026 (mark)</td>
+</tr>
+<tr>
 <td>Chainlink feed on Sepolia; mock aggregator on Arc and Anvil</td>
 <td><code>script/Deploy.s.sol</code>, <code>docs/sepolia-deployment.md</code>, <code>docs/arc-testnet-deployment.md</code></td>
 <td>Sepolia redeploy and Arc: EthOnline 2026</td>
