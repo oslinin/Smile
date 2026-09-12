@@ -46,9 +46,11 @@ function Rung({ title, sub, value, max, color, note, cta, onCta, tone }: {
         <div className="text-gray-500 text-xs">{sub}</div>
       </div>
       <div>
-        <div className="h-7 rounded-md bg-gray-800/80 overflow-hidden relative">
-          <div className={`h-full ${color} transition-all duration-700 ease-out`} style={{ width: `${w}%` }} />
-          <div className="absolute inset-0 flex items-center px-3 text-xs font-mono text-white drop-shadow">{note}</div>
+        {/* The fill sits behind in-flow text, so a note that wraps on a phone
+            grows the track instead of being clipped by a fixed height. */}
+        <div className="min-h-7 rounded-md bg-gray-800/80 overflow-hidden relative">
+          <div className={`absolute inset-y-0 left-0 ${color} transition-all duration-700 ease-out`} style={{ width: `${w}%` }} />
+          <div className="relative flex items-center min-h-7 px-3 py-1 text-xs font-mono text-white drop-shadow leading-snug">{note}</div>
         </div>
       </div>
       <button onClick={onCta} className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 whitespace-nowrap">{cta} →</button>
