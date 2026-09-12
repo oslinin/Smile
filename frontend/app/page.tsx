@@ -32,7 +32,7 @@ import { PriceChart } from "@/components/PriceChart";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { VolSurface, type SurfaceTrade } from "@/components/VolSurface";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Eth = { request: (a: unknown) => Promise<unknown> };
 function getEth() {
@@ -92,6 +92,8 @@ export default function Home() {
   const [networkOpen, setNetworkOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const networkRef = useRef<HTMLDivElement>(null);
+  const walletRef = useRef<HTMLDivElement>(null);
 
   // EIP-6963 surfaces each installed wallet as its own connector. Dedupe by
   // name and drop the generic "Injected" fallback when named wallets exist, so
@@ -180,18 +182,24 @@ export default function Home() {
 
   useEffect(() => {
     if (!networkOpen) return;
-    // Bubble phase, not capture: a capture listener closes the menu (and
-    // React re-renders in the microtask after it) before the item's own
-    // onClick runs, so on mobile the tapped item vanished without firing.
-    const close = () => setNetworkOpen(false);
-    window.addEventListener("click", close, { once: true });
+    // Close on a click outside the dropdown's wrapper. Bubble phase with a
+    // contains() check: a capture listener closed the menu before the item's
+    // own onClick ran (mobile taps did nothing), and a plain bubble listener
+    // fires for the very click that opened it (React flushes the effect
+    // during the same dispatch), so the wrapper check is what makes it work.
+    const close = (e: MouseEvent) => {
+      if (!networkRef.current?.contains(e.target as Node)) setNetworkOpen(false);
+    };
+    window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, [networkOpen]);
 
   useEffect(() => {
     if (!walletOpen) return;
-    const close = () => setWalletOpen(false);
-    window.addEventListener("click", close, { once: true });
+    const close = (e: MouseEvent) => {
+      if (!walletRef.current?.contains(e.target as Node)) setWalletOpen(false);
+    };
+    window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, [walletOpen]);
 
@@ -232,7 +240,7 @@ export default function Home() {
           {!mounted ? null : (
           <div className="flex items-center gap-3">
             {/* Network dropdown — always visible so you can switch before connecting */}
-            <div className="relative">
+            <div className="relative" ref={networkRef}>
               <button
                 onClick={() => setNetworkOpen((o) => !o)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
@@ -287,7 +295,7 @@ export default function Home() {
                 </button>
               </>
             ) : (
-              <div className="relative">
+              <div className="relative" ref={walletRef}>
                 <button
                   onClick={() => {
                     // Single wallet → connect directly; multiple → show picker
