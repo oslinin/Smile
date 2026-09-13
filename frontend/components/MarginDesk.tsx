@@ -10,10 +10,12 @@
 // against the MarginVault. Part B of
 // docs/plans/2026-09-05-aqua.md.
 
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
-import { useState, useEffect, useRef } from "react";
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { getDelta } from "greeks";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import { DEPLOYMENTS } from "@/lib/deployments";
+import { smileSigma, RISK_FREE_RATE } from "@/lib/options";
 
 const MARGIN_ABI = [
   {
@@ -222,6 +224,31 @@ export function MarginDesk({ spot }: { spot: number }) {
     address: mv, abi: MARGIN_ABI, functionName: "initialMargin", args: [viewAuthId ?? ZERO_BI, strikeWad, buyUnitsWad],
     query: { enabled: enabled && viewAuthId !== null && buyUnitsWad > ZERO_BI, refetchInterval: 10_000 },
   });
+
+  // ── Puts-by-strike chain for this margin range (the margin vault's own
+  // trade view): per-strike Ask + initial margin + Δ across [rMin, rMax]. ──
+  const chainStrikes = useMemo(() => {
+    if (!range || rMin <= 0 || rMax <= rMin) return [] as number[];
+    const out: number[] = [];
+    for (let k = grid(rMin); k <= grid(rMax) && out.length < 16; k += 50) out.push(k);
+    return out;
+  }, [range, rMin, rMax]);
+  const chainCalls = useMemo(
+    () => chainStrikes.flatMap((k) => {
+      const sw = BigInt(k) * WAD;
+      return [
+        { address: mv, abi: MARGIN_ABI, functionName: "quote", args: [viewAuthId ?? ZERO_BI, sw, WAD] } as const,
+        { address: mv, abi: MARGIN_ABI, functionName: "initialMargin", args: [viewAuthId ?? ZERO_BI, sw, WAD] } as const,
+      ];
+    }),
+    [chainStrikes, viewAuthId, mv],
+  );
+  const { data: chainData } = useReadContracts({
+    contracts: chainCalls,
+    query: { enabled: enabled && viewAuthId !== null && chainStrikes.length > 0, refetchInterval: 15_000 },
+  });
+  const tYears = rExpiry > ZERO_BI ? Math.max(0, (Number(rExpiry) - Date.now() / 1000) / (365 * 86_400)) : 0;
+  const putDelta = (k: number) => (tYears > 0 ? getDelta(spot, k, tYears, smileSigma(spot, k), RISK_FREE_RATE, "put") : (k > spot ? -1 : 0));
   const { refetch: refetchUsdcAllowance } = useReadContract({
     address: CONTRACTS.usdc, abi: ERC20_ABI, functionName: "allowance", args: [address ?? ZERO, mv],
     query: { enabled: !!address && enabled },
@@ -394,6 +421,41 @@ export function MarginDesk({ spot }: { spot: number }) {
                 <div className="flex justify-between"><span className="text-gray-400">Expires</span><span className="font-mono text-white">{rExpiry > ZERO_BI ? new Date(Number(rExpiry) * 1000).toLocaleDateString() : "…"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={rActive ? "text-green-400" : "text-red-400"}>{rActive ? "active" : "closed"}</span></div>
               </div>
+              {chainStrikes.length > 0 && (
+                <div className="rounded-lg bg-gray-950 overflow-hidden">
+                  <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · click a row to load it</div>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-gray-600">
+                        <th className="text-left font-normal px-3 py-1">Strike</th>
+                        <th className="text-right font-normal px-3 py-1">Ask (premium)</th>
+                        <th className="text-right font-normal px-3 py-1">Initial margin</th>
+                        <th className="text-right font-normal px-3 py-1">Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chainStrikes.map((k, i) => {
+                        const q = chainData?.[2 * i]?.result as readonly [bigint, bigint] | undefined;
+                        const imk = chainData?.[2 * i + 1]?.result as bigint | undefined;
+                        const ask = q ? q[0] + q[1] : undefined;
+                        const sel = k === strike;
+                        return (
+                          <tr
+                            key={k}
+                            onClick={() => !buyWorking && setStrike(k)}
+                            className={`cursor-pointer ${sel ? "bg-orange-900/40 text-white" : "text-gray-300 hover:bg-gray-900"}`}
+                          >
+                            <td className="font-mono px-3 py-1">${k.toLocaleString()}</td>
+                            <td className="text-right font-mono px-3 py-1 text-red-400">{ask !== undefined ? fmtUsdc(ask) : "…"}</td>
+                            <td className="text-right font-mono px-3 py-1 text-emerald-400">{imk !== undefined ? fmtUsdc(imk) : "…"}</td>
+                            <td className="text-right font-mono px-3 py-1 text-gray-400">{putDelta(k).toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-gray-400 mb-1 block">Strike (USD)</label><input type="number" value={strike} disabled={buyWorking} onChange={(e) => setStrike(Number(e.target.value))} step="50" className={input} /></div>
                 <div><label className="text-xs text-gray-400 mb-1 block">Units</label><input type="number" value={buyUnits} disabled={buyWorking} onChange={(e) => setBuyUnits(e.target.value)} step="1" min="0" className={input} /></div>
