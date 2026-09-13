@@ -14,7 +14,9 @@ the full stack cost ~0.46 USDC in gas.
   the same balance. That is the point of deploying here.
 - **WETH is a mock** (`MockERC20`, freely mintable): Arc has no canonical
   WETH.
-- **The ETH/USD spot oracle is a mock** (`MockV3Aggregator`, set to $3,000):
+- **The ETH/USD spot oracle is a mock** (`MockV3Aggregator`; since 2026-09-12
+  it mirrors Sepolia's Chainlink ETH/USD every 30 minutes, see "Oracle tick"
+  below):
   no Chainlink-compatible ETH/USD or EUR/USD feed is documented on Arc
   testnet as of this deploy (Pyth doesn't list Arc; Chainlink/RedStone show
   nothing; Stork has a pull-model contract at
@@ -140,6 +142,20 @@ keeper now parses both forms and the run used `AMOUNT=3`.
   fails in local simulation for anything that does — use `cast send`.
 - The faucet's 20 USDC is the native balance *and* the ERC-20 balance;
   spending premium reduces the gas balance and vice versa.
-- The mock ETH/USD feed does not tick: `MarginVault.buy` (90-minute mark
-  staleness) and `RfqVault.formulaQuote` (1-hour spot staleness) both revert
-  a few hours after the last `setAnswer`. Post a round first — anyone can.
+- The mock ETH/USD feed does not tick by itself: `MarginVault.buy` (90-minute
+  mark staleness) and `RfqVault.formulaQuote` (1-hour spot staleness) both
+  revert a few hours after the last `setAnswer`. The "Oracle tick" timer below
+  keeps it fresh; if the dev box is down, post a round by hand — anyone can.
+
+## Oracle tick
+
+`keeper/arc-oracle-tick.sh` reads Sepolia's Chainlink ETH/USD
+(`0x694A…5306`) and posts that answer into the Arc mock with `setAnswer`,
+so Arc's spot is the real ETH price with at most 30 minutes of lag and the
+staleness checks in `MarginVault` and `RfqVault` pass. On the dev box it runs
+as `arc-oracle-tick.timer` (systemd, `OnCalendar=*:00/30`, deployer key from
+`.env.sepolia`); `journalctl -u arc-oracle-tick` shows one line per tick with
+the mirrored price and the Arc tx hash. The frontend's spot badge on Arc reads
+the same mock (`● mock feed`, amber), so the chain the app shows is the chain
+the vaults price from. Nothing about the trust model changes: the feed is
+still a contract anyone can set (limitations L9).

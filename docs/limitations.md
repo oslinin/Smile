@@ -241,9 +241,10 @@ from the latency risk of L1/L2, and it is shared with essentially every
 oracle-settled derivative on-chain.
 
 On Arc testnet there is no Chainlink ETH/USD feed at all, so the deployment
-there settles against a `MockV3Aggregator` that anyone can set
-(`docs/arc-testnet-deployment.md`). Settlement on Arc is a demonstration of
-the mechanism, not of the trust model.
+there settles against a `MockV3Aggregator` that anyone can set; a keeper
+mirrors Sepolia's Chainlink answer into it every 30 minutes so the price is
+real, but the trust is not (`docs/arc-testnet-deployment.md`, "Oracle tick").
+Settlement on Arc is a demonstration of the mechanism, not of the trust model.
 
 ### L10. The off-chain alternative has its own price
 

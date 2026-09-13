@@ -141,7 +141,7 @@ export default function Home() {
     window.addEventListener("smile:goto", onGoto);
     return () => window.removeEventListener("smile:goto", onGoto);
   }, []);
-  const spot = useUniswapSpot();
+  const spot = useUniswapSpot(chainId);
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
   // Notify the Python vol-surface renderer of each confirmed trade so it bumps
@@ -377,11 +377,13 @@ export default function Home() {
             <span className={`text-xs font-mono ${
               spot.source === "uniswap-api" ? "text-pink-400" :
               spot.source === "chainlink"   ? "text-blue-400" :
+              spot.source === "mock"        ? "text-amber-400" :
                                               "text-gray-500"
             }`}>
               ●{" "}
               {spot.source === "uniswap-api" ? "Uniswap API" :
                spot.source === "chainlink"   ? "Chainlink"   :
+               spot.source === "mock"        ? "mock feed (the oracle this chain's vaults price from)" :
                                                "static"}
             </span>
           )}
