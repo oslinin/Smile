@@ -166,7 +166,14 @@ export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall
   const { isLoading: shipConfirming, isSuccess: shipSuccess } = useWaitForTransactionReceipt({ hash: shipTx });
 
   useEffect(() => { if (approveSuccess && step === "approving") setStep("approved"); }, [approveSuccess]);
-  useEffect(() => { if (openSuccess && step === "opening") setStep("opened"); }, [openSuccess]);
+  useEffect(() => {
+    if (openSuccess && step === "opening") {
+      setStep("opened");
+      // Safety net: if the id wasn't captured at open time, the just-opened
+      // structure is the last one (nextAuthId − 1 after the refetch).
+      if (authIdToShip === null && nextAuthId !== undefined && nextAuthId > ZERO_BI) setAuthIdToShip(nextAuthId - ONE_BI);
+    }
+  }, [openSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (shipSuccess && step === "shipping") {
       setStep("done");
@@ -182,11 +189,15 @@ export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall
     approve({ address: collateralToken, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.aqua as `0x${string}`, escrow] });
   };
 
-  const handleOpen = () => {
+  const handleOpen = async () => {
     if (openCalledRef.current) return;
     openCalledRef.current = true;
     setStep("opening");
-    if (nextAuthId !== undefined) setAuthIdToShip(nextAuthId);
+    // The new structure's id is the CURRENT nextAuthId. Refetch it fresh so a
+    // stale/undefined read can't leave authIdToShip null (which greys out Ship).
+    const { data: fresh } = await refetchNext();
+    const id = fresh ?? nextAuthId;
+    if (id !== undefined) setAuthIdToShip(id);
     open({
       address: CONTRACTS.spreadVault as `0x${string}`,
       abi: SPREAD_ABI,
