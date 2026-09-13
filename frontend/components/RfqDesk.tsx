@@ -275,7 +275,7 @@ export function RfqDesk({ spot }: { spot: number }) {
   const fillWorking = fillStep === "approving" ? (approveUsdcPending || approveUsdcConfirming) : fillStep === "filling" ? (fillPending || fillConfirming) : false;
 
   if (!mounted || !isConnected) return <div className="rounded-xl border border-gray-800 p-4 text-gray-500 text-sm">{mounted ? "Connect wallet to quote or fill." : null}</div>;
-  if (!enabled) return <div className="rounded-xl border border-gray-800 p-4 text-yellow-500 text-xs">Set NEXT_PUBLIC_RFQ_VAULT (printed by ./local.sh) to enable the RFQ desk.</div>;
+  if (!enabled) return <div className="rounded-xl border border-gray-800 p-4 text-yellow-500 text-xs">No RfqVault on this network (Arc Testnet has one). Switch the network menu — or, for Hardhat, run ./local.sh and set NEXT_PUBLIC_RFQ_VAULT.</div>;
 
   const input = "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-blue-600 disabled:opacity-50";
   const btn = (c: string) => `w-full py-2 rounded-lg ${c} disabled:opacity-50 text-white text-sm font-semibold`;

@@ -306,7 +306,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
   if (!CONTRACTS.spreadVault) {
     return (
       <div className="rounded-xl border border-gray-800 p-4 text-yellow-500 text-xs">
-        Set NEXT_PUBLIC_SPREAD_VAULT (printed by ./local.sh) to enable the spread desk.
+        No SpreadVault on this network. Switch the network menu to Sepolia or Arc Testnet — or, for Hardhat, run ./local.sh and set NEXT_PUBLIC_SPREAD_VAULT.
       </div>
     );
   }
