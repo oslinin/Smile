@@ -238,13 +238,9 @@ export function MarginDesk({ spot }: { spot: number }) {
     return out;
   }, [range, rMin, rMax]);
   const chainCalls = useMemo(
-    () => chainStrikes.flatMap((k) => {
-      const sw = BigInt(k) * WAD;
-      return [
-        { address: mv, abi: MARGIN_ABI, functionName: "quote", args: [viewAuthId ?? ZERO_BI, sw, WAD] } as const,
-        { address: mv, abi: MARGIN_ABI, functionName: "initialMargin", args: [viewAuthId ?? ZERO_BI, sw, WAD] } as const,
-      ];
-    }),
+    () => chainStrikes.map((k) => (
+      { address: mv, abi: MARGIN_ABI, functionName: "quote", args: [viewAuthId ?? ZERO_BI, BigInt(k) * WAD, WAD] } as const
+    )),
     [chainStrikes, viewAuthId, mv],
   );
   const { data: chainData } = useReadContracts({
@@ -449,20 +445,19 @@ export function MarginDesk({ spot }: { spot: number }) {
               </div>
               {chainStrikes.length > 0 && (
                 <div className="rounded-lg bg-gray-950 overflow-hidden">
-                  <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · you pay the Ask · click a row to load it</div>
+                  <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · click a row to load it · hold to expiry (no early sellback in the margin tier)</div>
                   <table className="w-full text-[11px]">
                     <thead>
                       <tr className="text-gray-600">
                         <th className="text-left font-normal px-3 py-1">Strike</th>
                         <th className="text-right font-normal px-3 py-1">Ask ↑ buy</th>
-                        <th className="text-right font-normal px-3 py-1 text-gray-700">writer&apos;s margin</th>
                         <th className="text-right font-normal px-3 py-1">Δ</th>
+                        <th className="text-right font-normal px-3 py-1">IV</th>
                       </tr>
                     </thead>
                     <tbody>
                       {chainStrikes.map((k, i) => {
-                        const q = chainData?.[2 * i]?.result as readonly [bigint, bigint] | undefined;
-                        const imk = chainData?.[2 * i + 1]?.result as bigint | undefined;
+                        const q = chainData?.[i]?.result as readonly [bigint, bigint] | undefined;
                         const ask = q ? q[0] + q[1] : undefined;
                         const sel = k === strike;
                         return (
@@ -473,8 +468,8 @@ export function MarginDesk({ spot }: { spot: number }) {
                           >
                             <td className="font-mono px-3 py-1">${k.toLocaleString()}</td>
                             <td className="text-right font-mono px-3 py-1 text-red-400">{ask !== undefined ? fmtUsdc(ask) : "…"}</td>
-                            <td className="text-right font-mono px-3 py-1 text-gray-600">{imk !== undefined ? fmtUsdc(imk) : "…"}</td>
                             <td className="text-right font-mono px-3 py-1 text-gray-400">{putDelta(k).toFixed(2)}</td>
+                            <td className="text-right font-mono px-3 py-1 text-gray-400">{(smileSigma(spot, k) * 100).toFixed(1)}%</td>
                           </tr>
                         );
                       })}
