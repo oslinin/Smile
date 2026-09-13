@@ -239,7 +239,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <header className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 pl-3 pr-6 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex flex-col items-start gap-0.5 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/smile-icon.svg`} alt="Smile" height={28} className="block" style={{ height: 28 }} />
