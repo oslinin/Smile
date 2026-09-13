@@ -21,10 +21,14 @@ export const SIGMA_GLOBAL = 0.8;
 export const ALPHA = 2.0;
 export const BETA = 0.0;
 
-export function smileSigma(spot: number, strike: number): number {
+export type SmileParams = { sigma: number; alpha: number; beta: number };
+export const DEFAULT_SMILE: SmileParams = { sigma: SIGMA_GLOBAL, alpha: ALPHA, beta: BETA };
+
+/** σ_strike = σ_tenor · max(0.1, 1 + α·ln(K/S)² + β·ln(K/S)) — SmileMath.smileVol. */
+export function smileSigma(spot: number, strike: number, p: SmileParams = DEFAULT_SMILE): number {
   const lnKS = Math.log(strike / spot);
-  const multiplier = Math.max(0.1, 1 + ALPHA * lnKS * lnKS + BETA * lnKS);
-  return SIGMA_GLOBAL * multiplier;
+  const multiplier = Math.max(0.1, 1 + p.alpha * lnKS * lnKS + p.beta * lnKS);
+  return p.sigma * multiplier;
 }
 
 // ── Trader-native surface quotes (ATM vol / risk reversal / butterfly) ───────
@@ -87,9 +91,10 @@ export function protocolPremium(
   spot: number,
   strike: number,
   isCall: boolean,
-  tYears: number
+  tYears: number,
+  p: SmileParams = DEFAULT_SMILE
 ): number {
-  const sigma = smileSigma(spot, strike);
+  const sigma = smileSigma(spot, strike, p);
   const intrinsic = isCall ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
   const moneyFactor = Math.min(spot, strike) / Math.max(spot, strike);
   const timeValue = spot * sigma * Math.sqrt(Math.max(tYears, 0)) * moneyFactor;
@@ -179,6 +184,7 @@ export interface PnlPoint {
   s: number;
   expiry: number; // P&L at nearest expiry
   now: number;    // P&L today (T+0 curve)
+  mid: number;    // P&L halfway to the nearest expiry
 }
 
 export function pnlSeries(legs: BuilderLeg[], spot: number, points = 200): PnlPoint[] {
@@ -192,8 +198,97 @@ export function pnlSeries(legs: BuilderLeg[], spot: number, points = 200): PnlPo
       s: Math.round(s),
       expiry: round2(strategyValue(legs, s, minDte) - cost),
       now: round2(strategyValue(legs, s, 0) - cost),
+      mid: round2(strategyValue(legs, s, minDte / 2) - cost),
     };
   });
+}
+
+/**
+ * OptionStrat-style P&L matrix: rows are underlying prices, columns are
+ * calendar days from today to the nearest expiry. Each cell is the
+ * strategy's P&L if the underlying is at that price on that day.
+ */
+export function pnlMatrix(legs: BuilderLeg[], spot: number, rows = 15, cols = 8): { prices: number[]; days: number[]; pnl: number[][] } {
+  const cost = entryCost(legs, spot);
+  const minDte = Math.min(...legs.map(dte));
+  const prices = Array.from({ length: rows }, (_, i) => Math.round(spot * (1.3 - (0.6 * i) / (rows - 1))));
+  const days = Array.from({ length: cols }, (_, j) => Math.round((minDte * j) / (cols - 1)));
+  const pnl = prices.map((p) => days.map((d) => round2(strategyValue(legs, p, d) - cost)));
+  return { prices, days, pnl };
+}
+
+/**
+ * What a writer locks on Smile for each sell leg of the strategy, per unit:
+ * naked (the main vault), netted if the same-type long leg caps the loss
+ * (SpreadVault, S12), and margined for puts (MarginVault, S13 — intrinsic
+ * plus a 50% buffer of spot, capped at the strike).
+ */
+/** A sell leg that pairs with a long into a credit spread writable on the Spreads tab. */
+export interface SpreadPrefill {
+  isCall: boolean;
+  k1: number; // lower strike
+  k2: number; // higher strike
+  units: number;
+}
+
+export interface WriterCollateralRow {
+  leg: BuilderLeg;
+  naked: string;
+  netted: string | null;
+  margined: string | null;
+  /** Present when this sell leg has a matching long → a writable credit spread. */
+  spread: SpreadPrefill | null;
+  /** True when the paired long is on the debit side (a long call BELOW a short
+   * call, or a long put ABOVE a short put): the structure is a bought debit
+   * spread, not a written credit spread, so there's no writer collateral. */
+  debit: boolean;
+}
+
+/**
+ * What a writer locks per unit for each sell leg, per vault, in the collateral
+ * token of the connected chain. On a USDC-native chain (Arc, chainId 5042002)
+ * the SpreadVault is cash-settled, so a call credit spread escrows USDC, not
+ * WETH; the main vault's naked covered call still needs the asset itself, a
+ * WETH stand-in on Arc since the chain has no ether.
+ */
+export function writerCollateral(legs: BuilderLeg[], spot: number, chainId?: number): WriterCollateralRow[] {
+  const usdcNative = chainId === 5042002; // Arc testnet
+  return legs
+    .filter((l) => l.direction === "sell")
+    .map((leg): WriterCollateralRow => {
+      const longs = legs.filter((l) => l.direction === "buy" && l.isCall === leg.isCall && l.amount >= leg.amount);
+      let netted: string | null = null;
+      let spread: SpreadPrefill | null = null;
+      let debit = false;
+      const units = leg.amount || 1;
+      if (leg.isCall) {
+        const cap = longs.filter((l) => l.strike > leg.strike).sort((a, b) => a.strike - b.strike)[0];
+        if (cap) {
+          // Cash-settled on Arc: K2−K1 USDC. Otherwise (K2−K1)/K2 WETH.
+          netted = usdcNative
+            ? `$${(cap.strike - leg.strike).toLocaleString()} USDC`
+            : `${((cap.strike - leg.strike) / cap.strike).toFixed(4)} WETH`;
+          spread = { isCall: true, k1: leg.strike, k2: cap.strike, units };
+        } else if (longs.some((l) => l.strike < leg.strike)) {
+          // A long call BELOW the short → bull call spread (a bought debit spread).
+          debit = true;
+        }
+      } else {
+        const cap = longs.filter((l) => l.strike < leg.strike).sort((a, b) => b.strike - a.strike)[0];
+        if (cap) {
+          netted = `$${(leg.strike - cap.strike).toLocaleString()} USDC`;
+          spread = { isCall: false, k1: cap.strike, k2: leg.strike, units };
+        } else if (longs.some((l) => l.strike > leg.strike)) {
+          // A long put ABOVE the short → bear put spread (a bought debit spread).
+          debit = true;
+        }
+      }
+      const naked = leg.isCall
+        ? (usdcNative ? "1 WETH (mock on Arc)" : "1 WETH")
+        : `$${leg.strike.toLocaleString()} USDC`;
+      const margined = leg.isCall ? null : `$${Math.min(leg.strike, Math.max(leg.strike - spot, 0) + spot * 0.5).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC`;
+      return { leg, naked, netted, margined, spread, debit };
+    });
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;

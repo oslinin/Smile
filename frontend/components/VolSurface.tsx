@@ -1,155 +1,201 @@
 "use client";
 
-// 3-D volatility surface rendered by the Python service in ../../volsurface.
-// The surface evolves as trades execute: every confirmed buy/sell is POSTed to
-// /trade, which bumps the traded tenor bucket by ±γ (the same feedback loop the
-// on-chain OptionPricingHook applies), then we re-fetch the freshly rendered PNG.
+// 3-D volatility surface, rendered in the browser with Plotly — no Python
+// service, so it works on the static and Vercel builds alike. The surface
+// evolves as trades execute: every confirmed buy/sell bumps the traded tenor
+// bucket by ±γ (the same feedback loop the on-chain OptionPricingHook applies),
+// and the surface re-renders live. Drag to rotate; the state lives here.
 //
-// Start the renderer with `volsurface/run.sh` (or it comes up with `./local.sh`).
-// When it isn't running the panel shows a hint instead of a broken image — so
-// the static GitHub Pages build degrades gracefully.
+// The model mirrors SmileMath.sol / OptionPricingHook and the former Python
+// renderer (volsurface/server.py):
+//   σ(K,T) = σ_tenor(T) · max(0.1, 1 + α·ln(K/S)² + β·ln(K/S))
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
-const BASE = (process.env.NEXT_PUBLIC_VOLSURFACE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // α/β mirror the frontend smile (lib/options.ts) and SmileMath.sol.
 const ALPHA = 2.0;
 const BETA = 0.0;
+const GAMMA = 0.005; // σ feedback per trade (0.5%)
+const SIGMA_FLOOR = 0.05;
+const SIGMA_CAP = 3.0;
+
+// Tenor buckets in days: [0,7), [7,30), [30,90), [90,inf) — the term structure.
+const TENOR_EDGES = [0, 7, 30, 90, Infinity];
+const TENOR_LABELS = ["0-7d", "7-30d", "30-90d", "90d+"];
+const DEFAULT_SIGMA_TENOR = [0.95, 0.85, 0.8, 0.72];
 
 export interface SurfaceTrade {
-  dte: number;                    // days to expiry of the traded leg → tenor bucket
-  direction: "buy" | "sell";      // buy steepens σ, sellback decays it
-  nonce: number;                  // increments per trade so effects re-fire
+  dte: number; // days to expiry of the traded leg → tenor bucket
+  direction: "buy" | "sell"; // buy steepens σ, sellback decays it
+  nonce: number; // increments per trade so effects re-fire
 }
 
-interface SurfaceState {
-  sigma_tenor: number[];
-  tenor_labels: string[];
-  gamma: number;
-  trades: number;
+function bucketForDte(dte: number): number {
+  for (let i = 0; i < TENOR_EDGES.length - 1; i++) {
+    if (dte >= TENOR_EDGES[i] && dte < TENOR_EDGES[i + 1]) return i;
+  }
+  return TENOR_LABELS.length - 1;
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+// max(0.1, 1 + α·ln(m)² + β·ln(m)) — the smile in strike space (m = K/S).
+function smileMultiplier(moneyness: number): number {
+  const ln = Math.log(moneyness);
+  return Math.max(0.1, 1 + ALPHA * ln * ln + BETA * ln);
+}
+
+function linspace(a: number, b: number, n: number): number[] {
+  return Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1));
 }
 
 export function VolSurface({ spot, trade }: { spot: number; trade?: SurfaceTrade | null }) {
-  const [version, setVersion] = useState(0);       // cache-buster for the PNG
-  const [azim, setAzim] = useState(-58);
-  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
-  const [info, setInfo] = useState<SurfaceState | null>(null);
+  const [sigmaTenor, setSigmaTenor] = useState<number[]>([...DEFAULT_SIGMA_TENOR]);
+  const [trades, setTrades] = useState(0);
+  const [ready, setReady] = useState(false);
+  const plotRef = useRef<HTMLDivElement>(null);
   const lastNonce = useRef<number | null>(null);
 
-  const roundedSpot = Math.round(spot);
-  const src = `${BASE}/surface.png?spot=${roundedSpot}&alpha=${ALPHA}&beta=${BETA}&azim=${azim}&v=${version}`;
+  const roundedSpot = Math.round(spot) || 3420;
 
-  const refreshState = useCallback(async () => {
-    try {
-      const r = await fetch(`${BASE}/state`, { cache: "no-store" });
-      if (r.ok) setInfo(await r.json());
-    } catch {
-      /* service down — the <img> onError path drives the fallback UI */
-    }
-  }, []);
-
-  useEffect(() => { refreshState(); }, [refreshState]);
-
-  // Re-render when spot moves (debounced so live spot ticks don't thrash it).
-  useEffect(() => {
-    const t = setTimeout(() => setVersion((v) => v + 1), 400);
-    return () => clearTimeout(t);
-  }, [roundedSpot]);
-
-  // A confirmed trade mutates the surface: bump the bucket, then re-render.
+  // A confirmed trade bumps the traded tenor bucket, mirroring OptionPricingHook.
   useEffect(() => {
     if (!trade || trade.nonce === lastNonce.current) return;
     lastNonce.current = trade.nonce;
-    (async () => {
-      try {
-        await fetch(`${BASE}/trade`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dte: trade.dte, direction: trade.direction }),
-        });
-        await refreshState();
-        setVersion((v) => v + 1);
-      } catch {
-        /* ignore — panel falls back if the renderer is offline */
-      }
-    })();
-  }, [trade, refreshState]);
+    const idx = bucketForDte(trade.dte);
+    const sign = trade.direction === "buy" ? 1 : -1; // buy steepens, sellback decays
+    setSigmaTenor((prev) => {
+      const next = [...prev];
+      next[idx] = clamp(next[idx] + sign * GAMMA, SIGMA_FLOOR, SIGMA_CAP);
+      return next;
+    });
+    setTrades((t) => t + 1);
+  }, [trade]);
 
-  const resetSurface = async () => {
-    try {
-      await fetch(`${BASE}/reset`, { method: "POST" });
-      await refreshState();
-      setVersion((v) => v + 1);
-    } catch { /* offline */ }
-  };
+  const resetSurface = useCallback(() => {
+    setSigmaTenor([...DEFAULT_SIGMA_TENOR]);
+    setTrades(0);
+  }, []);
+
+  // The surface grid: moneyness 0.6–1.4 × DTE 1–180, σ clipped to [5%, 300%].
+  const { strikes, dtes, z, atmZ } = useMemo(() => {
+    const moneyness = linspace(0.6, 1.4, 48);
+    const dteGrid = linspace(1, 180, 48);
+    const strikeGrid = moneyness.map((m) => m * roundedSpot);
+    const smile = moneyness.map(smileMultiplier);
+    const tenor = dteGrid.map((d) => sigmaTenor[bucketForDte(d)]);
+    // z[row=dte][col=strike] = σ_tenor(T) · smile(K/S) · 100
+    const zGrid = tenor.map((tv) =>
+      smile.map((sv) => clamp(tv * sv * 100, SIGMA_FLOOR * 100, SIGMA_CAP * 100)),
+    );
+    const atm = tenor.map((tv) => tv * 100); // ATM ridge at K = spot
+    return { strikes: strikeGrid, dtes: dteGrid, z: zGrid, atmZ: atm };
+  }, [roundedSpot, sigmaTenor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const el = plotRef.current;
+    if (!el) return;
+    (async () => {
+      const Plotly = (await import("plotly.js-dist-min")).default;
+      if (cancelled || !plotRef.current) return;
+      const data = [
+        {
+          type: "surface",
+          x: strikes,
+          y: dtes,
+          z,
+          colorscale: "Plasma",
+          showscale: true,
+          colorbar: { title: { text: "σ %", font: { color: "#9ca3af", size: 10 } }, tickfont: { color: "#9ca3af", size: 9 }, thickness: 12, len: 0.6, outlinewidth: 0 },
+          contours: { z: { show: true, usecolormap: true, width: 1, project: { z: false } } },
+          hovertemplate: "K $%{x:,.0f}<br>%{y:.0f}d<br>σ %{z:.1f}%<extra></extra>",
+          opacity: 0.97,
+        },
+        {
+          type: "scatter3d",
+          mode: "lines",
+          name: "ATM term structure",
+          x: dtes.map(() => roundedSpot),
+          y: dtes,
+          z: atmZ,
+          line: { color: "#22d3ee", width: 5 },
+          hovertemplate: "ATM %{y:.0f}d · σ %{z:.1f}%<extra></extra>",
+        },
+      ];
+      const axis = {
+        color: "#9ca3af",
+        gridcolor: "#1f2937",
+        zerolinecolor: "#1f2937",
+        backgroundcolor: "#050a16",
+        showbackground: true,
+        titlefont: { size: 11 },
+        tickfont: { size: 9 },
+      };
+      const layout = {
+        paper_bgcolor: "#030712",
+        plot_bgcolor: "#030712",
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        showlegend: true,
+        legend: { font: { color: "#e5e7eb", size: 10 }, bgcolor: "rgba(11,17,32,0.7)", x: 0, y: 1 },
+        scene: {
+          xaxis: { ...axis, title: { text: "Strike K ($)" } },
+          yaxis: { ...axis, title: { text: "Days to expiry" } },
+          zaxis: { ...axis, title: { text: "σ (%)" } },
+          camera: { eye: { x: 1.7, y: -1.5, z: 0.9 } },
+          aspectratio: { x: 1, y: 1, z: 0.6 },
+        },
+      };
+      await Plotly.react(plotRef.current, data, layout, { displayModeBar: false, responsive: true });
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [strikes, dtes, z, atmZ, roundedSpot]);
+
+  useEffect(() => {
+    const el = plotRef.current;
+    return () => {
+      if (el) import("plotly.js-dist-min").then((m) => m.default.purge(el)).catch(() => {});
+    };
+  }, []);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-gray-500 max-w-xl">
           Multiparameter vol surface{" "}
-          <span className="text-gray-400">σ(K,T) = σ<sub>tenor</sub>(T)·max(0.1, 1 + α·ln(K/S)² + β·ln(K/S))</span>,
-          rendered in Python (matplotlib). Each trade bumps the traded tenor bucket
-          by ±γ — the surface re-renders live.
+          <span className="text-gray-400">
+            σ(K,T) = σ<sub>tenor</sub>(T)·max(0.1, 1 + α·ln(K/S)² + β·ln(K/S))
+          </span>
+          , rendered in the browser. Each trade bumps the traded tenor bucket by ±γ — the surface re-renders live. Drag to rotate.
         </p>
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] text-gray-500 flex items-center gap-1.5">
-            rotate
-            <input
-              type="range" min={-120} max={30} value={azim}
-              onChange={(e) => setAzim(Number(e.target.value))}
-              className="w-24 accent-fuchsia-500"
-            />
-          </label>
-          <button
-            onClick={resetSurface}
-            className="text-[11px] text-gray-400 hover:text-white border border-gray-700 rounded px-2 py-1 transition-colors"
-          >
-            Reset σ
-          </button>
-        </div>
+        <button
+          onClick={resetSurface}
+          className="text-[11px] text-gray-400 hover:text-white border border-gray-700 rounded px-2 py-1 transition-colors"
+        >
+          Reset σ
+        </button>
       </div>
 
-      <div className="relative rounded-xl border border-gray-800 bg-[#030712] overflow-hidden min-h-[360px] flex items-center justify-center">
-        {status === "error" ? (
-          <div className="text-center px-6 py-16 space-y-2">
-            <p className="text-sm text-gray-300 font-semibold">Vol-surface renderer offline</p>
-            <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              Start the Python service to see the live surface:
-            </p>
-            <code className="inline-block text-[11px] text-fuchsia-300 bg-gray-900 border border-gray-800 rounded px-2 py-1 mt-1">
-              ./volsurface/run.sh
-            </code>
-            <p className="text-[11px] text-gray-600">
-              expected at <span className="font-mono">{BASE}</span> · then{" "}
-              <button onClick={() => { setStatus("loading"); setVersion((v) => v + 1); }} className="underline hover:text-gray-400">retry</button>
-            </p>
-          </div>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt="Volatility surface"
-            className="w-full h-auto max-w-[820px]"
-            onLoad={() => setStatus("ok")}
-            onError={() => setStatus("error")}
-          />
+      <div className="relative rounded-xl border border-gray-800 bg-[#030712] overflow-hidden min-h-[380px]">
+        <div ref={plotRef} className="w-full" style={{ height: 420 }} />
+        {!ready && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-600">Rendering surface…</div>
         )}
       </div>
 
-      {info && status === "ok" && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-gray-500">
-          <span className="text-gray-400">σ tenor:</span>
-          {info.tenor_labels.map((lbl, i) => (
-            <span key={lbl}>
-              {lbl} <span className="text-fuchsia-300">{(info.sigma_tenor[i] * 100).toFixed(1)}%</span>
-            </span>
-          ))}
-          <span className="text-gray-600">· γ={(info.gamma * 100).toFixed(1)}%/trade</span>
-          <span className="text-gray-600">· {info.trades} trades</span>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-gray-500">
+        <span className="text-gray-400">σ tenor:</span>
+        {TENOR_LABELS.map((lbl, i) => (
+          <span key={lbl}>
+            {lbl} <span className="text-fuchsia-300">{(sigmaTenor[i] * 100).toFixed(1)}%</span>
+          </span>
+        ))}
+        <span className="text-gray-600">· γ={(GAMMA * 100).toFixed(1)}%/trade</span>
+        <span className="text-gray-600">· {trades} trades</span>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,76 @@
+# One row per LP range authorization on AquaCollateralVault. `lp` is indexed
+# on the RangeAuthorized event, so "every range this wallet ever wrote" is a
+# single filtered query — the thing frontend/lib/copilot/chain.ts currently
+# approximates with a MAX_AUTHS=50 brute-force loop.
+type Authorization @entity(immutable: false) {
+  id: ID!                      # authId as a decimal string
+  authId: BigInt!
+  lp: Bytes!
+  strikeMin: BigInt!           # WAD USD
+  strikeMax: BigInt!
+  expiry: BigInt!              # unix seconds
+  isCall: Boolean!
+  collateralToken: Bytes!      # WETH for calls, USDC for puts (read via a bound call)
+  maxCollateral: BigInt!
+  usedCollateral: BigInt!      # refreshed via a bound call on every fill/close/release
+  active: Boolean!
+  fillCount: Int!
+  fills: [Fill!]! @derivedFrom(field: "authorization")
+  instruments: [Instrument!]! @derivedFrom(field: "authorization")
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  revokedAtBlock: BigInt
+}
+
+# One row per OptionBought — the buyer, the series token, the strike, size,
+# and premium. Enough for "open interest by strike" and per-wallet position
+# lists without walking a strike grid on-chain.
+type Fill @entity(immutable: true) {
+  id: ID!                      # txHash-logIndex
+  authorization: Authorization!
+  instrument: Instrument!
+  lp: Bytes!
+  buyer: Bytes!
+  optionToken: Bytes!
+  strike: BigInt!
+  amount: BigInt!              # WAD option units
+  premium: BigInt!             # premium-token units, fee included
+  isCall: Boolean!
+  expiry: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+# One row per option instrument (an OptionToken: one strike of one range). Open
+# interest is bought − closed − redeemed, so "open interest by strike" and an
+# LP's live short exposure are one query; lastPremiumPerUnit / lastTradeAt
+# are the tape the copilot and the price chart read.
+type Instrument @entity(immutable: false) {
+  id: ID!                      # optionToken address, lowercase hex
+  optionToken: Bytes!
+  authorization: Authorization!
+  lp: Bytes!
+  strike: BigInt!              # WAD USD
+  expiry: BigInt!
+  isCall: Boolean!
+  openInterest: BigInt!        # WAD option units outstanding
+  volume: BigInt!              # WAD option units ever bought
+  fillCount: Int!
+  lastPremiumPerUnit: BigInt!  # premium-token units per 1e18 option units, fee included
+  lastTradeAt: BigInt!
+  fills: [Fill!]! @derivedFrom(field: "instrument")
+  positions: [Position!]! @derivedFrom(field: "instrument")
+}
+
+# One row per (instrument, holder): the holder's live balance, credited on
+# OptionBought and debited on OptionClosed / Redeemed. ERC-20 transfers of
+# the option token between wallets are NOT tracked (that needs a data-source
+# template per OptionToken — plan G6, not built).
+type Position @entity(immutable: false) {
+  id: ID!                      # optionToken-holder
+  holder: Bytes!
+  instrument: Instrument!
+  optionToken: Bytes!
+  balance: BigInt!             # WAD option units
+  updatedAt: BigInt!
+}

@@ -3,7 +3,7 @@
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
-import { USDC_SEPOLIA, WETH_SEPOLIA, type ActiveAuth } from "@/components/AuthorizeRange";
+import { type ActiveAuth } from "@/components/AuthorizeRange";
 import { strikeForDelta, roundStrike, protocolPremium, surfaceQuotes } from "@/lib/options";
 
 // S9 (docs/solutions.md): the thetagang front door. Pick a side and a risk
@@ -122,7 +122,7 @@ export function IncomeOneClick({ spot, onAuthorized }: IncomeOneClickProps) {
   const periodYieldPct = collateralUsd > 0 ? (estIncome / collateralUsd) * 100 : 0;
   const aprPct = periodYieldPct * (365 / tenorDays);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   const maxCollateralBig = isCall
     ? BigInt(Math.round(sizeNum * 1e18))
     : BigInt(Math.round(sizeNum * 1e6));
@@ -176,7 +176,7 @@ export function IncomeOneClick({ spot, onAuthorized }: IncomeOneClickProps) {
         expiry,
         maxCollateralBig,
         collateralToken as `0x${string}`,
-        USDC_SEPOLIA as `0x${string}`,
+        CONTRACTS.usdc as `0x${string}`,
         isCall,
       ],
     });

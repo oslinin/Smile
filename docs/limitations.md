@@ -123,7 +123,18 @@ range.
 > (soft liquidity) by the firmness bond, reliability counters, and
 > phantom-depth-aware `bestQuote` routing. The sections below describe the
 > UNMITIGATED design so the reasoning stays legible; see
-> [solutions.md](./solutions.md) for what is now in place.
+> [Solutions](#solutions) for what is now in place.
+>
+> **EthOnline 2026 (September 2026):** L8 is partially lifted by two opt-in
+> sibling vaults — `SpreadVault` (S12) escrows a credit spread's true maximum
+> loss and `MarginVault` (S13) lets a put writer post initial margin, at the
+> price recorded in L13. L12a is lifted by the subgraph. R6 is built as
+> `RfqVault`. Note that R1's per-authorization block cap lives in the main
+> vault only; the three sibling vaults have no per-block cap, so L4 applies
+> to them in full. Per-integration pages (Help → Integrations) collect the entries
+> that touch each protocol. L14 records that the Uniswap v4 hook entrance
+> (`beforeSwap`/`afterSwap`) has never run outside tests; L15 that
+> self-fills are permitted and why the demo receipts are ones.
 
 ### L1. Stale-quote sniping — the oracle latency gap
 
@@ -185,7 +196,7 @@ the ordinary Greeks — **parameter risk**: ∂P/∂α ∝ vega·ln²(K/S) and
 ∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). In
 trader-native terms these are the familiar desk exposures — sensitivity to
 the **25Δ butterfly** (α) and the **25Δ risk reversal** (β) — not bespoke
-protocol Greeks (see the README's "Reading the surface like a trader"). If
+protocol Greeks (see the Overview's "Reading the surface like a trader"). If
 governance moves α/β, or the demand-feedback loop walks a σ bucket away from
 fair, every open quote in every affected range marks against the LP with no
 action on their part. There is currently no dashboard surfacing this exposure.
@@ -211,6 +222,15 @@ machinery, margin oracles, and insolvency risk — an option, once written, can
 lower than a margined venue's. Aqua softens this (collateral stays in the LP's
 wallet, unrehypothecated, until the moment of sale) but does not remove it.
 
+> **Update (EthOnline 2026):** two opt-in rungs now sit above the main
+> vault. `SpreadVault` (S12) margins a credit spread at its true maximum
+> loss — 0.0625 WETH instead of 1 WETH for a 3000/3200 call credit spread,
+> 200 USDC instead of 3,200 for the put twin — without changing the
+> "always pays" property. `MarginVault` (S13) locks initial margin (1,500
+> USDC for an ATM 3000 put instead of 3,000) and *does* give up that
+> property, which is why it is opt-in and why L13 exists. The main vault
+> itself is unchanged.
+
 ### L9. Settlement still depends on one oracle
 
 `settleWithChainlinkRound` is permissionless and verifies that the supplied
@@ -219,6 +239,12 @@ but the *value* settled is still whatever Chainlink published. A wrong or
 manipulated feed settles wrong, trustlessly. This is oracle risk, distinct
 from the latency risk of L1/L2, and it is shared with essentially every
 oracle-settled derivative on-chain.
+
+On Arc testnet there is no Chainlink ETH/USD feed at all, so the deployment
+there settles against a `MockV3Aggregator` that anyone can set; a keeper
+mirrors Sepolia's Chainlink answer into it every 30 minutes so the price is
+real, but the trust is not (the Arc deployment notes, "Oracle tick").
+Settlement on Arc is a demonstration of the mechanism, not of the trust model.
 
 ### L10. The off-chain alternative has its own price
 
@@ -257,7 +283,123 @@ free. Contrast: an order on Deribit's book is firm; an escrowed-vault quote
 is firm; an Aqua quote is indicative. Mitigations — honest depth display,
 slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
-[solutions.md](./solutions.md) (S1–S4).
+[Solutions](#solutions) (S1–S4).
+
+### L12a. No indexer — lifted by the subgraph (EthOnline 2026)
+
+**Was:** there was no subgraph or indexing service. `LPDashboard` found the
+connected wallet's active range by scanning `RangeAuthorized` logs from
+block 0 and reading each match; the copilot's `readAuths` looped every
+`authId` up to a hard `MAX_AUTHS = 50` — past 50 ranges ever created it
+went blind, including to its own wallet's position — and then walked a
+40-strike grid per range with N+1 RPC calls to find option balances.
+Cost grew with history, only one range per LP was ever shown, and a
+public RPC rate-limited the whole thing.
+
+**Now:** `subgraph/` indexes the vault into `Authorization`, `Fill`,
+`Instrument` (open interest, last trade per strike) and `Position` (holder
+balance) entities, live on Graph Studio for Sepolia (`smile-sepolia`) and
+Arc (`smile-arc-testnet`). The LP dashboard, the copilot's position tools
+and its trading tools (opportunities, liquidity map, portfolio greeks) read
+that tape through `frontend/lib/tape.ts`; the price chart draws premium and
+implied vol per instrument from it. On a public network there is **no RPC
+path any more** — a missing subgraph is an error, not a capped scan. The
+50-range cap is gone.
+
+**What remains:** the local Anvil chain has no graph-node (no arm64 image),
+so `lib/tape.ts` rebuilds the same entities from the vault's events there —
+gated on chain id 31337/1337 only. ERC-20 transfers of option tokens between
+wallets are not indexed (a data-source template per `OptionToken` would do
+it — plan G6); a transferred position shows on the original buyer until it
+is closed or redeemed. The Studio endpoints are rate-limited dev endpoints;
+publishing to the network and querying through the gateway with an API key
+(`SUBGRAPH_URL`, proxied by `/api/subgraph`) is the production path.
+
+### L13. Bad debt in the opt-in margin tier
+
+`MarginVault` (S13) is the one place Smile's "a written option always pays"
+promise can break, and it is opt-in precisely because of that. What can go
+wrong, honestly:
+
+- **The haircut path exists.** If a writer's margin, their free balance, the
+  takeover auction, the backstop pool, and the insurance fund are *all*
+  exhausted at finalization, holders of that series are paid pro rata from
+  the pot (`payoutPerUnit`, `haircutBps` on the series) and `HolderHaircut`
+  is emitted. The naked-notional ceiling (7× the backstop) and the gap-40
+  test bound this, they do not eliminate it — a gap larger than 40% from
+  the maintenance point in one heartbeat can exceed the pool.
+- **Settlement is a heartbeat wide.** Marks stop at expiry but the
+  settlement round can land up to one Chainlink heartbeat later; the
+  two-step design (per-writer waterfall, then `finalizeSeries`) is what
+  keeps that gap from becoming an oracle race, and a writer who never
+  settles is finalized around after 6 hours and repays the pool when they
+  do.
+- **The credit line is consent, not collateral.** A range's `autoTopUp`
+  pulls from the same Aqua allowance the fill used — bounded by what is
+  still shipped, in the wallet, and approved. The writer can dock or spend
+  it at any time, so a margin call may find nothing there; the vault then
+  flags rather than reverts.
+- **Sigma still moves the trade, not the margin.** Premiums follow the vol
+  hook (that is the product); margin requirements read the oracle only. A
+  manipulated sigma can make a put expensive, it cannot drain margin.
+- **`SpreadVault.releaseCollateral`-style admin risk does not exist here**,
+  but the owner does set the naked-notional ceiling, the fee split, and
+  the vol buffers — the buffers only ratchet up, with a 24 h delay on the
+  maintenance side, so a parameter change cannot liquidate anyone who had
+  no time to answer it.
+- **Whole-position liquidation only.** Takeover and absorb move a writer's
+  entire position in a series; partial-unit takeover is on the plan's cut
+  list. Per-range `maxBlockNotional` (R1) is not implemented in this vault;
+  the global ceiling bounds exposure instead.
+
+### L14. The Uniswap v4 hook path has never run live
+
+`OptionPricingHook` has two entrances. The one every trade uses is direct:
+the vault reads `sigmaFor()` to price and calls `bumpSigma()` after each
+fill and sellback (`AquaCollateralVault.sol:553`, `:830`), gated
+`only vault`. The other is the Uniswap v4 interface — `beforeSwap`
+(a 5% fair-value veto) and `afterSwap` (a surface-wide sigma bump) — gated
+`msg.sender == poolManager`. That path is exercised in
+`test/OptionPricingHook.t.sol` by pranking a fake pool-manager address and
+nowhere else: `script/Deploy.s.sol` passes `address(1)` as the pool manager
+on every network, no script creates a v4 pool, and Arc has no Uniswap
+deployment at all. Consequences: there is no on-chain secondary market for
+OptionTokens (holders exit only through `close()` at the Bid or by holding
+to expiry), and the "afterSwap shifts the whole surface" feedback described
+in the Overview's flow diagrams is a design, not a live mechanism. Nothing
+about pricing or the demand loop depends on it: the vault path carries the
+whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
+not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
+hook's `poolManager` set to the real one (see the Uniswap page).
+
+### L15. Self-fills are allowed — and economically null
+
+An LP can buy from its own range: nothing in any vault requires
+`buyer != lp`. A broker forbids this (a self-cross is a wash trade: it
+prints volume and a price no counterparty agreed to), and can enforce it
+because it sees both sides of one account. A public chain cannot see "the
+same person" — a second wallet defeats any on-chain guard in seconds — so
+Smile, like every permissionless venue, does not try (see L5: rejection is
+the wrong frame, pricing is the right one).
+
+What a self-fill *is* here: the premium goes from the buyer to the LP,
+i.e. from one pocket to the other, minus the 1% protocol fee; collateral
+moves from the LP's wallet into escrow and comes back at expiry as payout
+plus reclaim. Because every option is fully collateralized, no
+counterparty risk is created and solvency is never touched — the position
+nullifies by construction. What it *does* do is what wash trades do
+anywhere: print volume and open interest on the tape (the subgraph) that
+is not real demand, and move the demand-feedback loop (each buy bumps the
+traded tenor's sigma). That second effect is L7, and it is bounded by the
+spread plus the fee paid per round trip.
+
+Disclosure: the recorded demo fills on Sepolia and Arc
+(the Sepolia and Arc deployment notes) are the
+deployer buying from its own range, so the subgraph had a real trade to
+index. They are labelled as self-fills. A `buyer != lp` check was
+considered for the three sibling vaults as a guard against accidental
+self-fills and left out on purpose: it would be cosmetic, and the main
+vault is unchanged.
 
 ### L12. The per-trade gas floor — and where it actually comes from
 
@@ -277,7 +419,9 @@ expensive" — is wrong here, and measurably so. The pricing arithmetic
 (`lnWad` Padé series, one integer `sqrtWad`, the staleness spread, two
 size-impact iterations) is a rounding error inside the 198k repeat-fill
 cost, which is in the range of an ordinary Uniswap v3 swap; the design
-already avoids `exp`/`N(d₁)` entirely (README §Mathematical Specification).
+already avoids `exp`/`N(d₁)` entirely (Overview §Mathematical Specification;
+the price of that shortcut is that σ is not a Black-Scholes IV — a measured
+real Black-Scholes costs ~5k gas more per evaluation, see Overview §2).
 What actually dominates is **series bootstrapping**: ~840k of the first
 fill is the one-time deployment of that series' plain-ERC-20 OptionToken —
 contract-creation bytes, not math. Moving the calculation off-chain would
@@ -299,7 +443,7 @@ deployment choice, not a property of the code.
 > **Note:** these recommendations are expanded into a full sequenced build
 > plan — with the soft-liquidity solutions, the LP-quoted-vol competitive
 > pricing design, demand strategy, and phase gates — in
-> [solutions.md](./solutions.md).
+> [Solutions](#solutions).
 
 Ordered by benefit-to-complexity. Phases 1–2 are contained contract changes;
 each is testable in isolation. The guiding principle, from L5: **stop trying
@@ -357,6 +501,16 @@ Sophisticated LPs run fast repricing and toxicity models off-chain and win
 flow with tighter quotes; passive LPs keep the tier-1 spread. Build this only
 if, after Phases 1–2, realized LP markouts (P&L measured a few minutes after
 each fill) show flow is still systematically toxic.
+
+> **Implemented (EthOnline 2026)** — as a sibling AquaApp rather than a
+> SwapVM instruction: `src/periphery/RfqVault.sol`. The LP ships a range,
+> signs `Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)` under
+> the EIP-712 domain "Smile RFQ", and `fill()` recovers the signer, checks
+> ttl / size / nonce, then settles like a tier-1 fill (premium + fee in,
+> collateral pulled JIT through Aqua). `formulaQuote()` is the tier-1 Ask
+> for the same range. Nonces are single-use and cancellable. The markout
+> gate above was skipped; the tier is opt-in per range,
+> so tier 1 is untouched for anyone who does not sign.
 
 ### Phase 4 — LP risk tooling
 

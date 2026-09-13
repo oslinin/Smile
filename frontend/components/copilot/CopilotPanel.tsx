@@ -10,8 +10,15 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import type { BuilderLeg } from "@/lib/options";
 import { ChatMessage } from "./ChatMessage";
-import { CopilotSettings, loadByok, type ByokSettings } from "./CopilotSettings";
+import { CopilotSettings, loadByok, loadMcp, type ByokSettings, type McpServer } from "./CopilotSettings";
+import { SkillsMenu, loadSkillPrefs, type SkillPrefs } from "./SkillsMenu";
 import type { QuizAnswer } from "./QuizCard";
+
+// UI-only tools (no server execute): acknowledge at once so the model can
+// wrap up in text; ChatMessage renders their cards from the input.
+const DISPLAY_ONLY = new Set(["propose_trade", "prepare_lp_range", "prepare_rfq_quote"]);
+
+import { TABS, type TabId } from "@/lib/copilot/tabs";
 
 const STARTERS = [
   "Explain the volatility smile in this protocol",
@@ -24,15 +31,20 @@ export interface CopilotPanelProps {
   spot: number;
   chainId?: number;
   address?: string;
+  /** The tab on screen — the copilot explains and suggests for it. */
+  tab?: TabId;
   /** Load proposed legs into the Payoff Builder (page switches to the chain tab). */
   onProposeLegs?: (legs: BuilderLeg[], name: string) => void;
 }
 
-export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotPanelProps) {
+export function CopilotPanel({ spot, chainId, address, tab, onProposeLegs }: CopilotPanelProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [byok, setByok] = useState<ByokSettings | null>(null);
+  const [mcp, setMcp] = useState<McpServer[]>([]);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [skillPrefs, setSkillPrefs] = useState<SkillPrefs | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,34 +52,52 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
     // client syncs after mount (same pattern as page.tsx's `setMounted`).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setByok(loadByok());
+    setMcp(loadMcp());
+    setSkillPrefs(loadSkillPrefs());
   }, []);
 
   // Latest context via refs: the transport is created once, but its body()
   // and headers() callbacks run per request (an event, not render) and must
   // see the current spot/chain/wallet and BYOK key.
-  const ctxRef = useRef({ spot, chainId, address });
+  const ctxRef = useRef({ spot, chainId, address, tab });
   const byokRef = useRef<ByokSettings | null>(null);
+  const mcpRef = useRef<McpServer[]>([]);
+  const skillsRef = useRef<SkillPrefs | null>(null);
   useEffect(() => {
-    ctxRef.current = { spot, chainId, address };
-  }, [spot, chainId, address]);
+    ctxRef.current = { spot, chainId, address, tab };
+  }, [spot, chainId, address, tab]);
   useEffect(() => {
     byokRef.current = byok;
-  }, [byok]);
+    mcpRef.current = mcp;
+    skillsRef.current = skillPrefs;
+  }, [byok, mcp, skillPrefs]);
 
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
     // eslint-disable-next-line react-hooks/refs -- body()/headers() run at request time (fetch), not during render
     transport: new DefaultChatTransport({
       api: "/api/copilot/", // trailing slash: next.config has trailingSlash:true
-      body: () => ({ context: ctxRef.current }),
+      // skills undefined (before hydration) = server treats all built-ins as on.
+      body: () => ({
+        context: {
+          ...ctxRef.current,
+          skills: skillsRef.current?.enabled,
+          customSkills: skillsRef.current?.custom,
+        },
+      }),
       // BYOK: the user's own key rides each request; the server uses it for
-      // this request only and never stores it.
+      // this request only and never stores it. Same for the MCP server list.
       headers: () => {
         const b = byokRef.current;
-        if (!b?.apiKey) return {};
+        const m = mcpRef.current;
         return {
-          "x-copilot-provider": b.provider,
-          "x-copilot-api-key": b.apiKey,
-          ...(b.model ? { "x-copilot-model": b.model } : {}),
+          ...(b?.apiKey
+            ? {
+                "x-copilot-provider": b.provider,
+                "x-copilot-api-key": b.apiKey,
+                ...(b.model ? { "x-copilot-model": b.model } : {}),
+              }
+            : {}),
+          ...(m.length ? { "x-copilot-mcp": JSON.stringify(m) } : {}),
         };
       },
     }),
@@ -76,9 +106,9 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
       if (toolCall.dynamic) return;
       // propose_trade is display-only: acknowledge immediately so the model can
       // wrap up in text. The "Load into Builder" button is pure UI on top.
-      if (toolCall.toolName === "propose_trade") {
+      if (DISPLAY_ONLY.has(toolCall.toolName)) {
         addToolOutput({
-          tool: "propose_trade",
+          tool: toolCall.toolName as "propose_trade",
           toolCallId: toolCall.toolCallId,
           output: { displayed: true },
         });
@@ -107,6 +137,19 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, busy]);
+
+  // Other tabs can hand the copilot a question (the Risk Monitor's
+  // "Explain" button): open the panel and send it as if typed.
+  useEffect(() => {
+    const onAsk = (ev: Event) => {
+      const text = (ev as CustomEvent<string>).detail;
+      if (!text) return;
+      setOpen(true);
+      sendMessage({ text });
+    };
+    window.addEventListener("smile:ask", onAsk);
+    return () => window.removeEventListener("smile:ask", onAsk);
+  }, [sendMessage]);
 
   if (process.env.NEXT_PUBLIC_COPILOT !== "1") return null;
 
@@ -157,7 +200,21 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
                 </span>
               )}
               <button
-                onClick={() => setSettingsOpen((o) => !o)}
+                onClick={() => {
+                  setSkillsOpen((o) => !o);
+                  setSettingsOpen(false);
+                }}
+                className={`text-[11px] font-semibold transition-colors ${skillsOpen ? "text-white" : "text-gray-500 hover:text-white"}`}
+                aria-label="Copilot skills"
+                title="Skills: built-in procedures and your own"
+              >
+                Skills
+              </button>
+              <button
+                onClick={() => {
+                  setSettingsOpen((o) => !o);
+                  setSkillsOpen(false);
+                }}
                 className={`transition-colors ${settingsOpen ? "text-white" : "text-gray-500 hover:text-white"}`}
                 aria-label="Copilot settings"
                 title="Use your own API key"
@@ -175,7 +232,23 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
           </div>
 
           {settingsOpen && (
-            <CopilotSettings value={byok} onChange={setByok} onClose={() => setSettingsOpen(false)} />
+            <CopilotSettings
+              value={byok}
+              onChange={setByok}
+              mcp={mcp}
+              onMcpChange={setMcp}
+              onClose={() => setSettingsOpen(false)}
+            />
+          )}
+          {skillsOpen && skillPrefs && (
+            <SkillsMenu
+              value={skillPrefs}
+              onChange={setSkillPrefs}
+              onStarter={(t) => {
+                setSkillsOpen(false);
+                send(t);
+              }}
+            />
           )}
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
@@ -188,7 +261,7 @@ export function CopilotPanel({ spot, chainId, address, onProposeLegs }: CopilotP
                   review and sign yourself. Bring your own API key via the ⚙ icon.
                 </p>
                 <div className="space-y-1.5">
-                  {STARTERS.map((s) => (
+                  {(tab ? [...TABS[tab].starters, ...STARTERS.slice(0, 1)] : STARTERS).map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}

@@ -6,9 +6,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import type { Leg } from "@/components/PayoffBuilder";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
 import type { ActiveAuth } from "@/components/AuthorizeRange";
-import { USDC_SEPOLIA, WETH_SEPOLIA } from "@/components/AuthorizeRange";
 import { fetchUniswapSwapQuote, type UniswapSwapQuote } from "@/hooks/useUniswapTrade";
 import { useFirmDepth } from "@/hooks/useFirmDepth";
+import { useLiveSurface } from "@/hooks/useLiveSurface";
+import { protocolPremium, smileSigma, type SmileParams } from "@/lib/options";
 
 const PRICING_ENGINE_ABI = [
   {
@@ -134,8 +135,6 @@ const ERC20_ABI = [
 ] as const;
 
 const WAD = BigInt("1000000000000000000");
-const SIGMA_GLOBAL = (BigInt(80) * WAD) / BigInt(100);
-const ALPHA = BigInt(2) * WAD;
 const STRIKES_OFFSETS = [-20, -10, -5, 0, 5, 10, 20];
 
 function authRangeStrikes(min: number, max: number): number[] {
@@ -145,13 +144,9 @@ function authRangeStrikes(min: number, max: number): number[] {
     .filter((v, i, a) => v <= max && a.indexOf(v) === i);
 }
 
-const SIGMA_GLOBAL_NUM = 0.80;
-const ALPHA_NUM = 2.0;
-
-function smileVol(spot: number, strike: number): number {
-  const lnKS = Math.log(strike / spot);
-  return SIGMA_GLOBAL_NUM * (1 + ALPHA_NUM * lnKS * lnKS);
-}
+// Smile at a strike from the surface the vault prices from (live hook sigma
+// and beta via useLiveSurface); lib/options.ts holds the formula.
+const smileVol = (spot: number, strike: number, p: SmileParams) => smileSigma(spot, strike, p);
 
 // Abramowitz & Stegun 26.2.17 — max error 1.5e-7
 function normalCDF(x: number): number {
@@ -169,37 +164,15 @@ function callDelta(spot: number, strike: number, sigma: number, T: number): numb
   return normalCDF(d1);
 }
 
-function blackScholesCall(spot: number, strike: number, sigma: number, T: number): number {
-  if (T <= 0) return Math.max(0, spot - strike);
-  if (sigma <= 0 || spot <= 0 || strike <= 0) return Math.max(0, spot - strike);
-  const sqrtT = Math.sqrt(T);
-  const d1 = (Math.log(spot / strike) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
-  const d2 = d1 - sigma * sqrtT;
-  return spot * normalCDF(d1) - strike * normalCDF(d2);
-}
-
-function blackScholesPut(spot: number, strike: number, sigma: number, T: number): number {
-  if (T <= 0) return Math.max(0, strike - spot);
-  if (sigma <= 0 || spot <= 0 || strike <= 0) return Math.max(0, strike - spot);
-  const sqrtT = Math.sqrt(T);
-  const d1 = (Math.log(spot / strike) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
-  const d2 = d1 - sigma * sqrtT;
-  return strike * normalCDF(-d2) - spot * normalCDF(-d1);
-}
-
-function priceWAD(spot: number, strike: number, expiry: number, isCall: boolean, isBuy: boolean): bigint {
+// The on-chain premium (intrinsic + moneyness-damped time value at the smile
+// sigma — SmileMath.premium), not Black-Scholes, so the chain shows what
+// buy()/close() charge. Ask rounds up, Bid rounds down; the on-chain spread is
+// that rounding plus the staleness and size terms, which need the fill itself.
+function priceWAD(spot: number, strike: number, expiry: number, isCall: boolean, isBuy: boolean, p: SmileParams): bigint {
   const T = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
-  const sigma = smileVol(spot, strike);
-  const price = isCall
-    ? blackScholesCall(spot, strike, sigma, T)
-    : blackScholesPut(spot, strike, sigma, T);
-  const p = BigInt(Math.round(Math.max(0, price) * 1e12)) * BigInt(1e6);
-  return isBuy ? (p * BigInt(101)) / BigInt(100) : (p * BigInt(99)) / BigInt(100);
-}
-
-// kept for backward compat within this file
-function optionPriceWAD(spot: number, strike: number, expiry: number, isBuy: boolean): bigint {
-  return priceWAD(spot, strike, expiry, true, isBuy);
+  const price = protocolPremium(spot, strike, isCall, T, p);
+  const cents = Math.max(0, price) * 100;
+  return BigInt(isBuy ? Math.ceil(cents) : Math.floor(cents)) * BigInt(1e16);
 }
 
 function formatWAD(val: bigint | undefined): string {
@@ -327,7 +300,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
   const firedRef = useRef(false);
   const shipFiredRef = useRef(false);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   const amountNum = Math.max(0.001, Number(amount));
 
   // Calls: collateral = amount WETH (18 dec). Puts: collateral = amount × K_max USDC (6 dec)
@@ -377,7 +350,7 @@ function SellPanel({ strike, spot, bidWAD, defaultIsCall, defaultExpiry, onClose
         address: CONTRACTS.aquaVault as `0x${string}`,
         abi: VAULT_ABI,
         functionName: "authorizeRange",
-        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, USDC_SEPOLIA as `0x${string}`, isCall],
+        args: [kMinWAD, kMaxWAD, expiry, maxCollateral, collateralToken as `0x${string}`, CONTRACTS.usdc as `0x${string}`, isCall],
       });
     }
   }, [approveSuccess]);
@@ -544,7 +517,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
     setQuoteLoading(true);
     setQuoteError(null);
     try {
-      const q = await fetchUniswapSwapQuote(totalUsdcPremium, address as `0x${string}`, USDC_SEPOLIA, apiKey);
+      const q = await fetchUniswapSwapQuote(totalUsdcPremium, address as `0x${string}`, CONTRACTS.usdc, apiKey);
       setSwapQuote(q);
     } catch (e) {
       setQuoteError((e as Error).message);
@@ -592,7 +565,7 @@ function BuyPanel({ auth, strike, spot, askWAD, onClose, onSwapTx, onBuyConfirme
   const handleApprove = () => {
     if (!canTrade || !totalUsdcPremium) return;
     approveUsdc({
-      address: USDC_SEPOLIA as `0x${string}`,
+      address: CONTRACTS.usdc as `0x${string}`,
       abi: ERC20_ABI,
       functionName: "approve",
       args: [CONTRACTS.aquaVault as `0x${string}`, totalUsdcPremium * BigInt(2)],
@@ -796,15 +769,16 @@ function StrikeRow({ spot, strike, expiry, activeAuth, onSwapTx, onBuyConfirmed,
   const { address } = useAccount();
 
   const T     = Math.max(0, (expiry - Date.now() / 1000) / (365 * 24 * 3600));
-  const sigma = smileVol(spot, strike);
+  const surface = useLiveSurface(expiry);
+  const sigma = smileVol(spot, strike, surface);
   const cDelta = spot > 0 && expiry > 0 ? callDelta(spot, strike, sigma, T) : 0;
   const pDelta = cDelta - 1;
-  const ivStr  = `${(sigma * 100).toFixed(1)}%`;
+  const ivStr  = `${(sigma * 100).toFixed(1)}%${surface.live ? "" : "*"}`;
 
-  const callBid = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  false) : undefined;
-  const callAsk = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  true)  : undefined;
-  const putBid  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, false) : undefined;
-  const putAsk  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, true)  : undefined;
+  const callBid = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  false, surface) : undefined;
+  const callAsk = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, true,  true,  surface) : undefined;
+  const putBid  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, false, surface) : undefined;
+  const putAsk  = spot > 0 && expiry > 0 ? priceWAD(spot, strike, expiry, false, true,  surface) : undefined;
 
   const isATM       = Math.abs((strike - spot) / spot) < 0.01;
   const inAuthRange = !!activeAuth && strike >= activeAuth.strikeMin && strike <= activeAuth.strikeMax;

@@ -17,13 +17,17 @@ A non-custodial, parametric options marketplace that solves three interlocking p
 7. [End-to-End Demo Walkthrough](#end-to-end-demo-walkthrough)
 8. [Glossary](#-glossary)
 9. [Project Structure](#%EF%B8%8F-project-structure)
-10. [Technical Stack](#technical-stack)
+10. [EthOnline 2026 — Continuation Track](#-ethonline-2026--continuation-track)
+11. [Technical Stack](#technical-stack)
 
-More docs: [build notes & war stories](docs/build-notes.md) ·
-[verified CRE simulation transcript](docs/cre-simulation.md) ·
-[known limitations](docs/limitations.md) ·
-[solutions & phased roadmap](docs/solutions.md) ·
-[reference table — every L/R/S/P, one-liner + status](docs/reference-table.html)
+**Live:** [smile-frontend-omega.vercel.app](https://smile-frontend-omega.vercel.app) — the full app with the AI copilot (server build, Sepolia + Arc) · [oslinin.github.io/Smile](https://oslinin.github.io/Smile/) — static build (no copilot) · [help site](https://smile-frontend-omega.vercel.app/help.html)
+
+More docs: the build notes & war stories ·
+the verified CRE simulation transcript ·
+[known limitations](#limitations) ·
+[solutions & phased roadmap](#solutions) ·
+[reference table — every L/R/S/P, one-liner + status](#reference) ·
+integration pages — [1inch Aqua](#aqua), [Chainlink](#chainlink), [Uniswap](#uniswap), [The Graph](#thegraph), [Circle · Arc](#arc), [Frontend](#frontend)
 
 > This README is also published as a wiki-style help page — with a sidebar
 > linking Overview (this doc), Limitations, Solutions, and the Reference
@@ -85,8 +89,8 @@ own terms:
   mechanics — staleness-scaled spreads, size-convex price impact, per-block notional
   caps, a spread floor calibrated to the oracle's blind window — price adverse
   selection the way a desk does instead of pretending it away (see
-  [docs/limitations.md](docs/limitations.md) and
-  [docs/solutions.md](docs/solutions.md)).
+  [Limitations](#limitations) and
+  [Solutions](#solutions)).
 - **Chainlink settlement** is permissionless and round-verified, and LPs who want
   the full tradfi profile can delta-hedge from the same wallet that backs their
   quotes — the collateral never left it.
@@ -103,7 +107,7 @@ how it's made.
 | :------------- | :-------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Pricing**    | `SmileSwapVMRouter` + `OptionPricingEngine`   | Custom instruction (opcode 33) on the **official 1inch SwapVM** pricing off a **multiparameter vol surface**: σ per tenor bucket + skew, $\sigma_{strike} = \sigma_{tenor} \cdot (1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S))$, time-value $= S \cdot \sigma_{strike} \cdot \sqrt{T}$. The instruction is **two-sided**: forward direction prices the Ask, reverse the Bid. Oracle reads enforce Chainlink freshness. |
 | **Liquidity**  | **official 1inch `Aqua`** + `AquaCollateralVault` | LP calls `authorizeRange(K_{min}, K_{max}, \text{DTE}, \text{maxCollateral})`, then ships the strategy with the official `Aqua.ship()`. On `buy()`, the SwapVM swap `Aqua.push()`es the premium into the LP wallet and `Aqua.pull()`s collateral JIT into escrow. OptionToken deployed lazily per strike. |
-| **Market**     | `OptionPricingHook` + **Uniswap Trading API** | v4 Hook: `beforeSwap` vetoes mispriced trades; `afterSwap` shifts the vol surface. Trading API used for (1) live ETH/USD spot price and (2) routing the buyer's ETH→USDC premium swap via the Universal Router on each trade. |
+| **Market**     | `OptionPricingHook` + **Uniswap Trading API** | The vol surface lives in a Uniswap v4 hook contract: every vault reads `sigmaFor()` to price and calls `bumpSigma()` after each fill (live on every chain). Its v4 entrance — `beforeSwap` vetoes mispriced secondary-market trades, `afterSwap` shifts the whole surface — awaits a live OptionToken pool ([L14](#limitations)). Trading API used for (1) live ETH/USD spot price and (2) — when `NEXT_PUBLIC_UNISWAP_API_KEY` is set — quoting the buyer's ETH→USDC premium swap (Universal Router, mainnet route) ahead of the vault call; without a key, or on Sepolia/Arc, the buyer pays premium from USDC directly. |
 | **Settlement** | `AquaOptionSettlement` + Chainlink CRE        | Every minted series is registered at buy time. At expiry, settlement is **permissionless**: anyone supplies the Chainlink roundId covering expiry and the contract verifies on-chain that it is the first post-expiry round (`settleWithChainlinkRound`) — no trusted writer. The scheduled CRE DON path (`settleSeries`) remains as a keeper. Holders `redeem()` the cash-settled intrinsic from the vault; LPs `reclaimCollateral()` for the exact remainder. |
 | **Asset**      | `OptionToken`                                 | ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.                                                                                                |
 
@@ -152,9 +156,9 @@ Solvency is trivially guaranteed: if the option expires in-the-money, the locked
 
 | Gap | Root cause |
 |---|---|
-| Know its vol is right without trades | σ only moves on fills; an untraded range quotes yesterday's vol ([L6/L7](docs/limitations.md), S7 is the fix) |
-| Avoid paying informed flow | Quotes derive from a lagging oracle; adverse selection is *priced* (R1–R5), never eliminated ([L1/L2/L5](docs/limitations.md)) |
-| Capital-efficient short legs | A spread's short leg posts full collateral as if naked until S12 netting — condors work but are capital-hungry |
+| Know its vol is right without trades | σ only moves on fills; an untraded range quotes yesterday's vol ([L6/L7](#limitations), S7 is the fix) |
+| Avoid paying informed flow | Quotes derive from a lagging oracle; adverse selection is *priced* (R1–R5), never eliminated ([L1/L2/L5](#limitations)) |
+| Capital-efficient short legs | A spread's short leg posts full collateral as if naked until S12 netting — spreads and (on a cash-settled vault) the single-structure iron condor now escrow only the true max loss |
 | Naked writing | No mark, no liquidations — that is the entire V2 ladder below |
 | Assets without a price feed | The mechanism needs external spot; long-tail listings are feed-constrained (S11) |
 | Exact Black-Scholes prices | The on-chain formula deliberately omits N(d₁)/N(d₂) — gas-cheap, roughest deep-ITM and near expiry |
@@ -214,17 +218,17 @@ efficiency *without* paying for machinery the rung below didn't need:
 
 | Rung | Mechanism | Liquidation machinery | Who it serves |
 |---|---|---|---|
-| 1 | **Yield-bearing collateral** ([S4](docs/solutions.md)) — escrowed wstETH/sDAI keeps earning while backing quotes | None | Every LP: makes full collateral *cheap* instead of smaller |
-| 2 | **Defined-risk netting** ([S12](docs/solutions.md)) — a call spread margined at its true max loss `K₂−K₁`, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
-| 3 | **Partial-collateral puts** — a put's worst case is bounded (strike → 0), so "80% collateral survives any 80% crash" is a coherent product | Light — bounded bad debt | Yield-focused put writers |
-| 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine | All of it | Professional delta-hedging desks |
+| 1 | **Yield-bearing collateral** ([S4](#solutions)) — escrowed wstETH/sDAI keeps earning while backing quotes | None | Every LP: makes full collateral *cheap* instead of smaller |
+| 2 | **Defined-risk netting** ([S12](#solutions)) — **implemented at EthOnline 2026 as `SpreadVault`** (see the Continuation Track section below): a call spread margined at its true max loss `(K₂−K₁)/K₂` WETH, not naked-per-leg | None — pure position accounting | The spread/condor seller (the core Smile user) |
+| 3 | **Partial-collateral puts** — **implemented at EthOnline 2026 as `MarginVault`** ([S13](#solutions), opt-in, puts only): initial margin `min(K, intrinsic + 50% of the worst-of-hour Chainlink mark)`, maintenance at 30%, margin call → takeover auction → backstop pool → insurance → (haircut, loudly) | Light — bounded bad debt, see [L13](#limitations) | Yield-focused put writers |
+| 4 | **Naked calls + cross-margin** — unbounded liability, the full five-part machine; MarginVault's waterfall is the machine, calls follow once a WETH shortfall can be paid | All of it | Professional delta-hedging desks |
 
 Rungs 1–3 preserve the property that is Smile's one absolute differentiator
 against Derive, Panoptic, and Deribit alike: **an option, once written, can
 always pay.** Rung 4 breaks it — so rung 4 stays gated behind evidence that
 rungs 1–3 left real demand unmet, and its natural constituency (professional
 makers who hedge in milliseconds) may be better served by the signed-quote RFQ
-tier ([limitations.md R6](docs/limitations.md)), where pros manage their own
+tier ([Limitations, R6](#limitations)), where pros manage their own
 leverage off-chain and the trustless vault never underwrites it.
 
 ---
@@ -250,12 +254,13 @@ $$\sigma_{strike}(T) = \sigma_{tenor}(T) \cdot \max\!\big(0.1,\; 1 + \alpha \cdo
 
 *where $k_{25} = \lvert\ln(K_{25\Delta}/S)\rvert$, the log-moneyness of the "25-delta" reference strikes — the OTM call and put with ~25% probability of finishing in the money, the near-universal convention for measuring the wings. The frontend computes RR/BF exactly (evaluating the smile at the true 25Δ strikes — `surfaceQuotes` in `frontend/lib/options.ts`) and shows them in the One-Click Income panel with plain-language captions.
 
-Two things this framing buys: **(1) takers** get a sanity check in familiar units — an expected-move band instead of an abstract α; **(2) LPs** see their [L6](docs/limitations.md) surface-parameter risk in the same terms a Deribit market-maker manages daily — vega against the ATM level, RR-sensitivity against the skew, fly against the curvature — rather than as bespoke protocol exposures. (Client-facing greeks are untouched: takers always see plain Black-Scholes delta/gamma/theta/vega evaluated *at* the smile σ, whatever parameterization produces it.)
+Two things this framing buys: **(1) takers** get a sanity check in familiar units — an expected-move band instead of an abstract α; **(2) LPs** see their [L6](#limitations) surface-parameter risk in the same terms a Deribit market-maker manages daily — vega against the ATM level, RR-sensitivity against the skew, fly against the curvature — rather than as bespoke protocol exposures. (Client-facing greeks are untouched: takers always see plain Black-Scholes delta/gamma/theta/vega evaluated *at* the smile σ, whatever parameterization produces it.)
 
 ### 2. Premium Calculation
 
 $$P = \underbrace{\max(\pm(S - K),\, 0)}_{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}$$
 
+- **σ is a parametric level, not a Black-Scholes implied vol.** The time-value term has no 1/√(2π) factor and its wing damping is linear, so at σ = 80% this formula charges roughly 2.5× Black-Scholes at the money and more in the wings (S = 2,524, 30 days: $597 vs $242 at K = 2,500; $457 vs $50 at K = 3,200). The model is self-consistent — the hook's feedback and the α/β skew act on this σ — but a Black-Scholes IV back-solved from a fill (as the Trade tab's price chart does) is a different, larger number. Replacing the term with S·N(d₁) − K·N(d₂) costs about 5k more gas per evaluation (measured: 9.4k → 14.7k) and is the planned pricing change for the next router deployment.
 - **Ask** (forward swap direction, opening): rounds against the taker (up).
 - **Bid** (reverse direction, sellback): rounds down. One strategy quotes both sides; the rounding asymmetry is the spread engine.
 - A protocol fee (default 1%) is grossed up **on top of** the Ask via the official SwapVM fee opcode — the LP always nets the full premium. Sellbacks are fee-free.
@@ -317,6 +322,45 @@ No trusted writer exists on this path — settlement liveness reduces to the fee
 In short: 1inch Aqua holds the collateral, Uniswap prices and routes the trade, and settlement is **available trustlessly to anyone** with Chainlink CRE as the scheduled closer.
 
 > **Design note.** Because both paths resolve to the on-chain Chainlink feed, the DON's role is a *scheduled, trust-minimized keeper* (deterministic read + signed write) rather than novel off-chain data sourcing.
+
+### 6. Quoting Oracle — Chainlink Data Feeds, with an Optional Pyth Pull-Oracle
+
+Settlement (§5 above) always resolves through Chainlink's on-chain round
+history — that's what makes permissionless expiry-bracketing verifiable, and
+it never changes. **Quoting** (pricing a live `buy()`/`close()`) is a
+separate concern and reads whatever `IPriceOracle` the vault was deployed
+with:
+
+- **Default — Chainlink Data Feeds.** `OptionPremiumInstruction` and the
+  vault's put-pricing path call `latestRoundData()` directly, gated by a
+  `maxStalenessSec` freshness check. This is a **push** oracle: the price is
+  only as fresh as Chainlink's last heartbeat/deviation-triggered update,
+  which is the root cause of the oracle-latency gap documented as
+  [L1/L2 in Limitations](#limitations) (stale-quote sniping,
+  and an "invisible window" of sub-threshold drift with no on-chain signal
+  at all).
+- **Optional — `PythSpotAdapter` pull-oracle.** [Pyth](https://pyth.network)
+  is a first-party oracle: 100+ trading firms and exchanges submit price +
+  confidence directly, aggregated into an update roughly every 400ms. It's a
+  **pull** oracle — the taker fetches a signed update off-chain and posts it
+  in their own transaction (`PythSpotAdapter.refresh()`), so the very next
+  read in that transaction prices against a near-live spot instead of
+  Chainlink's last published round. `PythSpotAdapter.sol` wraps this behind
+  the same `latestRoundData()` shape the pricing path already expects (round
+  ids are meaningless for a pull oracle and returned as zero;
+  `updatedAt` maps to Pyth's `publishTime`), so swapping it in requires no
+  changes to `OptionPremiumInstruction` or the vault. Scope is **quoting
+  only** — settlement is untouched and still reads Chainlink rounds. See
+  [R5 in Solutions](#solutions) for the full design rationale
+  and [Limitations](#limitations) for what it does and
+  doesn't fix.
+
+To enable it at deploy time, set `PYTH` (the Pyth contract address on your
+target chain) and `PYTH_PRICE_ID` (the feed id, e.g. ETH/USD) in `.env` —
+`script/Deploy.s.sol` then deploys `PythSpotAdapter` and wires it in as the
+quoting oracle in place of the raw Chainlink feed. Leave both unset to use
+Chainlink Data Feeds for quoting (the default, and what the Sepolia
+addresses above run).
 
 ---
 
@@ -384,7 +428,7 @@ sequenceDiagram
 
 ### 2. Primary Market Buy (Trader)
 
-Premium payment is routed through the **Uniswap Trading API** (`EXACT_OUTPUT` ETH→USDC), giving an on-chain Uniswap tx before the vault call.
+With a Trading API key configured, premium payment is routed through the **Uniswap Trading API** (`EXACT_OUTPUT` ETH→USDC), giving an on-chain Uniswap tx before the vault call; otherwise the buyer's USDC is pulled directly.
 
 ```mermaid
 sequenceDiagram
@@ -504,35 +548,81 @@ sequenceDiagram
     Vault->>Maker: everything not owed to outstanding holders
 ```
 
+### MarginVault lifecycle (opt-in margin + liquidation waterfall)
+
+The six stages of `script/margin-lifecycle.sh`:
+
+```mermaid
+flowchart TD
+    S1["1 · Writer opens a margined put range<br/>authorizes IM capacity, ships to Aqua — nothing locked yet"]
+    S2["2 · Holder buys 1 put, $3,000 strike<br/>only initial margin ~$1,500 pulled JIT through Aqua<br/>(the main vault would cash-secure the full $3,000)"]
+    S3["3 · ETH crashes to $2,000<br/>put is $1,000 in-the-money · maintenance $1,600 > $1,500 locked<br/>keeper flags the position"]
+    S4["4 · One hour grace to add margin<br/>writer does not, so the auction opens"]
+    S5{"5 · Waterfall — who covers the gap?<br/>writer margin, then bidder, then backstop, then insurance"}
+    T["Takeover: a bidder assumes the short,<br/>posts full margin, earns a 1 to 10% bonus<br/>out of the liquidated writer's margin"]
+    B["Absorb: no bidder in 30 min, so the backstop pool<br/>takes the short, drawing only the shortfall<br/>then the insurance fund, then a holder haircut"]
+    S6["6 · Expiry at $2,000<br/>settle off Chainlink, finalize,<br/>holder redeems $1,000 intrinsic in cash"]
+    S1 --> S2 --> S3 --> S4 --> S5
+    S5 -->|a bidder appears| T
+    S5 -->|nobody bids| B
+    T --> S6
+    B --> S6
+```
+
 ---
 
 ## 📍 Deployed Addresses (Sepolia)
 
-> ⚠️ **Stale — v1 deployment.** These are the original hackathon contracts, deployed
-> **before** the official Aqua/SwapVM integration, the two-sided sellback, trustless
-> settlement, and the protocol fee. Their ABIs are incompatible with the current
-> frontend; a redeploy of the new stack (Aqua, `SmileSwapVMRouter`, oracle, vault,
-> settlement) is pending. Until then, use the [local Anvil path](#4-deploy-to-anvil-local),
-> which deploys and exercises everything.
+Redeployed 2026-09-10 (EthOnline 2026) — the full current stack, on real
+Circle USDC, canonical WETH and the real Chainlink ETH/USD feed. Every
+address, deploy hash and demo transaction: the Sepolia deployment notes;
+`.env.sepolia.example` points the app at it. The Graph Studio subgraph
+`smile-sepolia` indexes this vault (see the subgraph notes).
 
 | Contract                 | Address                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| **OptionPricingEngine**  | [`0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532`](https://sepolia.etherscan.io/address/0x3f5a5b1972Ddac7E81fdf7F6AEFC2633Fa8FF532) |
-| **OptionPricingHook**    | [`0x15578B9248b574194867Ab204bE4161213Acf194`](https://sepolia.etherscan.io/address/0x15578B9248b574194867Ab204bE4161213Acf194) |
-| **AquaCollateralVault**  | [`0x5115fbdb810D1dB316034fF670c65c45d875f887`](https://sepolia.etherscan.io/address/0x5115fbdb810D1dB316034fF670c65c45d875f887) |
-| **AquaOptionSettlement** | [`0x5c9E7BB8db084A955acD519f61287d24Ff24F211`](https://sepolia.etherscan.io/address/0x5c9E7BB8db084A955acD519f61287d24Ff24F211) |
+| **Aqua** (official registry) | [`0x915Bc53936Ecb14A18dB8270A4a648E8dE248749`](https://sepolia.etherscan.io/address/0x915Bc53936Ecb14A18dB8270A4a648E8dE248749) |
+| **SmileSwapVMRouter**    | [`0x44E2213838913aeC52410ec815b07D15Fcf0a72c`](https://sepolia.etherscan.io/address/0x44E2213838913aeC52410ec815b07D15Fcf0a72c) |
+| **OptionPricingEngine**  | [`0x681Bd7583B6612FFf1539781e8d5d7Db565994B3`](https://sepolia.etherscan.io/address/0x681Bd7583B6612FFf1539781e8d5d7Db565994B3) |
+| **OptionPricingHook**    | [`0xCa84Df6F9317FABDE1fD21f4bee25Cb2a8ba1676`](https://sepolia.etherscan.io/address/0xCa84Df6F9317FABDE1fD21f4bee25Cb2a8ba1676) |
+| **AquaCollateralVault**  | [`0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D`](https://sepolia.etherscan.io/address/0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D) |
+| **AquaOptionSettlement** | [`0x17aAAf612cB5b7b3749Cf22b0b2e0CB1AdA77ca1`](https://sepolia.etherscan.io/address/0x17aAAf612cB5b7b3749Cf22b0b2e0CB1AdA77ca1) |
+| **SmileQuoteLens**       | [`0xad1cE2065f1588caFB6BA6176D1b87cf4Ec7B8D6`](https://sepolia.etherscan.io/address/0xad1cE2065f1588caFB6BA6176D1b87cf4Ec7B8D6) |
+| **SpreadVault** (S12)    | [`0x94eE3E1747e96fd643f464ae42db5899Ce878391`](https://sepolia.etherscan.io/address/0x94eE3E1747e96fd643f464ae42db5899Ce878391) |
+| **MarginVault** (S13)    | [`0x23F9a08F44fBBCABe9Fdf0d458f226ABb3A84742`](https://sepolia.etherscan.io/address/0x23F9a08F44fBBCABe9Fdf0d458f226ABb3A84742) |
+| **MarginBackstop**       | [`0x6eEE1ec5F1AFA7Fb8353016a50fBA9C50791FdA2`](https://sepolia.etherscan.io/address/0x6eEE1ec5F1AFA7Fb8353016a50fBA9C50791FdA2) |
 | **USDC** (Circle Sepolia) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) |
 | **WETH** (canonical Sepolia) | [`0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9`](https://sepolia.etherscan.io/address/0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9) |
+| **Chainlink ETH/USD**    | [`0x694AA1769357215DE4FAC081bf1f309aDC325306`](https://sepolia.etherscan.io/address/0x694AA1769357215DE4FAC081bf1f309aDC325306) |
 
-> _Frontend deployed at **https://oslinin.github.io/Smile** (WalletConnect enabled). The live site currently targets the v1 contracts above — on-chain interactions there will work again after the Sepolia redeploy._
+> _Frontend deployed at **https://oslinin.github.io/Smile** (WalletConnect enabled). The live site still targets the pre-event v1 contracts (`AquaCollateralVault` `0x5115…f887`, incompatible ABI); point a build at `.env.sepolia.example` to use this deployment._
 
 ---
 
 ## 🛠️ How to Run the Project
 
-### 1. View Live Site (GitHub Pages)
+### 1. View the Live Sites
 
-**URL:** `https://oslinin.github.io/Smile`
+Two builds of the same code:
+
+| | URL | What it carries |
+|---|---|---|
+| **Vercel (server build)** | [smile-frontend-omega.vercel.app](https://smile-frontend-omega.vercel.app) | The full app: Sepolia + Arc Testnet, the AI copilot (`/api/copilot`), the subgraph proxy (`/api/subgraph`, gateway key stays server-side), the help site at `/help.html` |
+| **GitHub Pages (static export)** | [oslinin.github.io/Smile](https://oslinin.github.io/Smile) | The same app without the server routes — no copilot, subgraph read directly from Studio |
+
+**Deploying to Vercel.** The Vercel project points at this repository with **root directory `frontend`** and the continuation-track branch as its production branch; every push builds and promotes automatically. `frontend/next.config.ts` produces a server build whenever `NEXT_PUBLIC_BASE_PATH` is unset (the Pages workflow is the only thing that sets it), so no Vercel-specific configuration file exists. Environment variables set in the Vercel project (Production):
+
+| Variable | Purpose |
+|---|---|
+| `COPILOT_PROVIDER`, `COPILOT_MODEL` | Which LLM backs the copilot (`anthropic` / `openai` / `google` / `openrouter`) and the model id |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENROUTER_API_KEY` | The one key matching the provider |
+| `NEXT_PUBLIC_COPILOT=1` | Shows the copilot button (unset on the static build) |
+| `SUBGRAPH_URL_11155111`, `SUBGRAPH_URL_5042002` (or one `SUBGRAPH_URL` for all chains) | The Graph gateway URL per chain, carrying the API key; used only by `/api/subgraph` |
+| `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect project id for phone wallets |
+| `COPILOT_RPC_SEPOLIA`, `COPILOT_RPC_ARC` (optional) | RPCs the copilot's server-side reads use |
+| `COPILOT_MCP_SERVERS` (optional) | JSON seed of MCP servers offered in the copilot's ⚙ menu |
+
+Contract addresses are not environment variables on either live site: `frontend/config/wagmi.ts` carries the Sepolia and Arc address maps and resolves them from the connected chain. To deploy your own copy: import the repo in Vercel, set the root directory to `frontend`, add the variables above, push.
 
 ### 2. Local Frontend Development
 
@@ -713,13 +803,34 @@ cre workflow simulate settlement --non-interactive --trigger-index 0
 ```
 
 Verified: CLI v1.11.0 reads the live Sepolia ETH/USD feed, runs DON consensus and
-signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.md](docs/cre-simulation.md).
+signs the report, exiting `0`. Full annotated transcript: the CRE simulation transcript.
 
 > **Note — live broadcast is out of scope here.** CRE delivers DON-signed reports through
 > a KeystoneForwarder that calls `onReport(bytes,bytes)` on the receiver, whereas
 > `AquaOptionSettlement` exposes a plain `settleSeries(bytes32,uint256)` guarded by
 > `onlyCRE`. Wiring the live on-chain write (an `onReport` entrypoint + registered
 > forwarder) is a follow-up; the CRE CLI **simulation above** is the demonstrated path.
+
+### 7. Explore the Codebase — Knowledge Graph
+
+The repo ships a generated map of itself — [`.understand-anything/knowledge-graph.json`](.understand-anything/knowledge-graph.json) —
+166 nodes (files, functions, contracts) and 219 edges (imports, calls, contains)
+grouped into 5 architecture layers, plus a 13-step guided tour, produced by an
+`understand-anything`-style codebase analyzer.
+
+To browse it interactively:
+
+```bash
+./view-knowledge-graph.sh
+```
+
+This serves `.understand-anything/` on `http://localhost:4321` (override with
+`PORT=...`) and opens [`viewer.html`](.understand-anything/viewer.html) — a
+force-directed graph you can filter by layer, search by file/symbol name, and
+click through the guided tour, with each node's summary and tags shown in a
+side panel. It must be served over HTTP (not opened as a local `file://` page)
+so the browser can `fetch()` the JSON; the script handles that. Stop it with
+`Ctrl+C`.
 
 ---
 
@@ -796,30 +907,238 @@ signs the report, exiting `0`. Full annotated transcript: [docs/cre-simulation.m
 │   ├── vaults/               # AquaCollateralVault (escrow/lifecycle)
 │   │                         #   + AquaOptionSettlement (expiry-price registry)
 │   ├── hooks/                # OptionPricingHook (Uniswap v4 + the vol surface)
+│   ├── periphery/            # EthOnline 2026: SpreadVault (S12 netting AquaApp)
+│   │                         #   + SmilePremiumLib + SpreadToken
+│   │                         #   + MarginVault + MarginBackstop (S13 opt-in margin tier)
 │   ├── mocks/                # MockV3Aggregator (local Chainlink feed)
 │   └── OptionToken.sol       # ERC-20 option position
+├── subgraph/                 # EthOnline 2026: The Graph subgraph (authorizations + fills)
 ├── frontend/                 # Next.js app
-│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface
-│   ├── lib/                  # options engine + 20-strategy catalog
-│   └── config/               # Wagmi + contract addresses + official Aqua ABI
+│   ├── components/           # OptionMatrix, AuthorizeRange, PayoffBuilder, LPDashboard, VolSurface, SpreadDesk
+│   ├── lib/                  # options engine + 20-strategy catalog + subgraph client + AI copilot
+│   └── config/               # Wagmi + contract addresses (Anvil / Sepolia / Arc) + official Aqua ABI
 ├── volsurface/               # Python (Flask + matplotlib) 3-D vol-surface renderer
 │                             #   — evolves with each trade via the σ feedback loop
 ├── cre-workflow/             # Chainlink CRE workflow (TypeScript → WASM)
 ├── script/                   # Deploy.s.sol + DemoTrade.s.sol (live-node demo)
-├── docs/                     # grant proposal, build notes, CRE transcript
-├── test/                     # Foundry tests (82 passing)
+│                             #   + SpreadDemo.s.sol, spread-lifecycle.sh, arc-smoke.sh (EthOnline 2026)
+├── docs/                     # grant proposal, build notes, CRE transcript, docs/plans/ (feature plans)
+├── test/                     # Foundry tests (192 passing)
+├── .understand-anything/     # Generated codebase knowledge graph (nodes, edges,
+│                             #   layers, guided tour) + viewer.html — see §7 above
+├── view-knowledge-graph.sh   # Serves and opens the knowledge graph viewer
 └── foundry.toml              # solc 0.8.30, via_ir
 ```
+
+---
+
+## 🧭 EthOnline 2026 — Continuation Track
+
+Everything above this section is the pre-existing protocol. This section is
+what was built during EthOnline 2026 (September 5–13, 2026) on branch
+`EthOnline2026_continuation_track`, cut from `main` at `5b4cc63`. Plans and
+the honest scope decisions behind them are in the plans (feature overview ·
+SpreadVault / MarginVault · The Graph subgraph · Arc). The task-by-task
+status page is **Help → Continuation Track** in the app.
+
+### Feature · reason · integration
+
+| Feature | Reason it exists | Integration |
+|---|---|---|
+| **SpreadVault** — credit spreads escrow their true max loss (0.0625 WETH not 1; 200 USDC not 3,200) | Smile's core user sells spreads; margining each leg as naked wasted 16× the capital. Netting is a collateral-accounting problem, not a liquidation problem, so it was the safest efficiency win | **1inch** · Aqua App |
+| **MarginVault + Backstop** — opt-in margined puts (IM 1,500 not 3,000), margin calls, takeover auction, backstop pool, insurance, haircut-as-last-resort | Rung 3 of the ladder: yield writers want to post a fraction of the strike. Aqua's JIT pull applied to margin itself — collateral stays in the wallet until a real margin call — which no other margin system does | **1inch** · Aqua App |
+| **RfqVault** — LP-signed EIP-712 quotes over the formula floor, same Aqua pull | Tradfi's NBBO + price improvement: sophisticated makers bring their own models and win flow with tighter quotes while the formula tier stays the public fallback | **1inch** · Aqua App |
+| **The Graph subgraph** `smile-sepolia` + `smile-arc-testnet`, the copilot's tape | The LP dashboard and the copilot were brute-force-scanning logs and went blind past 50 ranges (L12a). The subgraph is now the only position source on public networks — no RPC path — and the copilot trades off it: opportunities vs Deribit, liquidity map, portfolio greeks, hedging, LP/RFQ preparation | **The Graph** · AI tooling / agents on live chain data |
+| **Trader skills, Skills menu, MCP servers** — eight skill files, user-added skills, The Graph Subgraph MCP preset, a subgraph skill file | The tooling half: the copilot's know-how is packaged as skills any AI environment can read, and it can query any indexed subgraph through The Graph's MCP | **The Graph** · AI tooling |
+| **Option premium + IV over time on the price chart**, 100-trade Anvil tape | An options venue has no public tape; the subgraph is Smile's — and a chart needs trades to draw | **The Graph** (data) · UI |
+| **Arc testnet deployment** — every vault on Circle's native USDC, real fills | An options venue whose premium, collateral, margin, backstop and gas are all the chain's native dollar is the cleanest stablecoin-native DeFi story | **Circle** · Arc |
+| **Sepolia redeploy** on Circle USDC, canonical WETH, Chainlink ETH/USD | The pre-event Sepolia contracts were a stale v1; the subgraph needed the current stack with real feeds | The Graph (prerequisite) · Circle USDC |
+| **Overview, Risk Monitor, TradingView chart, OptionStrat-grade builder, User Guide** | A first-time visitor gives it three minutes; the numbers that matter (16×, 1,500 vs 3,000, holders whole after a crash) had to be on screen, live, not in a README | UI/UX for all three |
+| **OpenRouter copilot provider**, copilot help page | Free-model access without an API key; the AI surface was undocumented | The Graph · AI tooling (supporting) |
+| Chainlink feed + CRE, Pyth adapter, Uniswap v4 hook, SwapVM opcode (pre-existing, blue in the map) | The oracle, settlement, vol surface and pricing engine every new vault reuses | infrastructure |
+
+### Integration & feature map
+
+Blue is what Smile already was on September 5; green is what the event
+added. Integrations and infrastructure alike.
+
+```mermaid
+flowchart TB
+  classDef old fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef new fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+  subgraph Infra["Infrastructure & integrations"]
+    Aqua["1inch Aqua<br/>JIT-pull liquidity registry"]:::old
+    SwapVM["1inch SwapVM<br/>custom opcode 33: OptionPremium"]:::old
+    Uni["Uniswap v4 hook<br/>demand-driven vol surface"]:::old
+    CL["Chainlink ETH/USD<br/>spot + permissionless settlement"]:::old
+    CRE["Chainlink CRE<br/>scheduled settlement keeper"]:::old
+    Pyth["Pyth pull oracle<br/>PythSpotAdapter (R5, opt-in)"]:::old
+    USDC["Circle USDC<br/>premium · fee · put collateral"]:::old
+    Graph["The Graph<br/>Studio subgraph smile-sepolia"]:::new
+    Arc["Circle Arc testnet<br/>USDC as the gas + quote token"]:::new
+    Sepolia["Sepolia redeploy<br/>full stack, real feeds"]:::new
+    OR["OpenRouter<br/>4th copilot provider"]:::new
+    TV["TradingView Lightweight Charts<br/>open-source engine, Apache-2.0"]:::new
+    MD["Coinbase / Kraken public candles<br/>market context for the chart"]:::new
+  end
+
+  subgraph Protocol["Smile contracts"]
+    Vault["AquaCollateralVault<br/>single-leg calls & puts"]:::old
+    Settle["AquaOptionSettlement<br/>round-verified expiry price"]:::old
+    Lens["SmileQuoteLens + FirmEscrow<br/>best quote, firm depth"]:::old
+    Spread["SpreadVault (S12)<br/>defined-risk netting"]:::new
+    Margin["MarginVault + Backstop (S13)<br/>opt-in margined puts"]:::new
+    Rfq["RfqVault (R6)<br/>EIP-712 signed quotes"]:::new
+  end
+
+  subgraph App["App & tooling"]
+    UI["Next.js app<br/>chain · LP · payoff builder"]:::old
+    Copilot["AI copilot<br/>reads live chain state"]:::old
+    Tabs["Overview · Spreads · Margin · RFQ · Risk Monitor tabs"]:::new
+    Chart["Price chart + OptionStrat-grade builder"]:::new
+    Keepers["Lifecycle scripts + margin keeper"]:::new
+  end
+
+  Aqua --> Vault & Spread & Margin & Rfq
+  SwapVM --> Vault
+  Uni --> SwapVM
+  CL --> Vault & Settle & Margin
+  Pyth -.-> Vault
+  CRE --> Settle
+  USDC --> Vault & Spread & Margin & Rfq
+  Arc --> Vault & Spread
+  Sepolia --> Vault & Spread & Margin
+  Graph --> Copilot & UI
+  OR --> Copilot
+  Vault --> Lens & UI
+  Spread & Margin & Rfq --> Tabs
+  Margin --> Keepers
+  TV & MD --> Chart
+  Chart --> UI
+```
+
+### What the event added
+
+| Piece | What it is | Feature | Where |
+|---|---|---|---|
+| **SpreadVault — S12 defined-risk netting** | Rung 2 of the V2 ladder above, now implemented: a sibling AquaApp where a credit spread escrows only its true max loss — **0.0625 WETH instead of 1 WETH** for a 3000/3200 call credit spread (16×), **200 USDC instead of 3,200** for the put-credit twin. Same JIT model (collateral stays in the writer's wallet until a buyer matches), same settlement contract, `AquaCollateralVault` untouched. Deployed without WETH (Arc, a chain with no ether) the vault is **cash-settled**: a call credit escrows K₂−K₁ USDC per unit and settles in USDC. | 1inch · Aqua App | `src/periphery/SpreadVault.sol`, `SmilePremiumLib.sol`, `SpreadToken.sol` · `test/SpreadVault.t.sol`, `test/SpreadSettlement.t.sol` · the **Spreads · Defined Risk** tab · `script/SpreadDemo.s.sol`, `script/spread-lifecycle.sh` |
+| **MarginVault — S13 opt-in margin** | Rung 3 of the ladder: a second sibling AquaApp where a put writer locks **initial margin — 1,500 USDC for an ATM 3000 put, not 3,000** — off the lowest Chainlink answer of the last hour (never the vol hook). Behind the holder, in order: the writer's margin and free balance, an opt-in Aqua credit line, a 30-min writer-takeover auction, a share-based backstop pool (naked notional capped at 7× it), the insurance fund, and only then a loud haircut. Two-step settlement; a gap-40 solvency test; `AquaCollateralVault` still untouched. | 1inch · Aqua App | `src/periphery/MarginVault.sol`, `MarginBackstop.sol` · `test/Margin*.t.sol` (54 tests) · the **Margin · Opt-in Puts** tab · `script/margin-lifecycle.sh` · `keeper/margin.mjs` |
+| **RfqVault — R6 hybrid RFQ** | The "NBBO + price improvement" tier from the limitations doc: an LP ships a range to a third sibling AquaApp, then signs EIP-712 quotes off-chain (no gas) — `(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)` — and a taker fills one; the vault recovers the signer and pulls the collateral JIT through Aqua exactly as tier 1. `formulaQuote()` shows the tier-1 Ask the quote is beating. Single-use nonces, cancellable; no `close()` (sellbacks stay on tier 1). | 1inch · Aqua App | `src/periphery/RfqVault.sol` · `test/RfqVault.t.sol` (8) · the **RFQ · Signed Quotes** tab · `script/rfq-lifecycle.sh` |
+| **The Graph subgraph + trading copilot** | `Authorization`, `Fill`, `Instrument` (open interest, last trade) and `Position` (holder balance) entities, live on Studio for Sepolia and Arc. On public networks the app and the copilot read **only** The Graph — the capped brute-force scan (`MAX_AUTHS = 50`, [L12a](#limitations)) is gone. The copilot trades off the tape: `find_opportunities` (Smile IV vs the nearest Deribit instrument and vs the last fill), `liquidity_map` (capacity, used %, open interest, stale/scarce/empty flags, per-strike heat map), `portfolio_greeks` (long side + written side), `hedge_suggestion`, `reference_market`, `macro_calendar`, and `prepare_lp_range` / `prepare_rfq_quote` cards that prefill the forms — the user signs. Eight trader skills (SKILL.md), a Skills menu with user-added skills, MCP servers with a Subgraph MCP preset, a subgraph skill file for AI environments. The price chart draws premium and IV per instrument from the tape; `./local.sh` seeds 100 trades. | The Graph · AI tooling / agent on live chain data | `subgraph/` · [Studio: `smile-sepolia`](https://thegraph.com/studio/subgraph/smile-sepolia), [`smile-arc-testnet`](https://thegraph.com/studio/subgraph/smile-arc-testnet) · `frontend/lib/tape.ts`, `lib/subgraph.ts`, `lib/copilot/graphTools.ts`, `frontend/skills/`, `lib/copilot/mcp.ts` · `components/PriceChart.tsx` · `script/seed-tape.sh` · [Copilot](#copilot) |
+| **Arc testnet deployment** | The whole stack — main vault, SpreadVault, MarginVault + backstop, RfqVault — on Circle's Arc, with **Circle's real Arc USDC** as premium, fee, put collateral, margin, backstop pool, insurance fund — and gas. Real fills on every vault, recorded: a USDC-margined put locking 1.50 instead of 3.00, an RFQ quote filled inside the formula. | Arc | the Arc deployment notes · `script/arc-smoke.sh`, `script/arc-siblings-smoke.sh` · `.env.arc.example` · Arc in the app's network picker |
+| **App: Overview, Risk Monitor, builder** | A default **Overview** tab — the capital-efficiency ladder as live bars from the connected chain, live counters across all vaults, the recorded testnet receipts; one build serves Anvil / Sepolia / Arc (addresses follow the connected chain); a **Risk Monitor** with per-position health bars and the liquidation timeline rebuilt from MarginVault events (+ "explain with the copilot"); the strategy builder gains today/halfway/expiry curves, a price × date P&L heat map, breakevens, and a per-leg "what the writer locks on each vault" panel; a TradingView Lightweight Charts price chart with the strategy overlaid; tabs in user language. | — (UI/UX for all three) | `frontend/components/Story.tsx`, `RiskMonitor.tsx`, `PayoffBuilder.tsx`, `PriceChart.tsx`, `lib/deployments.ts`, `config/wagmi.ts` |
+| **Copilot & docs** | OpenRouter as a fourth copilot provider; the copilot documented as a help page; a **User Guide** ([User Guide](#guide), in the help sidebar and in the copilot's knowledge) so the copilot walks people through buying, building strategies and providing liquidity step by step; reference-table rows cite the code that implements each solution; the LP Dashboard bug that started the whole indexer thread, fixed. | The Graph · AI tooling | `frontend/lib/copilot/provider.ts` · [Copilot](#copilot), [User Guide](#guide), [Reference Table](#reference) |
+
+```mermaid
+flowchart LR
+  subgraph Chain["EVM chain — Anvil · Sepolia · Arc testnet"]
+    Aqua["1inch Aqua registry<br/>(official, self-deployed)"]
+    Vault["AquaCollateralVault<br/>single-leg options · unchanged"]
+    Spread["SpreadVault (new)<br/>S12 netted spreads"]
+    S1["AquaOptionSettlement"]
+    S2["AquaOptionSettlement<br/>(the spread's own)"]
+    Aqua --- Vault
+    Aqua --- Spread
+    Vault --- S1
+    Spread --- S2
+  end
+  App["Next.js app<br/>Spreads tab · LP Dashboard · Copilot"]
+  Graph[("The Graph subgraph (new)<br/>Authorization · Fill")]
+  App -- "RPC / getLogs (fallback)" --> Chain
+  App -- "NEXT_PUBLIC_SUBGRAPH_URL" --> Graph
+  Graph -- "events + bound authorizations() calls" --> Vault
+```
+
+### SpreadVault in one table
+
+A taker buys the structure; the writer's escrow is the S12 true max loss,
+pulled JIT through the SpreadVault's own Aqua strategy, and settlement is
+one price through one formula per structure:
+
+| | Call credit (short K₁, long K₂) | Put credit (short K₂, long K₁) |
+|---|---|---|
+| Escrow per unit | `(K₂−K₁)/K₂` WETH — 0.0625 for 3000/3200 | `K₂−K₁` USDC — 200 for 3000/3200 |
+| vs. the main vault (naked short leg) | 1 WETH | 3,200 USDC |
+| Taker pays | Ask(K₁ call) − Bid(K₂ call), floored at 1 USDC, + fee | Ask(K₂ put) − Bid(K₁ put), same |
+| Payout at settlement price S | `units·(clamp(S,K₁,K₂)−K₁)/S` WETH | `units·(K₂−clamp(S,K₁,K₂))/1e30` USDC |
+| Max payout over S | exactly the escrow (at S = K₂) | exactly the escrow (at S ≤ K₁) |
+
+Pricing is not a new model: `SmilePremiumLib` is the vault's own put-side
+premium math lifted into a library with an `isCall` flag, and
+`test_quote_putLegMatchesVaultPutQuote` proves it reproduces
+`vault.putQuote` to the wei with the staleness spread and fee gross-up
+live. `test/SpreadSettlement.t.sol` fuzzes the settlement price across
+OTM, between the strikes, and far ITM: `holder payout + writer reclaim ==
+escrow` to the wei in either order, and the escrow cap never binds.
+
+```mermaid
+sequenceDiagram
+    participant W as Writer (LP)
+    participant SV as SpreadVault
+    participant AQ as Aqua
+    participant T as Taker
+    participant ST as AquaOptionSettlement
+    W->>SV: openStructure(CallCredit, [K1,K2], expiry, escrowCapacity)
+    W->>AQ: ship(app=SpreadVault, strategy, [WETH], [escrowCapacity])
+    Note over W,AQ: WETH stays in the writer's wallet
+    T->>SV: buy(authId, units, maxPremium)
+    SV->>SV: quote — Ask(long leg) − Bid(short leg), fee, escrow
+    SV->>AQ: pull(writer, hash, WETH, escrow) — the S12 max loss, not a full leg
+    SV->>T: mint SpreadToken
+    Note over ST: expiry — anyone supplies the first Chainlink round after it
+    T->>SV: redeem(authId, units) → net intrinsic, capped by escrow
+    W->>SV: reclaim(authId) → escrow − what outstanding holders are owed
+```
+
+### The app, as a visitor sees it
+
+`./local.sh` opens on **Overview**: which chain you are on and what is real
+there, the ladder — naked put $3,000 → credit spread $200 → margined put
+$1,500 (read live from MarginVault's mark) → signed quote — with a jump
+button per rung, live counters, and on Sepolia / Arc the real receipts.
+**Trade** opens on a TradingView-engine ETH/USD chart with the strategy
+you are building drawn on it (strikes, breakevens, the protocol's spot),
+then the option chain and the strategy builder (three P&L curves, a
+price × date heat map, breakevens, greeks, and what a writer locks per
+sell leg on each vault). **Earn** writes ranges (one-click or by hand);
+**Spreads**, **Margin** and **RFQ** are the three new vaults; **Risk
+Monitor** shows every margined position's health and the liquidation
+timeline as it happens; **My Positions** reads The Graph where it exists;
+**Receipts** lists every deployment. The copilot (bottom-right) has read
+the [User Guide](#guide) and can drive any of it.
+
+### Running the new pieces
+
+```bash
+./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
+./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
+./script/margin-lifecycle.sh        # margined put: fill (IM only) → crash → flag → auction → backstop absorbs → settle → redeem
+MODE=takeover ./script/margin-lifecycle.sh   # …or a second writer takes the position over at auction
+cd keeper && npm install && MARGIN_VAULT=… MARGIN_SETTLEMENT=… ORACLE=… PRIVATE_KEY=… npm run margin   # permissionless keeper
+./script/rfq-lifecycle.sh           # LP signs an EIP-712 quote 1% inside the formula (no gas) → taker fills → JIT pull → replay rejected
+
+cd subgraph && pnpm install && pnpm codegen && pnpm build   # The Graph subgraph (see the subgraph notes)
+
+cp .env.sepolia.example frontend/.env.local                  # point the app (+ subgraph URL) at the Sepolia deployment
+cp .env.arc.example frontend/.env.local                      # point the app at the Arc testnet deployment
+PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills on Arc, as plain cast sends
+```
+
+### Honest status of each track
+
+- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc, for call and put credit spreads. The **iron condor** is now a real single structure on a cash-settled vault — escrow = max(putWidth, callWidth) USDC (the wider wing, not the sum), one fill, one settlement (`test/SpreadCondor.t.sol`); it lands live at the next Arc SpreadVault redeploy. The optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted.
+- **MarginVault**: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range `maxBlockNotional` not ported (the global backstop-coupled ceiling bounds exposure instead); no `close()` by design (a sigma-priced buyback paid from margin is L7's attack). Full lifecycle on Anvil via `script/margin-lifecycle.sh` and the keeper; deployed to Sepolia and Arc, with a real-USDC margined fill on Arc (1.50 locked instead of 3.00). [L13](#limitations) is the honest list of what it does not promise.
+- **RfqVault**: built as a sibling vault rather than a SwapVM opcode — a signed quote changes the price, never the custody model, and nonces need state an instruction doesn't have. On Arc testnet with a real-USDC signed fill (not on Sepolia); no `close()` by design.
+- **Subgraph**: live on Graph Studio as `smile-sepolia` v0.0.2 (`https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2`), indexing the Sepolia deployment above — Authorization #0 was queryable within a minute of `Aqua.ship`, and the `Fill` for a real 0.01-unit $2,500 call one block after the buy. The local graph-node compose is x86-64-only (no arm64 image; emulation crashes). The two stretch items landed in a different shape: holder positions come from a `Position` entity fed by the vault's own events (no per-token data-source template, so wallet-to-wallet OptionToken transfers are not indexed), and the Subgraph MCP is documented (`.mcp.json.example`, The Graph page) with a preset in the app copilot.
+- **Arc**: every vault deployed with real USDC and traded (main, Spread, Margin + backstop, RFQ). FX options (USDC/EURC) were cut after the oracle check found no EUR/USD feed on Arc testnet at all (Stork's pull contract has none and its ETH/USD is stale); Circle Gateway and a Circle developer-controlled wallet fund the insurance fund and backstop pool on Arc (`keeper/insurance-gateway.mjs`, `keeper/backstop-wallet.mjs`, real runs recorded in the Arc deployment notes). Arc mainnet launches Sept 16; the mainnet deployment is a follow-up.
 
 ---
 
 ## Technical Stack
 
 - **Smart Contracts**: Solidity 0.8.30 (Foundry, via_ir), on the **official 1inch Aqua + SwapVM** contracts (vendored, unmodified)
-- **Frontend**: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT `black-scholes` + `greeks` packages
+- **Frontend**: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT `black-scholes` + `greeks` packages; price chart on **TradingView Lightweight Charts** (TradingView's open-source engine, Apache-2.0) fed by Coinbase's public ETH-USD candles (Kraken fallback) — market context only, the protocol prices off its oracle
+- **Indexing & AI**: The Graph (Studio subgraph `smile-sepolia`); copilot via the Vercel AI SDK with Anthropic / OpenAI / Google / OpenRouter as providers
 - **Oracle/Settlement**: Chainlink price feeds (permissionless round-verified settlement) + Chainlink CRE SDK (scheduled keeper)
 - **DEX Infrastructure**: Uniswap v4 Hooks, Uniswap Trading API
-
----
-
-_Built for the 1inch + Uniswap + Chainlink Hackathon._

@@ -1,0 +1,20 @@
+{
+  "localhost": {
+    "AquaCollateralVault": {
+      "address": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "startBlock": 0
+    }
+  },
+  "sepolia": {
+    "AquaCollateralVault": {
+      "address": "0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D",
+      "startBlock": 11677088
+    }
+  },
+  "arc-testnet": {
+    "AquaCollateralVault": {
+      "address": "0xE37ED711F7D1dc5aC045206b4A6367C55229C789",
+      "startBlock": 61227750
+    }
+  }
+}

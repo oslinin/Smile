@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/defi-options-marketplace-mvp-72wk65]
-    paths: [frontend/**]
+    branches: [main, EthOnline2026_continuation_track]
+    paths: [frontend/**, docs/**, README.md]
   workflow_dispatch:
 
 permissions:

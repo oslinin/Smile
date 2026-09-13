@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId, useChains, useBalance, useReadContract, useSwitchChain } from "wagmi";
 import { OptionMatrix } from "@/components/OptionMatrix";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, setActiveChainId, arcMainnet } from "@/config/wagmi";
 
 const VAULT_ABI_MINI = [
   { name: "nextAuthId", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
@@ -20,18 +20,41 @@ const VAULT_ABI_MINI = [
 ] as const;
 import { LPDashboard } from "@/components/LPDashboard";
 import { AuthorizeRange, type ActiveAuth } from "@/components/AuthorizeRange";
+import { SpreadDesk } from "@/components/SpreadDesk";
+import { MarginDesk } from "@/components/MarginDesk";
+import { RfqDesk } from "@/components/RfqDesk";
+import { Story } from "@/components/Story";
+import { RiskMonitor } from "@/components/RiskMonitor";
 import { IncomeOneClick } from "@/components/IncomeOneClick";
 import { TxProof } from "@/components/TxProof";
 import { PayoffBuilder, type Leg } from "@/components/PayoffBuilder";
+import { PriceChart } from "@/components/PriceChart";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { VolSurface, type SurfaceTrade } from "@/components/VolSurface";
 import { useUniswapSpot } from "@/hooks/useUniswapSpot";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Eth = { request: (a: unknown) => Promise<unknown> };
 function getEth() {
   return (window as unknown as { ethereum?: Eth }).ethereum ?? null;
 }
+
+// wallet_addEthereumChain payloads for networks a wallet won't have yet.
+const ADDABLE_CHAINS: Record<number, unknown> = {
+  31337: {
+    chainId: "0x7a69",
+    chainName: "Anvil",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: ["http://127.0.0.1:8545"],
+  },
+  5042002: {
+    chainId: "0x4cef52",
+    chainName: "Arc Testnet",
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+    rpcUrls: ["https://rpc.testnet.arc.network"],
+    blockExplorerUrls: ["https://testnet.arcscan.app"],
+  },
+};
 
 async function switchToNetwork(chainId: number) {
   const eth = getEth();
@@ -40,27 +63,31 @@ async function switchToNetwork(chainId: number) {
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
   } catch (err: unknown) {
-    if ((err as { code?: number }).code === 4902 && chainId === 31337) {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          chainId: "0x7a69",
-          chainName: "Anvil",
-          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          rpcUrls: ["http://127.0.0.1:8545"],
-        }],
-      });
+    const addable = ADDABLE_CHAINS[chainId];
+    if ((err as { code?: number }).code === 4902 && addable) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [addable] });
     }
   }
 }
 
 const NETWORKS = [
   { id: 11155111, name: "Sepolia" },
-  { id: 31337,   name: "Anvil" },
+  { id: 5042002,  name: "Arc Testnet" },
+  ...(arcMainnet ? [{ id: arcMainnet.id, name: "Arc" }] : []),
+  { id: 31337,    name: "Anvil" },
 ];
+if (arcMainnet) {
+  ADDABLE_CHAINS[arcMainnet.id] = {
+    chainId: "0x" + arcMainnet.id.toString(16),
+    chainName: "Arc",
+    nativeCurrency: arcMainnet.nativeCurrency,
+    rpcUrls: [arcMainnet.rpcUrls.default.http[0]],
+    ...(arcMainnet.blockExplorers ? { blockExplorerUrls: [arcMainnet.blockExplorers.default.url] } : {}),
+  };
+}
 
 export default function Home() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId: walletChainId } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
@@ -68,10 +95,19 @@ export default function Home() {
   const { data: balance } = useBalance({ address });
   const { switchChain, isPending: switching } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
+  const netName = (id?: number) => (id === undefined ? "—" : NETWORKS.find((n) => n.id === id)?.name ?? chains.find((c) => c.id === id)?.name ?? `chain ${id}`);
+  // Wrong-network guard: the wallet is on a different chain than the app targets,
+  // so writes go to the wallet's chain while reads hit the app's — they hang/fail.
+  const walletMismatch = isConnected && walletChainId !== undefined && walletChainId !== chainId;
+  // One build, every chain: point CONTRACTS at the connected chain's
+  // deployment before any child reads an address (Anvil falls back to env).
+  setActiveChainId(chainId);
   const [mounted, setMounted] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const networkRef = useRef<HTMLDivElement>(null);
+  const walletRef = useRef<HTMLDivElement>(null);
 
   // EIP-6963 surfaces each installed wallet as its own connector. Dedupe by
   // name and drop the generic "Injected" fallback when named wallets exist, so
@@ -92,7 +128,7 @@ export default function Home() {
     setSwitchError(null);
     if (!isConnected) { switchToNetwork(id); return; }
     switchChain(
-      { chainId: id as 1 | 11155111 | 31337 | 1337 },
+      { chainId: id as never }, // one of the configured chains (NETWORKS ⊂ config.chains)
       { onError: (e) => setSwitchError(e.message.split("\n")[0]) },
     );
   };
@@ -100,9 +136,26 @@ export default function Home() {
   const [swapTx, setSwapTx] = useState<string | undefined>();
   const [confirmedLegs, setConfirmedLegs] = useState<Omit<Leg, "id">[]>([]);
   const [proposal, setProposal] = useState<{ legs: Omit<Leg, "id">[]; key: number } | null>(null);
+  const [builderLegs, setBuilderLegs] = useState<Leg[]>([]);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
-  const [activeTab, setActiveTab] = useState<"income" | "lp-auth" | "chain" | "surface" | "lp-position" | "proof">("income");
-  const spot = useUniswapSpot();
+  const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "risk" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
+  // The builder's "Sell spread" button prefills the Spreads form and jumps to it.
+  const [spreadPrefill, setSpreadPrefill] = useState<{ isCall: boolean; k1: number; k2: number; units: number; key: number } | null>(null);
+  // The copilot's prepare_* cards switch to the form they prefill.
+  useEffect(() => {
+    const onGoto = (ev: Event) => setActiveTab((ev as CustomEvent<typeof activeTab>).detail);
+    const onSellSpread = (ev: Event) => {
+      setSpreadPrefill((ev as CustomEvent<{ isCall: boolean; k1: number; k2: number; units: number; key: number }>).detail);
+      setActiveTab("spreads");
+    };
+    window.addEventListener("smile:goto", onGoto);
+    window.addEventListener("smile:sell-spread", onSellSpread);
+    return () => {
+      window.removeEventListener("smile:goto", onGoto);
+      window.removeEventListener("smile:sell-spread", onSellSpread);
+    };
+  }, []);
+  const spot = useUniswapSpot(chainId);
   const spotPrice = spot.status === "loading" ? null : spot.price;
 
   // Notify the Python vol-surface renderer of each confirmed trade so it bumps
@@ -135,7 +188,12 @@ export default function Home() {
   useEffect(() => {
     if (!latestAuth || !latestAuthId) return;
     const [lp, strikeMinWAD, strikeMaxWAD, expiry, , , collateralToken, isCall, active] = latestAuth;
-    if (!active) return;
+    if (!active) {
+      // The latest range was revoked/closed. If the chain is still showing it
+      // as the active range, drop it so its strikes stop looking buyable.
+      setActiveAuth(prev => (prev && prev.authId === latestAuthId ? null : prev));
+      return;
+    }
     setActiveAuth(prev => {
       // Only overwrite if caller hasn't manually set a newer auth
       if (prev && prev.authId >= latestAuthId) return prev;
@@ -153,30 +211,44 @@ export default function Home() {
 
   useEffect(() => {
     if (!networkOpen) return;
-    const close = () => setNetworkOpen(false);
-    window.addEventListener("click", close, { capture: true, once: true });
-    return () => window.removeEventListener("click", close, { capture: true });
+    // Close on a click outside the dropdown's wrapper. Bubble phase with a
+    // contains() check: a capture listener closed the menu before the item's
+    // own onClick ran (mobile taps did nothing), and a plain bubble listener
+    // fires for the very click that opened it (React flushes the effect
+    // during the same dispatch), so the wrapper check is what makes it work.
+    const close = (e: MouseEvent) => {
+      if (!networkRef.current?.contains(e.target as Node)) setNetworkOpen(false);
+    };
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
   }, [networkOpen]);
 
   useEffect(() => {
     if (!walletOpen) return;
-    const close = () => setWalletOpen(false);
-    window.addEventListener("click", close, { capture: true, once: true });
-    return () => window.removeEventListener("click", close, { capture: true });
+    const close = (e: MouseEvent) => {
+      if (!walletRef.current?.contains(e.target as Node)) setWalletOpen(false);
+    };
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
   }, [walletOpen]);
 
   const TABS = [
-    { id: "income",       label: "One-Click Income" },
-    { id: "lp-auth",      label: "LP — Authorize Strike Range" },
-    { id: "chain",        label: "Option Chain + Payoff Builder" },
-    { id: "surface",      label: "Vol Surface · Python" },
-    { id: "lp-position",  label: "LP Position" },
-    { id: "proof",        label: "On-Chain Proof · Anvil" },
+    { id: "story",        label: "Overview" },
+    { id: "chain",        label: "Trade" },
+    { id: "income",       label: "Earn · One-Click" },
+    { id: "lp-auth",      label: "Earn · Write a Range" },
+    { id: "spreads",      label: "Spreads" },
+    { id: "margin",       label: "Margin" },
+    { id: "risk",         label: "Risk Monitor" },
+    { id: "rfq",          label: "RFQ" },
+    { id: "lp-position",  label: "My Positions" },
+    { id: "surface",      label: "Vol Surface" },
+    { id: "proof",        label: "Receipts" },
   ] as const;
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 pl-3 pr-6 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <header className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 pl-3 pr-6 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex flex-col items-start gap-0.5 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/smile-icon.svg`} alt="Smile" height={28} className="block" style={{ height: 28 }} />
@@ -187,7 +259,8 @@ export default function Home() {
 
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html`}
+            // Lands on the Screens page section for the tab in view.
+            href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/help.html#screens/tab-${activeTab}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-semibold text-gray-400 hover:text-white transition-colors"
@@ -197,13 +270,13 @@ export default function Home() {
           {!mounted ? null : (
           <div className="flex items-center gap-3">
             {/* Network dropdown — always visible so you can switch before connecting */}
-            <div className="relative">
+            <div className="relative" ref={networkRef}>
               <button
                 onClick={() => setNetworkOpen((o) => !o)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
               >
                 {switching ? "Switching…" : isConnected
-                  ? (currentChain?.name ?? `Chain ${chainId}`)
+                  ? (NETWORKS.find((n) => n.id === chainId)?.name ?? currentChain?.name ?? `Chain ${chainId}`)
                   : "Network"}
                 <svg className="w-3 h-3 opacity-60" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M6 8L1 3h10z"/>
@@ -238,7 +311,7 @@ export default function Home() {
               <>
                 {balance && (
                   <span className="text-gray-400 text-sm font-mono">
-                    {(Number(balance.value) / 1e18).toFixed(4)} ETH
+                    {(Number(balance.value) / 10 ** balance.decimals).toFixed(4)} {balance.symbol}
                   </span>
                 )}
                 <span className="text-gray-500 text-sm font-mono">
@@ -252,7 +325,7 @@ export default function Home() {
                 </button>
               </>
             ) : (
-              <div className="relative">
+              <div className="relative" ref={walletRef}>
                 <button
                   onClick={() => {
                     // Single wallet → connect directly; multiple → show picker
@@ -267,6 +340,18 @@ export default function Home() {
                 >
                   {isPending ? "Connecting…" : "Connect Wallet"}
                 </button>
+                {/* No injected wallet (a phone browser): a universal link that
+                    opens this page inside MetaMask's own browser, where MetaMask
+                    is injected — no WalletConnect relay or custom-scheme deep
+                    link involved (Firefox on Android blocks the latter). */}
+                {mounted && !walletConnectors.some((c) => c.name !== "WalletConnect") && typeof window !== "undefined" && (
+                  <a
+                    href={`https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`}
+                    className="ml-2 text-xs text-gray-400 hover:text-white underline whitespace-nowrap"
+                  >
+                    Open in MetaMask
+                  </a>
+                )}
                 {walletOpen && walletConnectors.length > 1 && (
                   <div className="absolute right-0 mt-1 w-52 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
                     {walletConnectors.map((c) => (
@@ -295,6 +380,20 @@ export default function Home() {
         )}
         </div>
       </header>
+      {walletMismatch && (
+        <div className="sticky top-0 z-20 bg-amber-950/90 backdrop-blur border-b border-amber-800 text-amber-200 text-xs sm:text-sm px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            ⚠ Your wallet is on <b>{netName(walletChainId)}</b>, but the app is on <b>{netName(chainId)}</b>. Transactions will hang or fail until they match — reads show the app&apos;s chain, writes go to your wallet&apos;s.
+          </span>
+          <button
+            onClick={() => handleSwitch(chainId)}
+            disabled={switching}
+            className="shrink-0 text-xs font-semibold px-3 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-50"
+          >
+            {switching ? "Switching…" : `Switch wallet to ${netName(chainId)}`}
+          </button>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         {/* Spot price bar */}
@@ -311,11 +410,13 @@ export default function Home() {
             <span className={`text-xs font-mono ${
               spot.source === "uniswap-api" ? "text-pink-400" :
               spot.source === "chainlink"   ? "text-blue-400" :
+              spot.source === "mock"        ? "text-amber-400" :
                                               "text-gray-500"
             }`}>
               ●{" "}
               {spot.source === "uniswap-api" ? "Uniswap API" :
                spot.source === "chainlink"   ? "Chainlink"   :
+               spot.source === "mock"        ? "mock feed (the oracle this chain's vaults price from)" :
                                                "static"}
             </span>
           )}
@@ -339,6 +440,12 @@ export default function Home() {
         </div>
 
         {/* Tab panels */}
+        {activeTab === "story" && (
+          <section>
+            <Story spot={spotPrice ?? 3420} onGo={setActiveTab} />
+          </section>
+        )}
+
         {activeTab === "income" && (
           <section>
             <IncomeOneClick spot={spotPrice ?? 3420} onAuthorized={setActiveAuth} />
@@ -351,8 +458,35 @@ export default function Home() {
           </section>
         )}
 
+        {activeTab === "risk" && (
+          <section>
+            <RiskMonitor />
+          </section>
+        )}
+
+        {activeTab === "rfq" && (
+          <div className="space-y-4">
+            <RfqDesk spot={spotPrice ?? 3420} />
+          </div>
+        )}
+
+        {activeTab === "margin" && (
+          <div className="space-y-4">
+            <MarginDesk spot={spotPrice ?? 3420} />
+          </div>
+        )}
+
+        {activeTab === "spreads" && (
+          <section>
+            <SpreadDesk spot={spotPrice ?? 3420} prefill={spreadPrefill} />
+          </section>
+        )}
+
         {activeTab === "chain" && (
           <div className="space-y-8">
+            <section>
+              <PriceChart spot={spotPrice ?? 3420} legs={builderLegs} />
+            </section>
             <section>
               <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
                 Option Chain
@@ -369,7 +503,7 @@ export default function Home() {
               <h2 className="text-gray-400 text-xs uppercase tracking-widest mb-3">
                 Strategy Payoff Builder
               </h2>
-              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} />
+              <PayoffBuilder spot={spotPrice ?? 3420} confirmedLegs={confirmedLegs} proposal={proposal} onLegsChange={setBuilderLegs} />
             </section>
           </div>
         )}
@@ -385,7 +519,7 @@ export default function Home() {
 
         {activeTab === "lp-position" && (
           <section>
-            <LPDashboard activeAuth={activeAuth} />
+            <LPDashboard />
           </section>
         )}
 
@@ -400,6 +534,7 @@ export default function Home() {
         spot={spotPrice ?? 3420}
         chainId={chainId}
         address={address}
+        tab={activeTab}
         onProposeLegs={(legs) => {
           setProposal((p) => ({ legs, key: (p?.key ?? 0) + 1 }));
           setActiveTab("chain");

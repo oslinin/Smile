@@ -2,14 +2,8 @@
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from "wagmi";
 import { useState, useEffect, useRef } from "react";
+import { takePrefill, type RangePrefill } from "@/components/copilot/PrepareCard";
 import { CONTRACTS, AQUA_ABI, SHIP_PARAMS_ABI } from "@/config/wagmi";
-
-export const USDC_SEPOLIA = (
-  process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
-) as `0x${string}`;
-export const WETH_SEPOLIA = (
-  process.env.NEXT_PUBLIC_WETH_ADDRESS ?? "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
-) as `0x${string}`;
 
 const VAULT_ABI = [
   {
@@ -105,7 +99,24 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  // Prefill from the copilot's prepare_lp_range card (stored before the tab
+  // switch, or pushed live while this form is mounted).
+  useEffect(() => {
+    const apply = (p: RangePrefill | null) => {
+      if (!p) return;
+      setIsCall(p.isCall);
+      setStrikeMin(p.strikeMin);
+      setStrikeMax(p.strikeMax);
+      setExpiryOffset(p.expiryDays * 86_400);
+      setMaxCollateral(String(p.maxCollateral));
+    };
+    apply(takePrefill<RangePrefill>("range"));
+    const onPrefill = (ev: Event) => apply((ev as CustomEvent<RangePrefill>).detail);
+    window.addEventListener("smile:prefill-range", onPrefill);
+    return () => window.removeEventListener("smile:prefill-range", onPrefill);
+  }, []);
+
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
 
   // For calls: 1.0 WETH = 1e18. For puts: collateral in USDC = maxCollateral * 1e6
   const maxCollateralBig = isCall
@@ -117,7 +128,7 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   const strikeMaxWAD = BigInt(Math.round(strikeMax * 1e18));
 
   // Read nextAuthId so we know what authId will be assigned
-  const { data: nextAuthId } = useReadContract({
+  const { data: nextAuthId, refetch: refetchNext } = useReadContract({
     address: CONTRACTS.aquaVault as `0x${string}`,
     abi: VAULT_ABI,
     functionName: "nextAuthId",
@@ -166,24 +177,30 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
     }
   }, [approveSuccess]);
 
-  const handleAuthorize = () => {
+  const handleAuthorize = async () => {
     if (authCalledRef.current) return;
     authCalledRef.current = true;
     setStep("authorizing");
-    if (nextAuthId !== undefined) setAuthIdToShip(nextAuthId);
+    const { data: fresh } = await refetchNext();
+    const id = fresh ?? nextAuthId;
+    if (id !== undefined) setAuthIdToShip(id);
     authorize({
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
       functionName: "authorizeRange",
-      args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, USDC_SEPOLIA as `0x${string}`, isCall],
+      args: [strikeMinWAD, strikeMaxWAD, expiry, maxCollateralBig, collateralToken as `0x${string}`, CONTRACTS.usdc as `0x${string}`, isCall],
     });
   };
 
   useEffect(() => {
     if (authSuccess && step === "authorizing") {
       setStep("authorized");
+      // Safety net: if the id wasn't captured at register time, it's the
+      // just-created range (nextAuthId − 1 after the refetch) — without it,
+      // getShipParams never enables and Ship stays on "Loading strategy…".
+      if (authIdToShip === null && nextAuthId !== undefined && nextAuthId > BigInt(0)) setAuthIdToShip(nextAuthId - BigInt(1));
     }
-  }, [authSuccess]);
+  }, [authSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleShip = () => {
     if (shipCalledRef.current || !shipParams || !CONTRACTS.aqua) return;

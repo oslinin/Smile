@@ -3,7 +3,7 @@
 // that lives in the system prompt, full section bodies served on demand via
 // the read_docs tool, and the glossary extracted for direct prompt inclusion.
 // Follows the gen-help.mjs precedent; runs via the predev / prebuild hooks.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,8 +13,17 @@ const outFile = join(here, "..", "lib", "copilot", "knowledge.generated.json");
 
 const DOCS = [
   { source: "README.md", prefix: "readme" },
+  { source: "docs/guide.md", prefix: "guide" },
+  { source: "docs/screens.md", prefix: "screens" },
   { source: "docs/limitations.md", prefix: "limitations" },
   { source: "docs/solutions.md", prefix: "solutions" },
+  { source: "docs/copilot.md", prefix: "copilot" },
+  { source: "docs/sponsors/aqua.md", prefix: "aqua" },
+  { source: "docs/sponsors/chainlink.md", prefix: "chainlink" },
+  { source: "docs/sponsors/uniswap.md", prefix: "uniswap" },
+  { source: "docs/sponsors/thegraph.md", prefix: "thegraph" },
+  { source: "docs/sponsors/arc.md", prefix: "arc" },
+  { source: "docs/sponsors/frontend.md", prefix: "frontend" },
 ];
 
 const slug = (s) =>
@@ -71,9 +80,33 @@ for (const { source, prefix } of DOCS) {
 const glossaryId = toc.find((t) => t.id.endsWith("/glossary"))?.id;
 const glossary = glossaryId ? sections[glossaryId] : "";
 
+// Built-in agent skills (frontend/skills/*.md, SKILL.md convention): YAML
+// frontmatter `name` / `description` / `starter`, then the body the model
+// follows. The id is the file name; enabled bodies are injected into the
+// system prompt as "## Active skills".
+const skillsDir = join(here, "..", "skills");
+const skills = readdirSync(skillsDir)
+  .filter((f) => f.endsWith(".md"))
+  .sort()
+  .map((f) => {
+    const md = readFileSync(join(skillsDir, f), "utf8");
+    const m = md.match(/^---\n([\s\S]*?)\n---\n/);
+    if (!m) throw new Error(`skills/${f}: missing frontmatter`);
+    const meta = Object.fromEntries(
+      m[1].split("\n").map((line) => {
+        const i = line.indexOf(":");
+        return [line.slice(0, i).trim(), line.slice(i + 1).trim().replace(/^["']|["']$/g, "")];
+      })
+    );
+    for (const k of ["name", "description", "starter"]) {
+      if (!meta[k]) throw new Error(`skills/${f}: frontmatter needs ${k}`);
+    }
+    return { id: f.slice(0, -3), ...meta, body: md.slice(m[0].length).trim() };
+  });
+
 mkdirSync(dirname(outFile), { recursive: true });
-const out = { generatedAt: null, toc, sections, glossary };
+const out = { generatedAt: null, toc, sections, glossary, skills };
 writeFileSync(outFile, JSON.stringify(out, null, 1));
 console.log(
-  `gen-knowledge: wrote ${outFile} (${toc.length} sections, ${JSON.stringify(out).length} bytes)`
+  `gen-knowledge: wrote ${outFile} (${toc.length} sections, ${skills.length} skills, ${JSON.stringify(out).length} bytes)`
 );

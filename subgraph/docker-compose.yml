@@ -1,0 +1,65 @@
+# Local graph-node indexing the ./local.sh Anvil chain.
+#
+# Host ports are remapped away from graph-node's defaults because this box
+# already serves the vol-surface renderer on 8000: GraphQL 8100, WS 8101,
+# admin/deploy 8120, index-status 8130, metrics 8140. Postgres is not
+# published. IPFS stays on 5001 so `graph deploy` can reach it.
+#
+# Anvil must be reachable from inside the container: local.sh binds it to
+# 127.0.0.1 AND the docker bridge (172.17.0.1), so `host.docker.internal`
+# (mapped to the host gateway below) resolves to an address Anvil listens on
+# without exposing the dev chain on the VPS's public interface.
+#
+#   sudo docker compose -p smile-graph up -d      (or: pnpm node:up; Compose v2 —
+#   the v1 docker-compose binary fails with a ContainerConfig KeyError on
+#   current Docker engines)
+services:
+  graph-node:
+    # x86-64 hosts only: graphprotocol/graph-node publishes amd64 images
+    # exclusively (checked v0.36-v0.38 and latest, 2026-09-10), and running
+    # them under qemu user-mode emulation on arm64 crashes with a QEMU
+    # SIGSEGV in graph-node's WASM JIT. On an arm64 box, deploy to Graph
+    # Studio instead (README, "Sepolia / Graph Studio").
+    image: graphprotocol/graph-node:v0.38.0
+    ports:
+      - "8100:8000"
+      - "8101:8001"
+      - "8120:8020"
+      - "8130:8030"
+      - "8140:8040"
+    depends_on:
+      - ipfs
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      postgres_host: postgres
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+      ipfs: "ipfs:5001"
+      ethereum: "localhost:http://host.docker.internal:8545"
+      GRAPH_LOG: info
+      # Anvil auto-mines a block per second; poll fast enough to keep up.
+      ETHEREUM_POLLING_INTERVAL: 1000
+      GRAPH_ETHEREUM_GENESIS_BLOCK_NUMBER: 0
+  ipfs:
+    image: ipfs/kubo:v0.29.0
+    ports:
+      - "5001:5001"
+    volumes:
+      - ipfs-data:/data/ipfs
+  postgres:
+    image: postgres:16
+    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements", "-cmax_connections=200"]
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      # graph-node requires C locale + UTF8
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+volumes:
+  ipfs-data:
+  postgres-data:

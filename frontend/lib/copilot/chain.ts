@@ -8,8 +8,16 @@
 // use bounded Promise.all fan-outs instead.
 
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
-import { CONTRACTS } from "@/config/wagmi";
+import { CONTRACTS, contractsFor } from "@/config/wagmi";
 import { ALPHA, SIGMA_GLOBAL } from "@/lib/options";
+import {
+  fetchActiveAuthorizations,
+  fetchAuthorizationsByLp,
+  isLocalChain,
+  subgraphUrlFor,
+  type SubgraphAuthorization,
+} from "@/lib/subgraph";
+import { readPositions, SubgraphRequiredError } from "@/lib/tape";
 
 const WAD = 1e18;
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
@@ -91,7 +99,9 @@ export function getPublicClient(chainId?: number): PublicClient {
   const url =
     chainId === 11155111
       ? process.env.COPILOT_RPC_SEPOLIA || "https://ethereum-sepolia-rpc.publicnode.com"
-      : "http://127.0.0.1:8545"; // Anvil (31337) / Hardhat (1337) local devnet
+      : chainId === 5042002
+        ? process.env.COPILOT_RPC_ARC || "https://rpc.testnet.arc.network" // Circle Arc testnet
+        : "http://127.0.0.1:8545"; // Anvil (31337) / Hardhat (1337) local devnet
   return createPublicClient({ transport: http(url) });
 }
 
@@ -109,14 +119,50 @@ export interface AuthSummary {
   utilizationPct: number;
 }
 
-export async function readAuths(client: PublicClient, opts?: { lp?: string }): Promise<AuthSummary[]> {
-  const vault = CONTRACTS.aquaVault as Address;
+function fromSubgraph(r: SubgraphAuthorization, now: number): AuthSummary {
+  const dec = r.isCall ? 1e18 : 1e6;
+  const max = Number(r.maxCollateral) / dec;
+  const used = Number(r.usedCollateral) / dec;
+  return {
+    authId: Number(r.authId),
+    lp: r.lp,
+    strikeMin: Number(r.strikeMin) / WAD,
+    strikeMax: Number(r.strikeMax) / WAD,
+    expiry: Number(r.expiry),
+    expiresInDays: Math.round(((Number(r.expiry) - now) / 86400) * 10) / 10,
+    isCall: r.isCall,
+    collateralToken: r.collateralToken,
+    maxCollateral: max,
+    usedCollateral: used,
+    utilizationPct: max > 0 ? Math.round((used / max) * 1000) / 10 : 0,
+  };
+}
+
+export async function readAuths(
+  client: PublicClient,
+  opts?: { lp?: string; chainId?: number }
+): Promise<AuthSummary[]> {
+  // Server-side the module-level active chain isn't set by the page; resolve
+  // addresses from the request's chain id.
+  const vault = (opts?.chainId ? contractsFor(opts.chainId) : CONTRACTS).aquaVault as Address;
   if (!vault) return [];
+  const now = Date.now() / 1000;
+
+  // Indexed path: every authorization, one query, no MAX_AUTHS cap
+  // (docs/limitations.md L12a). On a public network this is the only path —
+  // the bounded RPC scan below exists for the local Anvil chain, where no
+  // graph-node runs (plan P1: load-bearing in code, not wording).
+  const url = subgraphUrlFor(opts?.chainId);
+  if (url) {
+    const rows = opts?.lp ? await fetchAuthorizationsByLp(opts.lp, url) : await fetchActiveAuthorizations(url);
+    return rows.filter((r) => r.active).map((r) => fromSubgraph(r, now));
+  }
+  if (!isLocalChain(opts?.chainId)) throw new SubgraphRequiredError(opts?.chainId);
+
   const nextAuthId = Number(
     await client.readContract({ address: vault, abi: VAULT_ABI, functionName: "nextAuthId" })
   );
   const count = Math.min(nextAuthId, MAX_AUTHS);
-  const now = Date.now() / 1000;
 
   const rows = await Promise.all(
     Array.from({ length: count }, (_, i) =>
@@ -166,6 +212,8 @@ export interface LongOptionPosition {
 }
 
 export interface WalletPositions {
+  /** Where the positions came from — the copilot cites it. */
+  source: "subgraph" | "anvil-logs" | "rpc-scan";
   balances: { ethBalance: number; weth?: number; usdc?: number };
   lpAuths: AuthSummary[];
   longOptions: LongOptionPosition[];
@@ -173,14 +221,15 @@ export interface WalletPositions {
 
 export async function readWalletPositions(
   client: PublicClient,
-  address: string
+  address: string,
+  chainId?: number
 ): Promise<WalletPositions> {
-  const vault = CONTRACTS.aquaVault as Address;
+  const vault = (chainId ? contractsFor(chainId) : CONTRACTS).aquaVault as Address;
   const user = address as Address;
 
   const [ethWei, auths] = await Promise.all([
     client.getBalance({ address: user }),
-    readAuths(client),
+    readAuths(client, { chainId }),
   ]);
 
   const balances: WalletPositions["balances"] = { ethBalance: Number(ethWei) / WAD };
@@ -191,10 +240,30 @@ export async function readWalletPositions(
   if (weth) balances.weth = Number(await erc20Balance(weth).catch(() => BigInt(0))) / 1e18;
   if (usdc) balances.usdc = Number(await erc20Balance(usdc).catch(() => BigInt(0))) / 1e6;
 
-  // Long options: scan each active auth's $50 strike grid for deployed series,
-  // then check the user's OptionToken balance (18-dec ERC-20, 1e18 = 1 option).
+  // Long options: the Position entity (subgraph) or the event-rebuilt tape
+  // (Anvil) — one query, no strike-grid scan. The grid scan below is kept
+  // only as the Anvil path's belt-and-braces when the tape read fails.
   const longOptions: LongOptionPosition[] = [];
-  if (vault) {
+  let source: WalletPositions["source"] = "rpc-scan";
+  try {
+    const res = await readPositions(address, { chainId, client, vault });
+    source = res.source;
+    for (const p of res.positions) {
+      longOptions.push({
+        authId: p.authId,
+        strike: p.strike,
+        isCall: p.isCall,
+        expiry: p.expiry,
+        expiresInDays: Math.round(((p.expiry - Date.now() / 1000) / 86400) * 10) / 10,
+        amount: p.balance,
+        optionToken: p.optionToken,
+      });
+    }
+  } catch (err) {
+    if (err instanceof SubgraphRequiredError) throw err;
+    console.warn("copilot: tape read failed, scanning the strike grid:", (err as Error).message);
+  }
+  if (vault && source === "rpc-scan") {
     for (const auth of auths) {
       const strikes: number[] = [];
       const start = Math.ceil(auth.strikeMin / 50) * 50;
@@ -244,7 +313,7 @@ export async function readWalletPositions(
   // LP side: only the auths this wallet wrote.
   const lpAuths = auths.filter((a) => a.lp.toLowerCase() === address.toLowerCase());
 
-  return { balances, lpAuths, longOptions };
+  return { source, balances, lpAuths, longOptions };
 }
 
 /** Live call quote from the on-chain pricing engine (the same math the SwapVM instruction runs). */

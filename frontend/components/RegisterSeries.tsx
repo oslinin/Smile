@@ -1,12 +1,12 @@
 "use client";
 
+import { CONTRACTS } from "@/config/wagmi";
+
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { keccak256, encodePacked } from "viem";
 
 const SETTLEMENT_ADDRESS = "0x96381D3795A73Fc6a982A9B77D51f6d3F392aDCA" as const;
-export const USDC_SEPOLIA = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as const;
-export const WETH_SEPOLIA = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14" as const;
 
 const SETTLEMENT_ABI = [
   {
@@ -57,7 +57,7 @@ export function RegisterSeries({ spot, onRegistered }: RegisterSeriesProps) {
   const [optionToken, setOptionToken] = useState("");
   const [isCall, setIsCall] = useState(true);
 
-  const collateralToken = isCall ? WETH_SEPOLIA : USDC_SEPOLIA;
+  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
   // Call: 1 WETH per contract (18 dec). Put: strike USDC per contract (6 dec).
   const collateralPerUnit = isCall
     ? BigInt("1000000000000000000")
