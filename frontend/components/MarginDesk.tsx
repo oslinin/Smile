@@ -443,7 +443,12 @@ export function MarginDesk({ spot }: { spot: number }) {
                 )}
                 {lpError && <div className="text-red-400 text-[10px]">{lpError.message.split("\n")[0]}</div>}
               </div>
-              {chainStrikes.length > 0 && (
+              {!rActive && (
+                <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-400">
+                  This range is <span className="text-red-400">closed</span> — nothing to buy here. Write a new range on the left (or wait for another LP&apos;s active range).
+                </div>
+              )}
+              {rActive && chainStrikes.length > 0 && (
                 <div className="rounded-lg bg-gray-950 overflow-hidden">
                   <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · click a row to load it · hold to expiry (no early sellback in the margin tier)</div>
                   <table className="w-full text-[11px]">
@@ -477,6 +482,7 @@ export function MarginDesk({ spot }: { spot: number }) {
                   </table>
                 </div>
               )}
+              {rActive && (<>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-gray-400 mb-1 block">Strike (USD)</label><input type="number" value={strike} disabled={buyWorking} onChange={(e) => setStrike(Number(e.target.value))} step="50" className={input} /></div>
                 <div><label className="text-xs text-gray-400 mb-1 block">Units</label><input type="number" value={buyUnits} disabled={buyWorking} onChange={(e) => setBuyUnits(e.target.value)} step="1" min="0" className={input} /></div>
@@ -500,6 +506,7 @@ export function MarginDesk({ spot }: { spot: number }) {
                 className="w-full py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-semibold">
                 {buyStep === "approving" ? (approveUsdcPending ? "Check wallet — approve USDC…" : "Approving…") : buyStep === "buying" ? (buyPending ? "Check wallet — confirm buy…" : "Buying…") : `Buy ${buyUnits || 0} put${Number(buyUnits) === 1 ? "" : "s"} @ $${strike.toLocaleString()}`}
               </button>
+              </>)}
               {seriesToken !== ZERO && (
                 <div className="text-xs text-gray-400 space-y-0.5">
                   <div>OptionToken (shared by every writer of this strike/expiry): <span className="font-mono text-gray-300">{seriesToken.slice(0, 6)}…{seriesToken.slice(-4)}</span></div>
