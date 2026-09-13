@@ -128,7 +128,7 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   const strikeMaxWAD = BigInt(Math.round(strikeMax * 1e18));
 
   // Read nextAuthId so we know what authId will be assigned
-  const { data: nextAuthId } = useReadContract({
+  const { data: nextAuthId, refetch: refetchNext } = useReadContract({
     address: CONTRACTS.aquaVault as `0x${string}`,
     abi: VAULT_ABI,
     functionName: "nextAuthId",
@@ -177,11 +177,13 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
     }
   }, [approveSuccess]);
 
-  const handleAuthorize = () => {
+  const handleAuthorize = async () => {
     if (authCalledRef.current) return;
     authCalledRef.current = true;
     setStep("authorizing");
-    if (nextAuthId !== undefined) setAuthIdToShip(nextAuthId);
+    const { data: fresh } = await refetchNext();
+    const id = fresh ?? nextAuthId;
+    if (id !== undefined) setAuthIdToShip(id);
     authorize({
       address: CONTRACTS.aquaVault as `0x${string}`,
       abi: VAULT_ABI,
@@ -193,8 +195,12 @@ export function AuthorizeRange({ spot, onAuthorized }: AuthorizeRangeProps) {
   useEffect(() => {
     if (authSuccess && step === "authorizing") {
       setStep("authorized");
+      // Safety net: if the id wasn't captured at register time, it's the
+      // just-created range (nextAuthId − 1 after the refetch) — without it,
+      // getShipParams never enables and Ship stays on "Loading strategy…".
+      if (authIdToShip === null && nextAuthId !== undefined && nextAuthId > BigInt(0)) setAuthIdToShip(nextAuthId - BigInt(1));
     }
-  }, [authSuccess]);
+  }, [authSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleShip = () => {
     if (shipCalledRef.current || !shipParams || !CONTRACTS.aqua) return;

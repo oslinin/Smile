@@ -148,7 +148,7 @@ export function RfqDesk({ spot }: { spot: number }) {
   const { isLoading: revokeConfirming } = useWaitForTransactionReceipt({ hash: revokeTx });
   const { isLoading: shipConfirming, isSuccess: shipSuccess } = useWaitForTransactionReceipt({ hash: shipTx });
   useEffect(() => { if (approveSuccess && step === "approving") setStep("approved"); }, [approveSuccess]);
-  useEffect(() => { if (openSuccess && step === "opening") setStep("opened"); }, [openSuccess]);
+  useEffect(() => { if (openSuccess && step === "opening") { setStep("opened"); if (authIdToShip === null && nextAuthId !== undefined && nextAuthId > ZERO_BI) setAuthIdToShip(nextAuthId - ONE_BI); } }, [openSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (shipSuccess && step === "shipping") { setStep("done"); refetchNext(); } }, [shipSuccess]);
 
   const handleStart = async () => {
@@ -158,11 +158,13 @@ export function RfqDesk({ spot }: { spot: number }) {
     setStep("approving");
     approve({ address: collateralToken, abi: ERC20_ABI, functionName: "approve", args: [CONTRACTS.aqua as `0x${string}`, capacityRaw] });
   };
-  const handleOpen = () => {
+  const handleOpen = async () => {
     if (openCalledRef.current) return;
     openCalledRef.current = true;
     setStep("opening");
-    if (nextAuthId !== undefined) setAuthIdToShip(nextAuthId);
+    const { data: fresh } = await refetchNext();
+    const id = fresh ?? nextAuthId;
+    if (id !== undefined) setAuthIdToShip(id);
     open({ address: rfq, abi: RFQ_ABI, functionName: "openRange", args: [BigInt(kMin) * WAD, BigInt(kMax) * WAD, expiry, capacityRaw, isCall] });
   };
   const handleShip = () => {
