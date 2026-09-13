@@ -8,11 +8,28 @@ minutes including setup.
 
 ## Before recording (10 minutes)
 
-0. **Two stacks, pick per segment.** Anvil (`./local.sh`) for the
-   crash-and-liquidation segment (it needs time warps). The live app —
-   https://smile-frontend-omega.vercel.app — for the Sepolia / Arc / copilot
-   segments: copilot, The Graph MCP and the gateway path are already wired
-   there, nothing to configure. (The GitHub Pages build has no copilot.)
+0. **Record on the live app (Vercel), with one exception.**
+   https://smile-frontend-omega.vercel.app carries the copilot, The Graph
+   MCP and the gateway path already wired — nothing to configure — and runs
+   against real Sepolia and Arc, so it satisfies "live data from a Graph
+   provider" and "meaningful use of Arc" on camera. Use it for **every
+   segment except the crash-and-liquidation** (Overview, Trade, Spreads,
+   RFQ, the Sepolia/Graph/Arc proof, the whole copilot demo). Fund MetaMask
+   from the faucets first (Sepolia ETH + test USDC; Arc USDC from
+   faucet.circle.com) so the Spreads/RFQ fills go through live.
+   **The one exception:** the margin liquidation needs Anvil's time warps —
+   flag → 1 h grace → 30 min auction → expiry cannot be fast-forwarded on a
+   public chain. Run that 60-second segment on `./local.sh` and cut it into
+   the Vercel recording (or screen-switch). The Arc segment then *points at*
+   the real recorded margined-put fill on arcscan, so the liquidation
+   mechanism is shown once (Anvil) and its deployment proven once (Arc).
+   (The GitHub Pages build has no copilot — don't record there.)
+
+   Trade-off if you want zero Anvil: skip the live crash and instead narrate
+   the margined-put *fill* on the Arc Margin tab (real, on arcscan) plus the
+   App-Kit-funded backstop, and say the auction/settlement waterfall runs in
+   `script/margin-lifecycle.sh` — weaker, but 100% live. The cut-in is
+   better; the wow moment is the timeline filling.
 
 1. **Stack.** In a terminal at the repo root:
    ```bash
