@@ -548,6 +548,27 @@ sequenceDiagram
     Vault->>Maker: everything not owed to outstanding holders
 ```
 
+### MarginVault lifecycle (opt-in margin + liquidation waterfall)
+
+The six stages of `script/margin-lifecycle.sh`:
+
+```mermaid
+flowchart TD
+    S1["1 · Writer opens a margined put range<br/>authorizes IM capacity, ships to Aqua — nothing locked yet"]
+    S2["2 · Holder buys 1 put, $3,000 strike<br/>only initial margin ~$1,500 pulled JIT through Aqua<br/>(the main vault would cash-secure the full $3,000)"]
+    S3["3 · ETH crashes to $2,000<br/>put is $1,000 in-the-money · maintenance $1,600 > $1,500 locked<br/>keeper flags the position"]
+    S4["4 · One hour grace to add margin<br/>writer does not, so the auction opens"]
+    S5{"5 · Waterfall — who covers the gap?<br/>writer margin, then bidder, then backstop, then insurance"}
+    T["Takeover: a bidder assumes the short,<br/>posts full margin, earns a 1 to 10% bonus<br/>out of the liquidated writer's margin"]
+    B["Absorb: no bidder in 30 min, so the backstop pool<br/>takes the short, drawing only the shortfall<br/>then the insurance fund, then a holder haircut"]
+    S6["6 · Expiry at $2,000<br/>settle off Chainlink, finalize,<br/>holder redeems $1,000 intrinsic in cash"]
+    S1 --> S2 --> S3 --> S4 --> S5
+    S5 -->|a bidder appears| T
+    S5 -->|nobody bids| B
+    T --> S6
+    B --> S6
+```
+
 ---
 
 ## 📍 Deployed Addresses (Sepolia)

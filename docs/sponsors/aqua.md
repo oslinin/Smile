@@ -335,6 +335,25 @@ Settlement is two-step: a per-writer waterfall, then one series finalization tha
 
 `MarginBackstop` is a share-based USDC pool with a 24-hour withdrawal delay; withdrawals cannot drop below the pool's standing requirement and freeze while any expired series is unfinalized. The Anvil lifecycle fills a put locking 1,500 USDC, crashes spot to 2,000, flags, auctions, absorbs drawing only 175 USDC, settles at 2,000, and pays the holder exactly 1,000 USDC of intrinsic.
 
+The six stages the Anvil lifecycle script (`script/margin-lifecycle.sh`) runs:
+
+```mermaid
+flowchart TD
+    S1["1 · Writer opens a margined put range<br/>authorizes IM capacity, ships to Aqua — nothing locked yet"]
+    S2["2 · Holder buys 1 put, $3,000 strike<br/>only initial margin ~$1,500 pulled JIT through Aqua<br/>(the main vault would cash-secure the full $3,000)"]
+    S3["3 · ETH crashes to $2,000<br/>put is $1,000 in-the-money · maintenance $1,600 > $1,500 locked<br/>keeper flags the position"]
+    S4["4 · One hour grace to add margin<br/>writer does not, so the auction opens"]
+    S5{"5 · Waterfall — who covers the gap?<br/>writer margin, then bidder, then backstop, then insurance"}
+    T["Takeover: a bidder assumes the short,<br/>posts full margin, earns a 1 to 10% bonus<br/>out of the liquidated writer's margin"]
+    B["Absorb: no bidder in 30 min, so the backstop pool<br/>takes the short, drawing only the shortfall<br/>then the insurance fund, then a holder haircut"]
+    S6["6 · Expiry at $2,000<br/>settle off Chainlink, finalize,<br/>holder redeems $1,000 intrinsic in cash"]
+    S1 --> S2 --> S3 --> S4 --> S5
+    S5 -->|a bidder appears| T
+    S5 -->|nobody bids| B
+    T --> S6
+    B --> S6
+```
+
 ### RfqVault: a signed price, the same custody
 
 `RfqVault` implements the hybrid request-for-quote (RFQ) tier. The LP ships a range exactly as on tier 1 and then signs EIP-712 typed-data quotes off-chain, with no gas and from any pricing model. A taker submits the quote and signature to `fill`, which checks the range, the size cap, the time-to-live and the single-use nonce, recovers the signer, and only then pulls collateral through the vault's Aqua strategy. The event records the formula price alongside the signed price so the improvement is auditable on-chain.

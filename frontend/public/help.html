@@ -860,6 +860,23 @@ addresses above run).</p>
     Maker-&gt;&gt;Vault: reclaimCollateral(optionToken)
     Vault-&gt;&gt;Maker: everything not owed to outstanding holders
 </code></pre>
+<h3 id="marginvault-lifecycle-opt-in-margin-liquidation-waterfall">MarginVault lifecycle (opt-in margin + liquidation waterfall)</h3>
+<p>The six stages of <code>script/margin-lifecycle.sh</code>:</p>
+<pre><code class="language-mermaid">flowchart TD
+    S1[&quot;1 · Writer opens a margined put range&lt;br/&gt;authorizes IM capacity, ships to Aqua — nothing locked yet&quot;]
+    S2[&quot;2 · Holder buys 1 put, $3,000 strike&lt;br/&gt;only initial margin ~$1,500 pulled JIT through Aqua&lt;br/&gt;(the main vault would cash-secure the full $3,000)&quot;]
+    S3[&quot;3 · ETH crashes to $2,000&lt;br/&gt;put is $1,000 in-the-money · maintenance $1,600 &gt; $1,500 locked&lt;br/&gt;keeper flags the position&quot;]
+    S4[&quot;4 · One hour grace to add margin&lt;br/&gt;writer does not, so the auction opens&quot;]
+    S5{&quot;5 · Waterfall — who covers the gap?&lt;br/&gt;writer margin, then bidder, then backstop, then insurance&quot;}
+    T[&quot;Takeover: a bidder assumes the short,&lt;br/&gt;posts full margin, earns a 1 to 10% bonus&lt;br/&gt;out of the liquidated writer&#39;s margin&quot;]
+    B[&quot;Absorb: no bidder in 30 min, so the backstop pool&lt;br/&gt;takes the short, drawing only the shortfall&lt;br/&gt;then the insurance fund, then a holder haircut&quot;]
+    S6[&quot;6 · Expiry at $2,000&lt;br/&gt;settle off Chainlink, finalize,&lt;br/&gt;holder redeems $1,000 intrinsic in cash&quot;]
+    S1 --&gt; S2 --&gt; S3 --&gt; S4 --&gt; S5
+    S5 --&gt;|a bidder appears| T
+    S5 --&gt;|nobody bids| B
+    T --&gt; S6
+    B --&gt; S6
+</code></pre>
 <hr>
 <h2 id="-deployed-addresses-sepolia">📍 Deployed Addresses (Sepolia)</h2>
 <p>Redeployed 2026-09-10 (EthOnline 2026) — the full current stack, on real
@@ -4053,7 +4070,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 </tbody></table>
 </article>
     </section>
-    <section id="page-aqua" class="page" data-mermaid="false">
+    <section id="page-aqua" class="page" data-mermaid="true">
       <article class="doc"><h1>1inch Aqua and SwapVM in Smile</h1>
 <h2 id="summary">Summary</h2>
 <p>Smile is a non-custodial marketplace for fixed-expiry, cash-settled European options on ETH. Every option sold on Smile is backed by collateral that a liquidity provider (LP) has committed through <strong>1inch Aqua</strong>, a shared-liquidity layer in which a maker&#39;s tokens stay in the maker&#39;s own wallet until the moment a trade actually needs them. Smile&#39;s pricing for covered calls runs inside <strong>1inch SwapVM</strong>, a small on-chain virtual machine that executes a maker&#39;s strategy as a program of opcodes; Smile adds one custom opcode that prices an option.</p>
@@ -4372,6 +4389,22 @@ query <code>smile-sepolia</code> without reading the schema.</p>
         }
 </code></pre>
 <p><code>MarginBackstop</code> is a share-based USDC pool with a 24-hour withdrawal delay; withdrawals cannot drop below the pool&#39;s standing requirement and freeze while any expired series is unfinalized. The Anvil lifecycle fills a put locking 1,500 USDC, crashes spot to 2,000, flags, auctions, absorbs drawing only 175 USDC, settles at 2,000, and pays the holder exactly 1,000 USDC of intrinsic.</p>
+<p>The six stages the Anvil lifecycle script (<code>script/margin-lifecycle.sh</code>) runs:</p>
+<pre><code class="language-mermaid">flowchart TD
+    S1[&quot;1 · Writer opens a margined put range&lt;br/&gt;authorizes IM capacity, ships to Aqua — nothing locked yet&quot;]
+    S2[&quot;2 · Holder buys 1 put, $3,000 strike&lt;br/&gt;only initial margin ~$1,500 pulled JIT through Aqua&lt;br/&gt;(the main vault would cash-secure the full $3,000)&quot;]
+    S3[&quot;3 · ETH crashes to $2,000&lt;br/&gt;put is $1,000 in-the-money · maintenance $1,600 &gt; $1,500 locked&lt;br/&gt;keeper flags the position&quot;]
+    S4[&quot;4 · One hour grace to add margin&lt;br/&gt;writer does not, so the auction opens&quot;]
+    S5{&quot;5 · Waterfall — who covers the gap?&lt;br/&gt;writer margin, then bidder, then backstop, then insurance&quot;}
+    T[&quot;Takeover: a bidder assumes the short,&lt;br/&gt;posts full margin, earns a 1 to 10% bonus&lt;br/&gt;out of the liquidated writer&#39;s margin&quot;]
+    B[&quot;Absorb: no bidder in 30 min, so the backstop pool&lt;br/&gt;takes the short, drawing only the shortfall&lt;br/&gt;then the insurance fund, then a holder haircut&quot;]
+    S6[&quot;6 · Expiry at $2,000&lt;br/&gt;settle off Chainlink, finalize,&lt;br/&gt;holder redeems $1,000 intrinsic in cash&quot;]
+    S1 --&gt; S2 --&gt; S3 --&gt; S4 --&gt; S5
+    S5 --&gt;|a bidder appears| T
+    S5 --&gt;|nobody bids| B
+    T --&gt; S6
+    B --&gt; S6
+</code></pre>
 <h3 id="rfqvault-a-signed-price-the-same-custody">RfqVault: a signed price, the same custody</h3>
 <p><code>RfqVault</code> implements the hybrid request-for-quote (RFQ) tier. The LP ships a range exactly as on tier 1 and then signs EIP-712 typed-data quotes off-chain, with no gas and from any pricing model. A taker submits the quote and signature to <code>fill</code>, which checks the range, the size cap, the time-to-live and the single-use nonce, recovers the signer, and only then pulls collateral through the vault&#39;s Aqua strategy. The event records the formula price alongside the signed price so the improvement is auditable on-chain.</p>
 <p><code>src/periphery/RfqVault.sol</code></p>
