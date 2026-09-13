@@ -24,6 +24,8 @@ import {
 } from "@/lib/copilot/provider";
 import { buildSystemPrompt, type CopilotContext } from "@/lib/copilot/systemPrompt";
 import { buildTools } from "@/lib/copilot/tools";
+import { isTabId } from "@/lib/copilot/tabs";
+import { mergeMcpConfigs, openMcpTools, parseMcpHeader, serverMcpConfigs } from "@/lib/copilot/mcp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -61,7 +63,15 @@ export async function POST(req: Request) {
     spot: typeof context?.spot === "number" && context.spot > 0 ? context.spot : 3420,
     chainId: context?.chainId,
     address: context?.address,
+    tab: isTabId(context?.tab) ? context.tab : undefined,
+    skills: Array.isArray(context?.skills) ? context.skills.filter((s) => typeof s === "string") : undefined,
+    customSkills: Array.isArray(context?.customSkills) ? context.customSkills : undefined,
   };
+
+  // MCP servers (operator env + the user's own list from the header) are
+  // opened per request; their tools go after the built-ins so a built-in
+  // name always wins.
+  const mcp = await openMcpTools(mergeMcpConfigs(serverMcpConfigs(), parseMcpHeader(req)));
 
   const result = streamText({
     model: getModel(override),
@@ -69,8 +79,10 @@ export async function POST(req: Request) {
     // ignoreIncompleteToolCalls: a quiz card the user never answered must not
     // poison the next turn with a dangling tool call.
     messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
-    tools: buildTools(ctx),
+    tools: { ...buildTools(ctx), ...mcp.tools },
     stopWhen: isStepCount(10),
+    onFinish: () => void mcp.close(),
+    onError: () => void mcp.close(),
   });
 
   return createUIMessageStreamResponse({

@@ -17,6 +17,10 @@ import { PythSpotAdapter } from "../src/oracles/PythSpotAdapter.sol";
 import { OptionTokenFactory } from "../src/OptionTokenFactory.sol";
 import { SmileQuoteLens } from "../src/periphery/SmileQuoteLens.sol";
 import { FirmEscrowFactory } from "../src/periphery/FirmEscrow.sol";
+import { SpreadVault } from "../src/periphery/SpreadVault.sol";
+import { MarginVault } from "../src/periphery/MarginVault.sol";
+import { MarginBackstop } from "../src/periphery/MarginBackstop.sol";
+import { RfqVault } from "../src/periphery/RfqVault.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _dec;
@@ -37,12 +41,93 @@ contract Deploy is Script, StdCheats {
     address constant USDC_SEPOLIA = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
     address constant WETH_SEPOLIA = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
 
+    /// @dev S12 SpreadVault: sibling AquaApp with its own settlement (the
+    /// main settlement's registrar is one-time and already the vault).
+    /// Split out of run() to keep that function's stack shallow.
+    function _deploySpread(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address wethAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address dao,
+        address deployer
+    ) internal returns (address) {
+        SpreadVault spread = new SpreadVault(aquaAddr, oracleAddr, hookAddr, deployer, wethAddr, usdcAddr);
+        AquaOptionSettlement spreadSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        spreadSettlement.setRegistrar(address(spread));
+        spread.setSettlement(address(spreadSettlement));
+        spread.setPricingDefaults(50, 25, 0.001e18);
+        spread.setProtocolFee(0.01e9, dao);
+        return address(spread);
+    }
+
+    /// @dev R6 RfqVault: signed-quote tier, own settlement, same Aqua pull.
+    function _deployRfq(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address wethAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address tokenFactory,
+        address dao,
+        address deployer
+    ) internal returns (address) {
+        RfqVault rfq = new RfqVault(aquaAddr, oracleAddr, hookAddr, deployer, tokenFactory, wethAddr, usdcAddr);
+        AquaOptionSettlement rfqSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        rfqSettlement.setRegistrar(address(rfq));
+        rfq.setSettlement(address(rfqSettlement));
+        rfq.setPricingDefaults(50, 25, 0.001e18);
+        rfq.setProtocolFee(0.01e9, dao);
+        return address(rfq);
+    }
+
+    /// @dev S13 MarginVault: opt-in margined puts, own settlement, own
+    /// backstop pool. On Anvil the backstop and insurance are seeded from
+    /// the deployer's mock USDC, otherwise the first fill would hit the
+    /// backstop-coupled naked-notional ceiling at zero.
+    function _deployMargin(
+        address aquaAddr,
+        address oracleAddr,
+        address hookAddr,
+        address usdcAddr,
+        address chainlinkFeed,
+        address tokenFactory,
+        address dao,
+        address deployer,
+        bool seed
+    ) internal returns (address, address, address) {
+        MarginVault mv = new MarginVault(aquaAddr, oracleAddr, hookAddr, deployer, tokenFactory, usdcAddr);
+        AquaOptionSettlement marginSettlement = new AquaOptionSettlement(deployer, deployer, chainlinkFeed);
+        marginSettlement.setRegistrar(address(mv));
+        mv.setSettlement(address(marginSettlement));
+        MarginBackstop backstop = new MarginBackstop(usdcAddr, address(mv));
+        mv.setBackstop(address(backstop));
+        mv.setPricingDefaults(50, 25, 0.001e18);
+        mv.setProtocolFee(0.01e9);
+        mv.setFeeSplit(5000, 3000, dao);
+        mv.setNotionalCeiling(250_000e6);
+        if (seed) {
+            MockERC20(usdcAddr).mint(deployer, 30_000e6);
+            MockERC20(usdcAddr).approve(address(backstop), 25_000e6);
+            backstop.deposit(25_000e6);
+            MockERC20(usdcAddr).approve(address(mv), 5_000e6);
+            mv.fundInsurance(5_000e6);
+        }
+        return (address(mv), address(backstop), address(marginSettlement));
+    }
+
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer    = vm.addr(deployerKey);
         // Second Anvil account — acts as a buyer in manual testing
         address buyer       = vm.envOr("BUYER_ADDRESS", address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8));
         bool    forkMainnet = vm.envOr("FORK_MAINNET", false);
+        // Arc mainnet chain id is not published as of 2026-09-12; it must be
+        // supplied, never guessed (docs/arc-mainnet-checklist.md).
+        uint256 arcMainnetId = vm.envOr("ARC_MAINNET_CHAIN_ID", uint256(0));
 
         address usdcAddr;
         address wethAddr;
@@ -54,6 +139,43 @@ contract Deploy is Script, StdCheats {
             usdcAddr   = USDC_SEPOLIA;
             wethAddr   = WETH_SEPOLIA;
             oracleAddr = ETH_USD_FEED_SEPOLIA;
+        } else if (block.chainid == 5042002) {
+            // ── Arc testnet: Circle's REAL USDC — the chain's native asset,
+            //    6-dec ERC-20 view — for premiums, fees, and put collateral.
+            //    No canonical WETH on Arc and no Chainlink-style ETH/USD feed
+            //    documented there yet (the Arc plan, step X1),
+            //    so the call-side collateral and the spot oracle stay mock. ──
+            vm.startBroadcast(deployerKey);
+            MockERC20 arcWeth = new MockERC20("Wrapped Ether", "WETH", 18);
+            arcWeth.mint(deployer, 100e18);
+            MockV3Aggregator arcOracle = new MockV3Aggregator(8, 3000e8);
+            vm.stopBroadcast();
+            usdcAddr   = 0x3600000000000000000000000000000000000000; // Arc USDC (docs.arc.io contract addresses)
+            wethAddr   = address(arcWeth);
+            oracleAddr = address(arcOracle);
+        } else if (arcMainnetId != 0 && block.chainid == arcMainnetId) {
+            // ── Arc mainnet (public from 2026-09-16): everything from env —
+            //    docs/arc-mainnet-checklist.md. Real USDC (the native asset's
+            //    ERC-20 view, overridable), canonical WETH and a Chainlink
+            //    ETH/USD feed if Arc has them on day one; mocks only when
+            //    ARC_MAINNET_ALLOW_MOCKS=true, never silently. ─────────────
+            usdcAddr   = vm.envOr("ARC_MAINNET_USDC", address(0x3600000000000000000000000000000000000000));
+            wethAddr   = vm.envOr("ARC_MAINNET_WETH", address(0));
+            oracleAddr = vm.envOr("ARC_MAINNET_ETH_USD_FEED", address(0));
+            aquaAddr   = vm.envOr("ARC_MAINNET_AQUA", address(0)); // official 1inch Aqua if deployed there, else ours below
+            bool allowMocks = vm.envOr("ARC_MAINNET_ALLOW_MOCKS", false);
+            require(wethAddr != address(0) || allowMocks, "Arc mainnet: set ARC_MAINNET_WETH or ARC_MAINNET_ALLOW_MOCKS=true");
+            require(oracleAddr != address(0) || allowMocks, "Arc mainnet: set ARC_MAINNET_ETH_USD_FEED or ARC_MAINNET_ALLOW_MOCKS=true");
+            if (wethAddr == address(0) || oracleAddr == address(0)) {
+                vm.startBroadcast(deployerKey);
+                if (wethAddr == address(0)) {
+                    MockERC20 mainnetWeth = new MockERC20("Wrapped Ether", "WETH", 18);
+                    mainnetWeth.mint(deployer, 100e18);
+                    wethAddr = address(mainnetWeth);
+                }
+                if (oracleAddr == address(0)) oracleAddr = address(new MockV3Aggregator(8, 3000e8));
+                vm.stopBroadcast();
+            }
         } else if (forkMainnet) {
             // ── Mainnet fork: real tokens, real Chainlink feed, and the
             //    OFFICIAL production Aqua deployment ─────────────────────────
@@ -163,6 +285,25 @@ contract Deploy is Script, StdCheats {
         uint16 bondBps = uint16(vm.envOr("FIRMNESS_BOND_BPS", uint256(0)));
         if (bondBps > 0) vault.setFirmnessBondBps(bondBps);
 
+        // ── S12 SpreadVault: sibling AquaApp, own settlement ─────────────
+        // On Arc (no ether on the chain) the vault gets no WETH, which makes
+        // call credit spreads cash-settled in USDC (SpreadVault.cashSettledCalls).
+        bool usdcNative = block.chainid == 5042002 || (arcMainnetId != 0 && block.chainid == arcMainnetId);
+        address spreadAddr = _deploySpread(
+            aquaAddr, oracleAddr, address(hook), usdcNative ? address(0) : wethAddr, usdcAddr, chainlinkFeed, dao, deployer
+        );
+
+        // ── S13 MarginVault: opt-in margin tier, own settlement + backstop ─
+        (address marginAddr, address backstopAddr, address marginSettlementAddr) = _deployMargin(
+            aquaAddr, oracleAddr, address(hook), usdcAddr, chainlinkFeed, address(tokenFactory), dao, deployer,
+            block.chainid == 31337 && !forkMainnet // mock USDC only: seed the backstop + insurance
+        );
+
+        // ── R6 RfqVault: signed-quote tier over the formula floor ─────────
+        address rfqAddr = _deployRfq(
+            aquaAddr, oracleAddr, address(hook), wethAddr, usdcAddr, chainlinkFeed, address(tokenFactory), dao, deployer
+        );
+
         vm.stopBroadcast();
 
         // ── Output — grep-friendly for shell parsing ──────────────────────
@@ -177,6 +318,11 @@ contract Deploy is Script, StdCheats {
         console.log("NEXT_PUBLIC_SETTLEMENT=%s",      address(settlement));
         console.log("NEXT_PUBLIC_QUOTE_LENS=%s",      address(lens));
         console.log("NEXT_PUBLIC_FIRM_ESCROW_FACTORY=%s", address(firmFactory));
+        console.log("NEXT_PUBLIC_SPREAD_VAULT=%s",    spreadAddr);
+        console.log("NEXT_PUBLIC_MARGIN_VAULT=%s",    marginAddr);
+        console.log("NEXT_PUBLIC_MARGIN_BACKSTOP=%s", backstopAddr);
+        console.log("NEXT_PUBLIC_MARGIN_SETTLEMENT=%s", marginSettlementAddr);
+        console.log("NEXT_PUBLIC_RFQ_VAULT=%s",       rfqAddr);
         console.log("NEXT_PUBLIC_CHAIN_ID=%s", block.chainid);
     }
 }

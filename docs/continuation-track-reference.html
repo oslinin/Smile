@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smile Continuation Track: Implementation Reference</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+      a { color: #64b5f6; }
+      th { background: #2a2a2a; border-color: #404040; }
+      tr:nth-child(even) { background: #242424; }
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      .container {
+        background: #1e1e1e;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      }
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin-bottom: 20px;
+      color: #666;
+      font-size: 14px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .subtitle { color: #999; }
+    }
+
+    .filters {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    @media (prefers-color-scheme: dark) {
+      .filter-btn {
+        background: #2a2a2a;
+        border-color: #404040;
+        color: #e0e0e0;
+      }
+    }
+    .filter-btn.active {
+      background: #007bff;
+      color: white;
+      border-color: #007bff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #555;
+    }
+    @media (prefers-color-scheme: dark) {
+      th {
+        background: #2a2a2a;
+        border-color: #404040;
+        color: #bbb;
+      }
+    }
+
+    td {
+      border: 1px solid #dee2e6;
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+    @media (prefers-color-scheme: dark) {
+      td { border-color: #404040; }
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+    @media (prefers-color-scheme: dark) {
+      tr:nth-child(even) { background: #242424; }
+    }
+
+    .code {
+      font-family: monospace;
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .code {
+        background: #333;
+        color: #64b5f6;
+      }
+    }
+
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status.not-started {
+      background: #f1f1f1;
+      color: #555;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.not-started {
+        background: #333;
+        color: #bbb;
+      }
+    }
+
+    .status.done {
+      background: #d4edda;
+      color: #155724;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.done {
+        background: #1e4620;
+        color: #4caf50;
+      }
+    }
+
+    .status.gated {
+      background: #fff3cd;
+      color: #856404;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.gated {
+        background: #664400;
+        color: #ffc107;
+      }
+    }
+
+    .status.in-progress {
+      background: #cfe2ff;
+      color: #084298;
+    }
+    @media (prefers-color-scheme: dark) {
+      .status.in-progress {
+        background: #0d3b66;
+        color: #6ea8fe;
+      }
+    }
+
+    .cat {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #666;
+      letter-spacing: 0.5px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .cat { color: #999; }
+    }
+
+    .refs {
+      font-size: 11px;
+      color: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+      .refs { color: #999; }
+    }
+
+    .ref-link {
+      display: inline-block;
+      margin-right: 4px;
+      padding: 1px 4px;
+      background: #e8e8e8;
+      border-radius: 2px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ref-link {
+        background: #333;
+        color: #64b5f6;
+      }
+    }
+    .ref-link:hover {
+      background: #d0d0d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ref-link:hover { background: #444; }
+    }
+
+    .impl {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+      .impl { color: #999; }
+    }
+    .impl-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-right: 4px;
+    }
+
+    .legend {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #dee2e6;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .legend { border-top-color: #404040; }
+    }
+
+    .legend-item {
+      margin-bottom: 8px;
+    }
+
+    .legend-item strong {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Smile Continuation Track: Implementation Reference</h1>
+    <div class="subtitle">
+      Tracks two plans on branch <code class="code">EthOnline2026_continuation_track</code>:
+      Parts A/B from the Aqua plan
+      (two opt-in sibling vaults) and Part C from
+      The Graph plan (a subgraph indexer +
+      Copilot integration, The Graph feature). Continuation Track, Sept 5–13 2026. Execution order, as decided on
+      Sept 10: Part A (SpreadVault) → Part C (subgraph) → Arc (tracked in
+      the Arc plan) → Part B (MarginVault, stretch —
+      cut first if the clock runs out). <strong>Outcome, Sept 10 evening:</strong> A1–A4, B1–B8 and
+      C1–C5 all landed, MarginVault included; the RFQ tier first scoped as the Arc plan's stretch
+      X7 was built too and is tracked here as <strong>A6</strong> — it is a third Aqua app, so it
+      belongs with the 1inch work, not with Arc. Rows flip from "Not started" to "Done" as each
+      task's commit lands; the overview of all three features is in
+      the EthOnline 2026 plan. The main
+      <a href="reference-table.html">Reference Table</a> still lists only implemented/designed
+      protocol items. The MarginVault plan defines a <strong>v1</strong> scope only (puts only, no
+      <code class="code">close()</code>); there is no v2 — calls are mentioned only as a later
+      follow-on, not a scoped phase.
+    </div>
+
+    <div class="filters">
+      <span style="font-weight: 600; font-size: 12px;">Filter by category:</span>
+      <button class="filter-btn active" onclick="filterTable('all')">All</button>
+      <button class="filter-btn" onclick="filterTable('A')">Part A · SpreadVault (A)</button>
+      <button class="filter-btn" onclick="filterTable('B')">Part B · MarginVault (B)</button>
+      <button class="filter-btn" onclick="filterTable('C')">Part C · Subgraph (C)</button>
+      <button class="filter-btn" onclick="filterTable('M')">Milestones (M)</button>
+    </div>
+
+    <table id="refTable">
+      <thead>
+        <tr>
+          <th style="width: 8%">Code</th>
+          <th style="width: 12%">Category</th>
+          <th style="width: 40%">Description</th>
+          <th style="width: 12%">Status</th>
+          <th style="width: 8%">Target</th>
+          <th style="width: 20%">References</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- PART A: SpreadVault -->
+        <tr class="row-A">
+          <td><span class="code">A1</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>SpreadVault scaffold, ranges, own settlement</strong> — the foundation everything else in Part A builds on: a new `AquaApp` (`SpreadVault`) that opens two/three-leg structures (call credit, put credit, iron condor) as its own authorization type, with its own `AquaOptionSettlement` instance so the main vault's settlement is never touched.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/SpreadVault.sol</span> <span class="code">src/periphery/SpreadToken.sol</span> <span class="code">test/SpreadVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>commit <span class="code">2b060d2</span> — a $3,000/$3,200 call credit spread ships exactly 0.0625 WETH to Aqua (the S12 true max loss, not a full WETH), the vault's own balance stays 0 until a real pull, and <span class="code">setSettlement</span> is one-time. Self-hosted AquaApp, same pattern as the main vault's put leg — no SwapVM dispatch (that's the optional call-credit opcode, later).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
+        </tr>
+        <tr class="row-A">
+          <td><span class="code">A2</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>Shared premium library, two-leg quote</strong> — a spread's price is just its long leg's Ask minus its short leg's Bid; this task ports the vault's existing per-unit premium math into a standalone library both legs can call, so a spread quote provably agrees with the main vault's own quote to the wei.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/SmilePremiumLib.sol</span> <span class="code">SpreadVault.quote()</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>the library reproduces <span class="code">vault.putQuote</span> to the wei with the R3 staleness slope and the fee gross-up both live (<span class="code">test_quote_putLegMatchesVaultPutQuote</span>); <span class="code">SpreadVault.quote</span> returns Ask(long leg) − Bid(short leg), the fee grossed up on that net, and the S12 escrow for the size (<span class="code">test_quote_spreadIsAskMinusBid</span>). Call credit and put credit both priced; iron condor still reverts <span class="code">UnsupportedKind</span>. Adds <span class="code">MIN_QUOTE_SIGMA</span> (0.2), inert at the default σ.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A1')">A1</span><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
+        </tr>
+        <tr class="row-A">
+          <td><span class="code">A3</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>buy() pulls exactly max loss, mints one series token</strong> — the actual capital-efficiency payoff of Part A: a call credit spread (short K1, long K2) currently would lock collateral as if K1 were naked; this task makes it pull only the structure's true worst case, and mints one ERC-20 series token for the combined position instead of two.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">SpreadVault.buy()</span> <span class="code">SpreadVault.execPull()</span> <span class="code">src/periphery/SpreadToken.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>a 3000/3200 call credit spread pulls <strong>0.0625 WETH</strong> from the writer, not the 1 WETH the main vault locks for a naked short leg (<span class="code">test_buy_callCreditPullsTrueMaxLossNotFullWeth</span>); a 3000/3200 put credit spread pulls <strong>200 USDC, not 3,200</strong> (<span class="code">test_buy_putCreditPulls200not3200</span>). Premium + fee in, JIT pull of exactly the netted escrow through this vault's own Aqua strategy under the official reentrancy guard, one SpreadToken series per structure registered with its own settlement. Reverts loudly on expiry, slippage, or exhausted Aqua capacity — no firmness bond, so never a silent <span class="code">(0, 0)</span>.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A2')">A2</span><span class="ref-link" onclick="scrollTo('M1')">M1</span></span></td>
+        </tr>
+        <tr class="row-A">
+          <td><span class="code">A4</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>Settle, redeem, reclaim</strong> — wires the spread through to expiry: one settlement price, one floored payout formula per the netting table (credit spreads, condors), holder redemption, and the LP reclaiming whatever's left. Also the deploy-script wiring so `local.sh` and the frontend pick up the new vault's address.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">SpreadVault.netPayout / redeem / reclaim</span> <span class="code">test/SpreadSettlement.t.sol</span> (deploy wiring landed with A3's UI commit)</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>one settlement price, one floored payout expression per structure — call credit <span class="code">units·(clamp(S,K1,K2)−K1)/S</span> WETH, put credit <span class="code">units·(K2−clamp(S,K1,K2))/1e30</span> USDC — whose maximum over S is exactly the escrow, so the cap never binds. 10 tests: pin at K2 pays the holder exactly the escrow with zero shortfall; <span class="code">holder payout + writer reclaim == escrow</span> to the wei in both orders; a 256-run fuzz across OTM / between / far-ITM matches the formula; OTM burns for zero and the writer reclaims everything; the put-credit twin pays the full 200 USDC below K1. Settlement reuses <span class="code">AquaOptionSettlement</span> unchanged (the spread's own instance, registrar = SpreadVault). <span class="code">script/spread-lifecycle.sh</span> replays the whole thing as real transactions on the <span class="code">./local.sh</span> Anvil — open → ship → buy → expiry → oracle round → permissionless <span class="code">settleWithChainlinkRound</span> → redeem → reclaim — and checks conservation: at $3,100 the holder received 32,258,064,516,129,032 wei and the writer reclaimed 30,241,935,483,870,968 wei, summing to the 62,500,000,000,000,000 wei escrow exactly, vault left holding 0.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 6</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A3')">A3</span><span class="ref-link" onclick="scrollTo('M2')">M2</span></span></td>
+        </tr>
+        <tr class="row-A">
+          <td><span class="code">A5</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>Long OptionToken as collateral (debit spreads, optional)</strong> — the dominance result the plan's design work already proved: if the writer already owns the long leg as an actual OptionToken, a debit spread needs <em>zero</em> extra collateral beyond that token. Optional/cut-first if time runs short — everything else in Part A works without it.
+            <div class="impl"><span class="impl-label">Planned files</span> modifies <span class="code">SpreadVault.sol</span></div>
+          </td>
+          <td><span class="status not-started">Not started</span></td>
+          <td>Day 6</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A4')">A4</span><span class="ref-link" onclick="scrollTo('M2')">M2</span></span></td>
+        </tr>
+
+        <!-- PART B: MarginVault -->
+        <!-- A6: RFQ tier (1inch) — first scoped as the Arc plan's stretch X7, but it is an Aqua app on any chain -->
+        <tr class="row-A">
+          <td><span class="code">A6</span></td>
+          <td><span class="cat">Part A</span></td>
+          <td>
+            <strong>Hybrid RFQ tier (R6) — Derive-inspired signed quotes</strong> — the limitations doc's Phase-3 recommendation (first scoped as the Arc plan's stretch item X7, but nothing in it is Arc-specific — it is a third Aqua app, so it lives with the 1inch work): tier 1 stays the formula surface (permissionless, always live, the fallback); tier 2 lets an LP sign EIP-712 quotes off-chain from any pricing model and a taker fill them, settling through the identical Aqua JIT pull. Tradfi's "NBBO + price improvement".
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/RfqVault.sol</span> <span class="code">test/RfqVault.t.sol</span> <span class="code">frontend/components/RfqDesk.tsx</span> <span class="code">script/rfq-lifecycle.sh</span>; <span class="code">script/Deploy.s.sol</span> (<span class="code">_deployRfq</span>), <span class="code">local.sh</span>, <span class="code">wagmi.ts</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Built as a sibling AquaApp, not a SwapVM instruction (nonces need state; the custody model, not the pricing path, is what Aqua contributes). <span class="code">openRange</span> ships calls (WETH) or puts (USDC), fully collateralized; the LP signs <span class="code">Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</span> under domain "Smile RFQ" v1; <span class="code">fill</span> recovers the signer, checks ttl / size / nonce, takes premium + 1 % fee, pulls collateral JIT under <span class="code">nonReentrantStrategy</span>, mints one OptionToken per (range, strike), registers with its own settlement; <span class="code">formulaQuote</span> exposes the tier-1 Ask and <span class="code">QuoteFilled</span> emits both prices. Single-use nonces, <span class="code">cancelQuote</span>, no <span class="code">close()</span>. 8 tests (wrong signer / oversize / off-range / cancelled / expired / tampered all revert; ITM call settles with conservation). The RFQ tab signs with <span class="code">useSignTypedData</span> (no gas) and shows quote vs formula; <span class="code">script/rfq-lifecycle.sh</span> on Anvil: formula Ask 691.93 USDC, signed quote 685.01, taker paid 691.93 incl. fee vs 698.92 on tier 1, 1 WETH pulled JIT at the fill, replay rejected <span class="code">QuoteUsed</span>. Runtime 12,714 bytes; 200 Foundry tests. On Arc testnet (<span class="code">0x269E7008…1879</span>) with a real-USDC signed fill — quote 0.688860 vs formula 0.695819, 0.001 WETH pulled JIT (see the Arc deployment notes); not on Sepolia.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Stretch · built</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A3')">A3</span><span class="ref-link" onclick="scrollTo('B3')">B3</span></span></td>
+        </tr>
+
+        <tr class="row-B">
+          <td><span class="code">B1</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>MarginVault scaffold, ranges, own settlement, size gate</strong> — the v1-scoped (puts-only, USDC-only) margin tier's foundation: its own `AquaApp`, its own settlement instance, and a timelocked vol-buffer schedule (margin requirements can only ratchet up gradually, never jump).
+            <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/MarginVault.sol</span> <span class="code">src/periphery/MarginBackstop.sol</span> (stub) <span class="code">test/MarginVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">MarginVault is AquaApp, Ownable, ReentrancyGuard</span>: <span class="code">openRange(strikeMin, strikeMax, expiry, maxCapacity, lpMarginBps, autoTopUp, sigmaMulBps)</span> ships to Aqua under this vault's own strategy hash (asserted against <span class="code">aqua.rawBalances</span>); <span class="code">setSettlement</span> / <span class="code">setBackstop</span> are one-time; <span class="code">scheduleVolBuffer(im, mm)</span> only tightens — IM raise applies at once, MM raise lands after 24 h via <span class="code">applyVolBuffer()</span>, at most +1000 bps a step, MM ≤ IM. <span class="code">MarginBackstop</span> stub: <span class="code">totalAssets()</span> and a vault-only <span class="code">draw()</span>. Runtime 4,905 bytes.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 9</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B2</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Worst-of mark and margin rule</strong> — what "properly margined" actually means here: the mark price is the <em>lowest</em> Chainlink answer in the last hour (deliberately conservative, and it never reads the vault's own σ hook — margin can't be gamed by moving vol). Initial/maintenance margin are 50%/30% of that mark, capped at the strike.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.markSpot / isMarkStale / marginRequirement</span> <span class="code">test/MarginVault.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">markSpot()</span> walks <span class="code">getRoundData</span> back from the latest round until the first round updated before the hour (bounded at 64 rounds, never reverts on staleness); <span class="code">isMarkStale()</span> past 90 min. <span class="code">marginRequirement(K, u, S, initial) = min(K·u, intrinsic + u·S·buffer)</span> in USDC — K 3000, 1 unit: S 3000 → IM 1500 / MM 900; S 2000 → 2000 / 1600; S 0 → both capped at 3000. Tests: 3000 → 2700 → 2950 in an hour marks 2700; a 2500 two hours ago is ignored.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 9</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B1')">B1</span><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B3</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>buy() locks only initial margin</strong> — the actual capital-efficiency payoff of Part B: an ATM put currently locks the full strike value; this task makes it lock only the 50% IM computed by B2, with a naked-notional ceiling tied to the backstop pool's size so total exposure can never outrun what could actually absorb a default.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.quote / initialMargin / effectiveCeiling / buy / execPull</span> <span class="code">test/MarginVault.t.sol</span> <span class="code">test/GasProbe.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">buy(authId, strike, units, maxPremium)</span>: the taker pays the same <span class="code">SmilePremiumLib</span> Ask the main vault charges; the writer locks only IM — free balance first, the rest pulled JIT via <span class="code">execPull</span> under <span class="code">nonReentrantStrategy</span>. <strong>An ATM 3000 put locks 1500 USDC, not 3000</strong> (asserted on the LP wallet). One OptionToken per (strike, expiry) shared by every writer; series registered with the vault's own settlement. Ceiling at fill: <span class="code">nakedNotional + (K·u − IM) ≤ min(notionalCeiling, 10 × backstop.totalAssets())</span> — shrinking the backstop stops new fills. Fee split 50 % insurance / 30 % backstop / 20 % DAO (<span class="code">claim()</span>); <span class="code">fundInsurance</span> open. Reverts on a stale mark or under 3 h to expiry. Repeat fill with a 12-round mark walk: 119,698 gas. Not done: per-range <span class="code">maxBlockNotional</span> (the global ceiling bounds exposure instead). Runtime 13,257 bytes.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 9</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B2')">B2</span><span class="ref-link" onclick="scrollTo('M3')">M3</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B4</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Margin calls, covered immunity, withdrawals</strong> — what happens when a writer's margin falls below maintenance: free balance gets swept first, then an opt-in Aqua credit line attempts a bounded auto top-up, and only if that's not enough does the position actually flag for liquidation (with a 1-hour grace period). A writer who's fully hedged (holds the matching long position) is immune to being flagged at all.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.deposit / withdraw / health / isCovered / flag / topUp / startAuction / coverShort</span> <span class="code">test/MarginCall.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">flag(sid, writer)</span>: under MM at the worst-of-hour mark, the vault first cures toward IM on the writer's behalf — free balance, then (range opted in) a pull from the same Aqua allowance the fill used, bounded by shipped / wallet / approval — and flags only if still under MM. Test: a crash to $2,000 auto-tops the ATM put from 1,500 to 2,000 USDC out of the writer's own shipped allowance, no flag. <span class="code">topUp</span> (anyone) clears the flag at IM, excess past full cover lands in free; <span class="code">startAuction</span> after the 1 h grace judges health on rounds posted after the flag only (a dip that recovered unflags instead); covered puts are <span class="code">Covered()</span>-immune; <span class="code">withdraw</span> refused while flagged / in debt / stale and never below IM across every open position; <span class="code">coverShort</span> burns own longs and frees the margin pro rata. 11 tests.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 11</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B3')">B3</span><span class="ref-link" onclick="scrollTo('M4')">M4</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B5</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Writer-takeover auction and backstop pool</strong> — what happens after the grace period expires with no cure: a 30-minute auction lets another writer take over the flagged position (rising bonus, 1%→10% of notional) for a discount; if nobody bids, the pre-funded backstop pool absorbs it instead. Either way the holder's option token is untouched — only who's on the hook for it changes.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.takeoverBonusBps / takeOver / absorb / hasExpiredUnfinalized</span> <span class="code">src/periphery/MarginBackstop.sol</span> <span class="code">test/MarginAuction.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">takeOver(sid, writer)</span>: bonus 1 % → 10 % of notional over the 30 min window; <span class="code">min(locked, MM + bonus + penalty)</span> travels with the position — bonus to the bidder, 2 % penalty to insurance (0.25 % to the flagger), the rest seeds the bidder who posts only <span class="code">IM − seed</span>; the holder's OptionToken is untouched; whatever exceeded the liability is the old writer's again as free balance; no self-takeover. Worked numbers at a $2,000 mark: 1,500 moves, bidder posts 725, holds 2,000. <span class="code">absorb</span> after the window: the backstop adopts the position and draws only <span class="code">MM − seed</span> (175 USDC in the test), keeper tip 0.5 %. <span class="code">MarginBackstop</span>: share-based deposit with dead shares, 24 h <span class="code">requestWithdraw</span>, <span class="code">withdraw</span> floored at <span class="code">max(poolRequirement, nakedNotional / 10)</span> and frozen while any expired series is unfinalized, vault-only <span class="code">draw</span>, epoch roll voiding every share on a full draw. Whole-unit takeover only (partial-unit is on the cut list). 7 tests, plus a book-balance check: vault USDC == Σ locked + free + insurance + claimable.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 11</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B4')">B4</span><span class="ref-link" onclick="scrollTo('M4')">M4</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B6</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Settlement waterfall, haircut, ratchet</strong> — the actual solvency guarantee gets proven here: at expiry, each writer settles (locked margin → free balance → penalty, in that order), the series finalizes by drawing backstop then insurance for any remaining shortfall, and only as an explicit last resort do holders take a haircut (paid less than owed). A test in this task fuzzes a 40% crash and asserts holders stay whole.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">MarginVault.intrinsicPerUnit / settlePosition / finalizeSeries / redeem</span> <span class="code">test/MarginSettlement.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">settlePosition</span>: locked, then free; what is still short is bad debt plus the 2 % penalty, junior to the holder; a backstop-held position draws the rest from the pool; a late settler (after finalization) repays the backstop first, then insurance, then keeps the rest. <span class="code">finalizeSeries</span> once every writer settled or 6 h after expiry: remaining shortfall from the backstop, then insurance, only then a haircut — <span class="code">HolderHaircut</span> emitted, IM buffer +500 bps. <span class="code">redeem</span> needs finalization. <strong>Gap-40 holds</strong> after lowering the backstop multiple 10 → 7 (a writer exactly at MM gapping 40 % leaves a 0.1·S shortfall against 0.7·S naked): holders get 1,714.285714 USDC to the unit with insurance untouched. Conservation: two writers, crash to $1,200, every USDC booked, total supply unchanged. 5 tests.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 13</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B5')">B5</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B7</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Invariants</strong> — no new production code; a pure test task asserting margin math is completely independent of σ (bump the demand-feedback hook 400 times, margin numbers must stay bit-identical) and that the main vault's bytecode is provably untouched by this whole plan (`git diff main -- AquaCollateralVault.sol` empty).
+            <div class="impl"><span class="impl-label">Files</span><span class="code">test/MarginInvariants.t.sol</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>400 <span class="code">bumpSigma</span> calls through the hook, exactly as fills do: the premium rises, <span class="code">marginRequirement</span> / <span class="code">initialMargin</span> / <span class="code">health</span> / <span class="code">markSpot</span> stay bit-identical. Bytecode guards: <span class="code">AquaCollateralVault</span> runtime still 24,364 bytes; <span class="code">MarginVault</span> 23,463 and <span class="code">MarginBackstop</span> 3,148 — under EIP-170 without the auctioneer split. No production code changed.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 13</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B6')">B6</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
+        </tr>
+        <tr class="row-B">
+          <td><span class="code">B8</span></td>
+          <td><span class="cat">Part B</span></td>
+          <td>
+            <strong>Deploy, keeper, demo, docs</strong> — makes the whole thing runnable: deploy wiring (seeded backstop + insurance on Anvil so the first buy doesn't immediately hit the notional ceiling), a keeper script that polls positions and drives the margin-call → auction → settle → finalize lifecycle, and an end-to-end demo test that walks and logs the entire flow.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">script/Deploy.s.sol</span> (<span class="code">_deployMargin</span>) <span class="code">local.sh</span> <span class="code">frontend/config/wagmi.ts</span> <span class="code">frontend/components/MarginDesk.tsx</span> <span class="code">script/margin-lifecycle.sh</span> <span class="code">keeper/margin.mjs</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Deploy wires <span class="code">MarginVault</span> + its own <span class="code">AquaOptionSettlement</span> + <span class="code">MarginBackstop</span>, 1 % fee split 50/30/20, 250k ceiling; on a blank Anvil the backstop is seeded with 25k and insurance with 5k so the first fill clears the ceiling (175k). <span class="code">./local.sh</span> prints <span class="code">NEXT_PUBLIC_MARGIN_VAULT / _BACKSTOP / _SETTLEMENT</span>. The app gets a <strong>Margin · Opt-in Puts (S13)</strong> tab: write a margined range, buy a put with "writer locks IM vs the 3,000 the main vault would" shown live, and a health card (mark, locked vs MM/IM, state, naked notional vs ceiling, backstop and insurance). <span class="code">script/margin-lifecycle.sh</span> replays fill → crash → flag → grace → auction → absorb (or <span class="code">MODE=takeover</span>) → expiry → permissionless settle → settlePosition → finalize → redeem as real cast transactions: holder receives exactly 1,000 USDC of intrinsic, backstop drew 175. <span class="code">keeper/margin.mjs</span> (viem) discovers every series from events and drives flag / startAuction / absorb / settle / finalize permissionlessly. Cut per the plan: <span class="code">test/MarginDemo.t.sol</span> (the shell script is the demo), <span class="code">.env.example</span> (never had a SpreadVault line either).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 13</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B7')">B7</span><span class="ref-link" onclick="scrollTo('M5')">M5</span></span></td>
+        </tr>
+
+        <!-- PART C: Subgraph -->
+        <tr class="row-C">
+          <td><span class="code">C1</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Local subgraph scaffold — Authorization entity</strong> — the foundation of the indexer: a schema + AssemblyScript mappings turning `RangeAuthorized`/`AuthorizationRevoked` events into a queryable `Authorization` entity, replacing the capped, brute-force `eth_getLogs`/RPC scans currently backing `LPDashboard.tsx` and the copilot's `chain.ts`.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/subgraph.yaml</span> <span class="code">subgraph/schema.graphql</span> <span class="code">subgraph/src/vault.ts</span> <span class="code">subgraph/tests/vault.test.ts</span> the subgraph notes</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">Authorization</span> (keyed by authId, LP indexed) and <span class="code">Fill</span> (one per <span class="code">OptionBought</span>) entities; handlers for <span class="code">RangeAuthorized</span>, <span class="code">AuthorizationRevoked</span>, <span class="code">OptionBought</span>, <span class="code">OptionClosed</span>, <span class="code">CollateralReleased</span>, <span class="code">PullFailed</span>. <span class="code">graph codegen</span> + <span class="code">graph build</span> clean. Four matchstick tests written, including "an older authorization stays visible after a newer one appears" — the LPDashboard bug this replaces; matchstick has no arm64 binary, so they run via <span class="code">graph test -d</span> (Docker + qemu) or on x86 CI. Package joined the pnpm workspace.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C2</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Keep usedCollateral in sync via bound contract calls</strong> — rather than reimplementing the vault's JIT-pull collateral accounting in AssemblyScript (drift risk), the mappings for `OptionBought`/`CollateralReleased`/`PullFailed` each make one bound `authorizations(authId)` contract call and overwrite `usedCollateral`/`active` directly from the live value.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/src/vault.ts</span> (<span class="code">refreshFromChain</span>, <span class="code">refreshBySeries</span>)</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>one bound <span class="code">authorizations(authId)</span> call per fill / sellback / reclaim / pull failure overwrites <span class="code">maxCollateral</span>, <span class="code">usedCollateral</span>, <span class="code">collateralToken</span>, <span class="code">active</span> from chain state; sellbacks and reclaims resolve the series token back to its authorization through the vault's <span class="code">seriesOf(token)</span> getter. The matchstick fill test asserts <span class="code">usedCollateral</span> comes from the mocked call, not from arithmetic in the mapping.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C1')">C1</span><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C3</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Local graph-node against Anvil, docker-compose</strong> — a 3-container stack (graph-node, IPFS, Postgres) pointed at this VPS's own Anvil RPC, for fast dev iteration before the real Sepolia deploy. Verified by querying it directly and matching a `cast call` on the same authorization.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/docker-compose.yml</span> the subgraph notes <span class="code">local.sh</span> (Anvil now also binds the docker bridge)</div>
+            <div class="impl"><span class="impl-label">Blocked on this host, 2026-09-10</span>the compose stack (graph-node, IPFS, Postgres; ports remapped off 8000) and the Anvil bridge binding are in place, but <span class="code">graphprotocol/graph-node</span> ships amd64 images only (checked v0.36–v0.38 and latest) and crashes under qemu emulation on this arm64 VPS. Runs as written on an x86-64 host; on arm64 the path that counts is Graph Studio (C5), which is the one that matters for the feature anyway.</div>
+          </td>
+          <td><span class="status gated">Blocked: arm64 host</span></td>
+          <td>Day 2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C2')">C2</span><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M6')">M6</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C4</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Wire the frontend to the subgraph (Sepolia + local dual-mode)</strong> — `LPDashboard.tsx` and the copilot's `readAuths` query the subgraph via GraphQL when `NEXT_PUBLIC_SUBGRAPH_URL` is set; the existing `eth_getLogs`/RPC-scan paths stay as the fallback for local Anvil dev with no indexer running — never deleted, per the plan's ground rules.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">frontend/lib/subgraph.ts</span>; <span class="code">LPDashboard.tsx</span>, <span class="code">lib/copilot/chain.ts</span>, <span class="code">.env.example</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10 (code)</span><span class="code">lib/subgraph.ts</span> is a thin GraphQL fetch client with typed <span class="code">Authorization</span> queries (by LP, all active). <span class="code">LPDashboard</span> and the copilot's <span class="code">readAuths</span> take the indexed path when <span class="code">NEXT_PUBLIC_SUBGRAPH_URL</span> is set — no <span class="code">MAX_AUTHS</span> cap on that path — and fall back to the existing getLogs / RPC scan on any error or when unset. Type-checks clean; exercised for real once the Studio endpoint (C5) exists, since no local graph-node runs on this host (C3).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C3')">C3</span><span class="ref-link" onclick="scrollTo('M7')">M7</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C5</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Deploy contracts + subgraph to Sepolia (the live deployment)</strong> — no Sepolia deployment exists yet for this repo at all (only a local Anvil broadcast history), so this task is a real first deploy, not a re-point. The one task in the whole plan marked "cannot be cut" — an Anvil-only subgraph doesn't demonstrate the feature.
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/networks.json</span>; runs <span class="code">forge script script/Deploy.s.sol --rpc-url sepolia --broadcast</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><strong>Contracts:</strong> the full current stack (main vault, SpreadVault, MarginVault + backstop, router, hook, lens, three settlements, fresh official Aqua) deployed to Sepolia with real Circle USDC, canonical WETH and the Chainlink ETH/USD feed — 31 txs, 28.0M gas at 1.4 gwei ≈ 0.034 ETH, addresses and hashes in the Sepolia deployment notes; vault <span class="code">0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D</span>. Then a real <span class="code">authorizeRange</span> (calls $2,300–$2,800 around the live $2,462 spot) + <span class="code">Aqua.ship</span>. <strong>Subgraph:</strong> <span class="code">smile-sepolia</span> on <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Graph Studio</a> — v0.0.1 proved the pipeline against the old vault (no data), <strong>v0.0.2</strong> indexes the new vault from block 11,677,088 and returned Authorization #0 within a minute of the ship: <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span>, no indexing errors. <span class="code">subgraph/networks.json</span> carries the per-network address + startBlock. Then a real <span class="code">buy</span> of 0.01 units of the $2,500 call (<span class="code">0x505285ff…</span>, 0.01 WETH pulled JIT from the LP wallet through Aqua, premium 5.636405 USDC): the subgraph returned the <span class="code">Fill</span> and the refreshed authorization (<span class="code">usedCollateral</span> 0.01 WETH, <span class="code">fillCount</span> 1) one block later.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C4')">C4</span><span class="ref-link" onclick="scrollTo('M8')">M8</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C6</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Long-option positions via dynamic data sources (stretch)</strong> — indexes each lazily-deployed `OptionToken`'s own Transfer events (a subgraph "data source template," instantiated the first time `OptionBought` reveals a new token address), replacing `chain.ts`'s `MAX_STRIKES_PER_AUTH`-bounded strike-grid scan entirely.
+            <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/src/optionToken.ts</span>; modifies <span class="code">subgraph/subgraph.yaml</span>, <span class="code">subgraph/schema.graphql</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-11, differently</span>a <span class="code">Position</span> entity (holder, instrument, balance) is kept from the vault's own events — <span class="code">OptionBought</span> adds, sellback and redemption subtract — so no data-source template and no per-token <span class="code">Transfer</span> indexing was needed. Consequence: an OptionToken transferred wallet-to-wallet is not seen by the subgraph (noted in the mapping). <span class="code">subgraph/src/vault.ts</span>, <span class="code">lib/subgraph.ts</span> <span class="code">positions(where: holder)</span>.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M9')">M9</span></span></td>
+        </tr>
+        <tr class="row-C">
+          <td><span class="code">C7</span></td>
+          <td><span class="cat">Part C</span></td>
+          <td>
+            <strong>Subgraph MCP for local dev (stretch, AI-tooling half of the feature)</strong> — documents pointing Claude Code/Cursor/ChatGPT at The Graph's own hosted Subgraph MCP server so a contributor can query `smile-sepolia` in natural language during development. Opt-in tooling doc, not app code — the feature's other path alongside C1-C5's "AI agent using live chain data."
+            <div class="impl"><span class="impl-label">Planned files</span>the subgraph notes (MCP section); possibly repo-root <span class="code">.mcp.json</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-12</span>repo-root <span class="code">.mcp.json.example</span> (The Graph's hosted Subgraph MCP with a Gateway key header), the subgraph notes' MCP section, and the app copilot's own "Add The Graph Subgraph MCP" preset (<span class="code">lib/copilot/mcp.ts</span>); the Overview's Continuation Track table and The Graph page describe the setup.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M10')">M10</span></span></td>
+        </tr>
+
+        <!-- MILESTONES -->
+        <tr class="row-M">
+          <td><span class="code">M1</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td>
+            <strong>A call credit spread pulls 200 USDC, not 3200</strong> — first proof the netting math actually works end to end, on Anvil.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>real broadcast transactions on the local Anvil via <span class="code">script/SpreadDemo.s.sol</span>: a 3000/3200 call credit spread opened and shipped, one unit bought, <strong>0.0625 WETH pulled from the writer</strong> where the main vault would lock 1 WETH; taker paid 45.50 USDC; SpreadToken minted. The put-credit twin (200 USDC, not 3,200) is asserted in the test suite. A "Spreads · Defined Risk (S12)" tab in the app writes and buys spreads with the netted-vs-naked escrow shown live.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A1')">A1</span><span class="ref-link" onclick="scrollTo('A2')">A2</span><span class="ref-link" onclick="scrollTo('A3')">A3</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M2</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Pin settlement conserves escrow to the wei; Deploy prints the SpreadVault address</strong> — Part A is demoable end to end on a fresh <code class="code">./local.sh</code>.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_redeem_pinAtK2_holderGetsExactlyTheEscrow</span> + the fuzz; <span class="code">./local.sh</span> prints <span class="code">NEXT_PUBLIC_SPREAD_VAULT</span>; <span class="code">script/spread-lifecycle.sh</span> checks payout + reclaim == escrow on real Anvil transactions. A5 (debit-spread collateral) was optional and not built.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 6</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('A4')">A4</span><span class="ref-link" onclick="scrollTo('A5')">A5</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M3</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>An ATM put fills with 1500 USDC pulled, not 3000</strong> — first proof MarginVault's IM-only locking works end to end.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_buy_pullsOnlyInitialMargin</span>: writer wallet drops 1,500 USDC of margin (net of the premium received), <span class="code">positions[sid][lp].locked == 1500e6</span>, <span class="code">nakedNotional == 1500e6</span>, OptionToken minted, series registered. 167 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 9</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B1')">B1</span><span class="ref-link" onclick="scrollTo('B2')">B2</span><span class="ref-link" onclick="scrollTo('B3')">B3</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M4</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Crash, margin call, takeover, absorb into the backstop</strong> — the liquidation path runs end to end, not just in isolation.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test/MarginAuction.t.sol</span>: ATM put filled at 1,500 locked → crash to $2,000 → <span class="code">flag</span> → 1 h grace → post-flag round → <span class="code">startAuction</span> → either <span class="code">takeOver</span> (bidder posts 725, holds at IM 2,000) or, 30 min later, <span class="code">absorb</span> (backstop draws 175, holds at MM 1,600, <span class="code">poolRequirement</span> = 3,000). Holder's token unchanged throughout. 185 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 11</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B4')">B4</span><span class="ref-link" onclick="scrollTo('B5')">B5</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M5</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Holders whole after a 40% gap; keeper demo; docs updated</strong> — the plan's actual definition of done: solvency proven under stress, the whole lifecycle runnable by a keeper, not just by a human calling functions by hand.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_gap40_holdersWhole</span> green (backstop multiple 7); <span class="code">keeper/margin.mjs</span> ran one pass against the Anvil stack and settled + finalized the open series on its own; README ladder rung 3, Solutions S13, Limitations L13, the reference table's S12/S13/L13 rows, the copilot's doc ranges, and the help site all updated. 192 Foundry tests passing.</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 13</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('B6')">B6</span><span class="ref-link" onclick="scrollTo('B7')">B7</span><span class="ref-link" onclick="scrollTo('B8')">B8</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M6</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Local subgraph answers "LP X's active ranges" against Anvil, matches cast call</strong> — first proof the indexer's data is actually correct, not just running.
+            <div class="impl"><span class="impl-label">Gated: arm64 host</span>Needs a local graph-node, which has no arm64 image and crashes under emulation (C3). The correctness proof happened on Sepolia instead: v0.0.2's Authorization #0 and its Fill match the vault's <span class="code">authorizations(0)</span> (<span class="code">usedCollateral</span> 0.01 WETH, <span class="code">fillCount</span> 1) — see M8.</div>
+          </td>
+          <td><span class="status gated">Gated</span></td>
+          <td>Day 2</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C1')">C1</span><span class="ref-link" onclick="scrollTo('C2')">C2</span><span class="ref-link" onclick="scrollTo('C3')">C3</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M7</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>LPDashboard + copilot get_positions read from the local subgraph, getLogs still works with it stopped</strong> — proves the fallback path is real, not just a plan-doc promise.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Both readers take <span class="code">NEXT_PUBLIC_SUBGRAPH_URL</span> when set (the Studio URL, since no local node runs here) and fall through to <span class="code">getLogs</span> / per-id RPC calls when it is unset or the query fails — <span class="code">frontend/lib/subgraph.ts</span>, <span class="code">LPDashboard.tsx</span>, <span class="code">lib/copilot/chain.ts</span> (C4).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 3</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C4')">C4</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M8</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Same data, live on Sepolia via Graph Studio</strong> — the live artifact for the feature.
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">smile-sepolia</span> v0.0.2 — <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span> — indexing the fresh Sepolia deployment: Authorization #0 within a minute of <span class="code">Aqua.ship</span>, the Fill one block after the buy, <span class="code">hasIndexingErrors: false</span> (C5).</div>
+          </td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 4</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M9</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>Copilot answers "what options do I hold" without the strike-grid scan (stretch)</strong> — proves the dynamic data-source pattern actually replaces the bounded RPC scan, not just supplements it.
+            <div class="impl"><span class="impl-label">Done 2026-09-11</span>on Sepolia and Arc the copilot's <span class="code">get_positions</span> and the LP dashboard read holder positions from the subgraph (<span class="code">readWalletPositions</span> reports <span class="code">source: "subgraph"</span>); the bounded strike-grid scan survives only for Anvil and as the fallback when the tape read fails.</div></td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C6')">C6</span></span></td>
+        </tr>
+        <tr class="row-M">
+          <td><span class="code">M10</span></td>
+          <td><span class="cat">Milestone</span></td>
+          <td><strong>README documents Subgraph MCP setup for contributors (stretch)</strong> — a natural-language query against the Subgraph MCP correctly resolves `smile-sepolia` and returns M8's live data.
+            <div class="impl"><span class="impl-label">Done 2026-09-12</span>documented in the Overview (Continuation Track table) and on The Graph page: copy <span class="code">.mcp.json.example</span>, add a Gateway key, ask the agent for <span class="code">smile-sepolia</span>.</div></td>
+          <td><span class="status done">Done</span></td>
+          <td>Day 5</td>
+          <td><span class="refs"><span class="ref-link" onclick="scrollTo('C7')">C7</span></span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="legend">
+      <strong>Legend</strong>
+      <div class="legend-item"><strong>Code:</strong> Unique identifier (A = Part A/SpreadVault task, B = Part B/MarginVault task, C = Part C/Subgraph task, M = Milestone)</div>
+      <div class="legend-item"><strong>Status:</strong> "Done" rows carry a dated note with the commit or test that proves it; "Gated" means blocked by the environment (arm64 host); the one remaining "Not started" (A5, long OptionToken as collateral) was cut on purpose</div>
+      <div class="legend-item"><strong>Target:</strong> the day target from each plan's own milestone table, assuming work starts day 0 (Parts A/B and Part C run on independent day-counts from their own plan docs, not one shared calendar)</div>
+      <div class="legend-item"><strong>References:</strong> the task/milestone each row depends on or feeds into — click any to scroll to it</div>
+      <div class="legend-item" style="margin-top: 12px; font-size: 11px;">
+        <strong>Cut order if time compresses — Parts A/B</strong>: A5 first, then <code class="code">keeper/margin.mjs</code> (demo via the script instead), partial-unit takeover, <code class="code">lpMarginBps</code>. Never cut: single-price settlement in Part A, the backstop-coupled ceiling, the two-step waterfall, the sigma-independence test (B7).
+      </div>
+      <div class="legend-item" style="font-size: 11px;">
+        <strong>Cut order if time compresses — Part C</strong>: C6 and C7 first (both stretch). C5 is the one task that cannot be cut — an Anvil-only subgraph doesn't demonstrate the feature; if C5 itself is at risk, ship C1-C4 and say so explicitly.
+      </div>
+      <div class="legend-item" style="font-size: 11px;">
+        Full task detail (exact signatures, test names, commit messages) lives in
+        the Aqua plan (Parts A/B) and
+        The Graph plan (Part C).
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function filterTable(category) {
+      const table = document.getElementById('refTable');
+      const rows = table.querySelectorAll('tbody tr');
+
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      rows.forEach(row => {
+        if (category === 'all') {
+          row.style.display = '';
+        } else {
+          if (row.classList.contains(`row-${category}`)) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    function scrollTo(code) {
+      const rows = document.querySelectorAll('tbody tr');
+      let targetRow = null;
+
+      rows.forEach(row => {
+        const codeCell = row.querySelector('.code');
+        if (codeCell && codeCell.textContent === code) {
+          targetRow = row;
+        }
+      });
+
+      if (targetRow) {
+        targetRow.style.background = '#fff59d';
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        setTimeout(() => {
+          targetRow.style.background = '';
+        }, 2000);
+      }
+    }
+  </script>
+</body>
+</html>

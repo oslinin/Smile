@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Full MarginVault lifecycle on the ./local.sh Anvil, as real transactions:
+#   writer opens + ships a margined put range → taker buys an ATM put (only
+#   IM is pulled) → the oracle crashes → anyone flags → 1 h grace → a post-
+#   flag round confirms → auction → either a bidder takes over or, after
+#   30 min, the backstop absorbs → expiry → permissionless settlement →
+#   settlePosition → finalizeSeries → holder redeems.
+#
+# Needs the stack from ./local.sh (addresses read from frontend/.env.local).
+# Time is advanced with Anvil's evm_increaseTime.
+#
+#   ./script/margin-lifecycle.sh                 # backstop absorbs, settles at $2,000
+#   MODE=takeover ./script/margin-lifecycle.sh   # a second writer takes the position over
+#   SETTLE_USD=1500 ./script/margin-lifecycle.sh
+set -euo pipefail
+
+RPC=${RPC:-http://localhost:8545}
+ENV_FILE="$(dirname "$0")/../frontend/.env.local"
+get() { grep "^$1=" "$ENV_FILE" | cut -d= -f2; }
+MV=${MV:-$(get NEXT_PUBLIC_MARGIN_VAULT)}
+BACKSTOP=${BACKSTOP:-$(get NEXT_PUBLIC_MARGIN_BACKSTOP)}
+SETTLEMENT=${SETTLEMENT:-$(get NEXT_PUBLIC_MARGIN_SETTLEMENT)}
+AQUA=${AQUA:-$(get NEXT_PUBLIC_AQUA)}
+USDC=${USDC:-$(get NEXT_PUBLIC_USDC_ADDRESS)}
+ORACLE=${ORACLE:-$(get NEXT_PUBLIC_SPOT_ORACLE)}
+# Anvil's default accounts: 0 writer, 1 holder, 2 keeper/bidder — local dev keys only.
+LP_KEY=${LP_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
+HOLDER_KEY=${HOLDER_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}
+KEEPER_KEY=${KEEPER_KEY:-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a}
+LP=$(cast wallet address --private-key "$LP_KEY")
+HOLDER=$(cast wallet address --private-key "$HOLDER_KEY")
+KEEPER=$(cast wallet address --private-key "$KEEPER_KEY")
+MODE=${MODE:-absorb}
+CRASH_USD=${CRASH_USD:-2000}
+SETTLE_USD=${SETTLE_USD:-2000}
+MAX=115792089237316195423570985008687907853269984665640564039457584007913129639935
+K=3000000000000000000000
+UNITS=1000000000000000000
+
+send() {
+  local key=$1; shift
+  local out
+  if ! out=$(cast send --rpc-url "$RPC" --private-key "$key" --json "$@" 2>&1); then
+    echo "FAILED: $(echo "$out" | grep -v no_persistence | tail -1)"; return 1
+  fi
+  echo "$out" | grep -v no_persistence | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["transactionHash"][:18]+"…", "status", d["status"])'
+}
+call() { cast call --rpc-url "$RPC" "$@" 2>/dev/null; }
+num() { cut -d' ' -f1; }
+usdc() { python3 -c "print(f'{int(\"$1\")/1e6:,.2f} USDC')"; }
+warp() { cast rpc --rpc-url "$RPC" evm_increaseTime "$1" >/dev/null 2>&1; cast rpc --rpc-url "$RPC" evm_mine >/dev/null 2>&1; }
+post() { send $KEEPER_KEY $ORACLE "setAnswer(int256)" $(( $1 * 100000000 )) >/dev/null; }
+ship_args() { python3 -c '
+import json,sys
+app,strategy,tokens,amounts=json.load(sys.stdin)
+print(app); print(strategy); print("["+",".join(tokens)+"]"); print("["+",".join(str(int(a)) for a in amounts)+"]")'; }
+locked() { call $MV 'positions(bytes32,address)(uint256,uint256,uint256,uint64,uint64,address)' $SID $1 | sed -n 3p | num; }
+freebal() { call $MV 'accounts(address)(uint256,uint256)' $1 | sed -n 1p | num; }
+
+# A clean mark: the worst-of-hour window must not still contain a crash
+# from a previous run, or the fill would lock IM off that instead of $3,000.
+post 3000; warp 3700; post 3000
+NOW=$(cast block latest --rpc-url "$RPC" -f timestamp 2>/dev/null)
+EXPIRY=$((NOW + 86400))
+SID=$(call $MV 'seriesId(uint256,uint256)(bytes32)' $K $EXPIRY)
+echo "margin vault $MV  backstop $BACKSTOP  settlement $SETTLEMENT"
+echo "writer $LP  holder $HOLDER  keeper/bidder $KEEPER  mode $MODE"
+echo "backstop pool $(usdc $(call $BACKSTOP 'totalAssets()(uint256)' | num))  insurance $(usdc $(call $MV 'insuranceFund()(uint256)' | num))  ceiling $(usdc $(call $MV 'effectiveCeiling()(uint256)' | num))"
+
+echo; echo "── 1. writer opens + ships a 2500–3500 put range, 10,000 USDC of margin capacity, expiring in 24h ──"
+AUTH=$(call $MV 'nextAuthId()(uint256)' | num)
+echo "openRange #$AUTH:    $(send $LP_KEY $MV 'openRange(uint256,uint256,uint256,uint256,uint16,bool,uint16)' 2500000000000000000000 3500000000000000000000 $EXPIRY 10000000000 0 false 0)"
+send $LP_KEY $USDC "approve(address,uint256)" $AQUA $MAX >/dev/null
+mapfile -t S < <(call $MV 'getShipParams(uint256)(address,bytes,address[],uint256[])' $AUTH --json | ship_args)
+echo "aqua.ship:          $(send $LP_KEY $AQUA 'ship(address,bytes,address[],uint256[])' "${S[0]}" "${S[1]}" "${S[2]}" "${S[3]}")"
+
+echo; echo "── 2. holder buys 1 put struck at \$3,000, with ETH at \$3,000 (at-the-money) ──"
+echo "   A put pays the HOLDER (K − settlement price) in cash if ETH ends below \$3,000 — nobody"
+echo "   delivers ETH. At-the-money the put has \$0 intrinsic today, so the WRITER need not lock"
+echo "   the whole \$3,000: just initial margin = ~50% of spot, and adds more only if ETH falls."
+Q=$(call $MV 'quote(uint256,uint256,uint256)(uint256,uint256)' $AUTH $K $UNITS | num | tr '\n' ' ')
+echo "quote (premium fee): $Q   initial margin (IM): $(usdc $(call $MV 'initialMargin(uint256,uint256,uint256)(uint256)' $AUTH $K $UNITS | num))"
+send $HOLDER_KEY $USDC "approve(address,uint256)" $MV $MAX >/dev/null
+LP0=$(call $USDC 'balanceOf(address)(uint256)' $LP | num)
+echo "buy:                $(send $HOLDER_KEY $MV 'buy(uint256,uint256,uint256,uint256)' $AUTH $K $UNITS $MAX)"
+LP1=$(call $USDC 'balanceOf(address)(uint256)' $LP | num)
+TOKEN=$(call $MV 'seriesOf(bytes32)(uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256,bool,uint256,uint16)' $SID | sed -n 3p)
+echo "→ writer locked $(usdc $(locked $LP)) of margin (wallet moved $(usdc $((LP0 - LP1))) net of the premium it earned) — the main vault would have cash-secured the full 3,000.00 USDC"
+
+echo; echo "── 3. ETH crashes to \$$CRASH_USD — the writer is now under-margined ──"
+warp 300; post $CRASH_USD
+read -r LOCKED MM IM <<<"$(call $MV 'health(bytes32,address)(uint256,uint256,uint256)' $SID $LP | num | tr '\n' ' ')"
+GAP=$(( MM > LOCKED ? MM - LOCKED : 0 ))
+echo "   writer's debt to the holder (put value) = 3000 − $CRASH_USD = $(usdc $(( (3000 - CRASH_USD) * 1000000 )))"
+echo "   margin needed now (maintenance) = $(usdc $MM)   ·   writer has locked = $(usdc $LOCKED)   →   short by $(usdc $GAP)"
+echo "   so anyone can flag it for liquidation:"
+echo "flag:               $(send $KEEPER_KEY $MV 'flag(bytes32,address)' $SID $LP)"
+
+echo; echo "── 4. the writer gets 1 hour to add margin. It doesn't. The auction opens. ──"
+warp 3660; post $CRASH_USD
+echo "startAuction:       $(send $KEEPER_KEY $MV 'startAuction(bytes32,address)' $SID $LP)"
+
+echo; echo "── 5. the WATERFALL: the holder must stay covered, so someone takes the writer's place ──"
+LP_LOCKED_BEFORE=$(locked $LP); LP_FREE_BEFORE=$(freebal $LP)   # to compute the default cost at the end
+echo "   order of who covers the gap: writer's own margin → an auction bidder → the backstop pool → the insurance fund"
+if [ "$MODE" = takeover ]; then
+  echo "   this run: a BIDDER takes over. They take on the writer's obligation, post full margin, and get a"
+  echo "   discount (a bonus, 1%→10% over 30 min) paid out of the liquidated writer's margin."
+  warp 900; post $CRASH_USD
+  send $KEEPER_KEY $USDC "mint(address,uint256)" $KEEPER 5000000000 >/dev/null   # Anvil mock USDC: fund the bidder
+  send $KEEPER_KEY $USDC "approve(address,uint256)" $MV $MAX >/dev/null
+  echo "takeOver:           $(send $KEEPER_KEY $MV 'takeOver(bytes32,address)' $SID $LP)"
+  NEWWRITER=$KEEPER
+  echo "→ the bidder now backs the position with $(usdc $(locked $KEEPER)); the old writer is liquidated (margin now $(usdc $(locked $LP)))"
+else
+  echo "   this run: NO bidder shows up in 30 min, so the next rung — the BACKSTOP POOL (LP-funded) — takes over,"
+  echo "   putting in the shortfall (the gap to maintenance plus a small keeper tip) so the holder stays covered."
+  warp 1860; post $CRASH_USD
+  P0=$(call $BACKSTOP 'totalAssets()(uint256)' | num)
+  echo "absorb:             $(send $KEEPER_KEY $MV 'absorb(bytes32,address)' $SID $LP)"
+  P1=$(call $BACKSTOP 'totalAssets()(uint256)' | num)
+  NEWWRITER=$BACKSTOP
+  echo "→ the backstop now backs the position with $(usdc $(locked $BACKSTOP)) (it added $(usdc $((P0 - P1))) from the pool); the old writer is liquidated"
+fi
+echo "   the HOLDER never had to do anything — they still hold their $(python3 -c "print(int('$(call $TOKEN 'balanceOf(address)(uint256)' $HOLDER | num)')/1e18)") put; only who stands behind it changed."
+LP_FREE_AFTER=$(freebal $LP)   # any margin handed back to the liquidated writer
+
+echo; echo "── 6. expiry at \$$SETTLE_USD: the holder is paid the put's value in cash ──"
+echo "   payout = 3000 − $SETTLE_USD = $(usdc $(python3 -c "print(max(0, 3000 - $SETTLE_USD) * 1000000)")). (Not \$3,000 — that's the strike; the put is worth the gap to the \$$SETTLE_USD market, cash-settled, no ETH moves.)"
+NOW=$(cast block latest --rpc-url "$RPC" -f timestamp 2>/dev/null)
+warp $((EXPIRY - NOW + 60)); post $SETTLE_USD
+ROUND=$(call $ORACLE 'latestRound()(uint80)' | num)
+echo "settleWithChainlinkRound(round $ROUND): $(send $KEEPER_KEY $SETTLEMENT 'settleWithChainlinkRound(bytes32,uint80)' $SID $ROUND)"
+echo "settlePosition:     $(send $KEEPER_KEY $MV 'settlePosition(bytes32,address)' $SID $NEWWRITER)"
+echo "finalizeSeries:     $(send $KEEPER_KEY $MV 'finalizeSeries(bytes32)' $SID)"
+H0=$(call $USDC 'balanceOf(address)(uint256)' $HOLDER | num)
+echo "redeem:             $(send $HOLDER_KEY $MV 'redeem(bytes32,uint256)' $SID $UNITS)"
+H1=$(call $USDC 'balanceOf(address)(uint256)' $HOLDER | num)
+OWED=$(python3 -c "print(max(0, 3000 - $SETTLE_USD) * 1000000)")
+echo
+echo "holder received  $(usdc $((H1 - H0)))   (intrinsic owed: $(usdc $OWED))"
+echo "backstop pool    $(usdc $(call $BACKSTOP 'totalAssets()(uint256)' | num))   insurance $(usdc $(call $MV 'insuranceFund()(uint256)' | num))   naked notional $(usdc $(call $MV 'nakedNotional()(uint256)' | num))"
+if [ $((H1 - H0)) -eq "$OWED" ]; then echo "holders whole:   ✓ (the crash never touched them — margin + backstop covered the full intrinsic)"; else echo "holders took a haircut (see HolderHaircut event)"; fi
+
+# ── what defaulting cost the liquidated writer ──────────────────────────────
+RETURNED=$(( LP_FREE_AFTER - LP_FREE_BEFORE ))          # margin handed back to it, if any
+NET_FORFEITED=$(( LP_LOCKED_BEFORE - RETURNED ))        # margin it actually lost
+echo
+echo "── what defaulting cost the writer ──"
+echo "margin it had locked        $(usdc $LP_LOCKED_BEFORE)"
+echo "returned to it on liquidation $(usdc $RETURNED)"
+echo "it actually owed (intrinsic)  $(usdc $OWED)"
+echo "net margin forfeited        $(usdc $NET_FORFEITED)"
+if [ "$NET_FORFEITED" -ge "$OWED" ]; then
+  echo "→ DEFAULT COST = $(usdc $((NET_FORFEITED - OWED))): a solvent writer would have paid the $(usdc $OWED) and reclaimed $(usdc $((LP_LOCKED_BEFORE - OWED))); by defaulting it forfeited that too (keeper tip + penalty + the excess kept re-margining the position). The protocol did not eat the loss — the writer overpaid."
+else
+  echo "→ DEFAULT COST = $(usdc $NET_FORFEITED) (its whole margin), and the pool covered the $(usdc $((OWED - NET_FORFEITED))) shortfall beyond it — the tail case (L13), mutualized and capped."
+fi

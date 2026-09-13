@@ -23,3 +23,12 @@ frontend/.env.local
 # understand-anything scratch/trash (auto-purged after 7 days)
 .understand-anything/.trash-*/
 .understand-anything/tmp/
+
+# local deployer keys
+.env.sepolia
+# Circle Wallets kit state + entity-secret recovery file (keeper/backstop-wallet.mjs)
+keeper/.circle-wallet.json
+keeper/recovery_file_*.dat
+
+# The Graph gateway key (.mcp.json.example is the template)
+.mcp.json

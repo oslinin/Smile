@@ -72,31 +72,71 @@ const readDoc = (relPath) => readFileSync(join(repoRoot, relPath), "utf8");
 
 const pages = [
   { id: "overview", label: "Overview", source: "README.md", mermaid: true },
+  { id: "guide", label: "User Guide", source: "docs/guide.md", mermaid: false },
+  { id: "screens", label: "Screens", source: "docs/screens.md", mermaid: false },
   { id: "limitations", label: "Limitations", source: "docs/limitations.md", mermaid: false },
   { id: "solutions", label: "Solutions", source: "docs/solutions.md", mermaid: false },
+  { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
+  // Sponsor pages: one per protocol Smile is built on — features used, why,
+  // value add, technical details, limitations, plans, glossary.
+  { id: "aqua", label: "1inch Aqua", source: "docs/sponsors/aqua.md", mermaid: true, group: "Integrations" },
+  { id: "chainlink", label: "Chainlink", source: "docs/sponsors/chainlink.md", mermaid: false },
+  { id: "uniswap", label: "Uniswap", source: "docs/sponsors/uniswap.md", mermaid: false },
+  { id: "thegraph", label: "The Graph", source: "docs/sponsors/thegraph.md", mermaid: false },
+  { id: "arc", label: "Circle · Arc", source: "docs/sponsors/arc.md", mermaid: false },
+  { id: "frontend", label: "Frontend", source: "docs/sponsors/frontend.md", mermaid: false },
 ];
 
 // Every doc (not just the README) goes through extractMath first, so KaTeX
 // spans survive marked.parse on all wiki pages.
-const renderDoc = (relPath) => {
+// Every h2 gets a GitHub-style id (slug of its text, de-duplicated per page)
+// so the sidebar TOC can address it and README-style #slug links resolve.
+const slugify = (html) =>
+  html.replace(/<[^>]+>/g, "").replace(/&[a-z]+;|&#\d+;/g, "").toLowerCase().trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
+const addHeadingIds = (html, pageId) => {
+  const seen = new Set();
+  return html.replace(/<h([23])>(.*?)<\/h\1>/g, (_, level, inner) => {
+    let id = slugify(inner) || "section";
+    let n = 1;
+    while (seen.has(id)) id = `${slugify(inner) || "section"}-${n++}`;
+    seen.add(id);
+    return `<h${level} id="${id}">${inner}</h${level}>`;
+  });
+};
+const renderDoc = (relPath, pageId) => {
   const { text, spans } = extractMath(readDoc(relPath));
-  return marked
-    .parse(text, { gfm: true })
-    .replace(/MATHSPANPLACEHOLDER(\d+)ENDMATHSPAN/g, (_, i) => spans[Number(i)]);
+  return addHeadingIds(
+    marked
+      .parse(text, { gfm: true })
+      .replace(/MATHSPANPLACEHOLDER(\d+)ENDMATHSPAN/g, (_, i) => spans[Number(i)]),
+    pageId,
+  );
 };
 
-const pageHtml = Object.fromEntries(pages.map((p) => [p.id, renderDoc(p.source)]));
+const pageHtml = Object.fromEntries(pages.map((p) => [p.id, renderDoc(p.source, p.id)]));
 
-// The Reference Table is its own standalone interactive document (filters,
-// cross-reference scrolling) — copy it next to help.html and embed via
-// iframe rather than inlining its markup, so its CSS/JS can't collide with
-// the wiki shell's.
+// Standalone interactive documents (filters, cross-reference scrolling) —
+// copied next to help.html and embedded via iframe rather than inlined, so
+// their own CSS/JS can't collide with the wiki shell's.
+const standalonePages = [
+  { id: "reference", label: "Reference Table", file: "reference-table.html", title: "Smile reference table" },
+  {
+    id: "continuation-track",
+    label: "Continuation Track",
+    file: "continuation-track-reference.html",
+    title: "Smile Continuation Track reference",
+  },
+];
+
 mkdirSync(publicDir, { recursive: true });
-copyFileSync(join(repoRoot, "docs", "reference-table.html"), join(publicDir, "reference-table.html"));
+for (const sp of standalonePages) {
+  copyFileSync(join(repoRoot, "docs", sp.file), join(publicDir, sp.file));
+}
 
 const sidebarLinks = [
-  ...pages.map((p) => `<button class="nav-link" data-page="${p.id}">${p.label}</button>`),
-  `<button class="nav-link" data-page="reference">Reference Table</button>`,
+  ...pages.map((p) => `${p.group ? `<h3>${p.group}</h3>` : ""}<button class="nav-link" data-page="${p.id}">${p.label}</button>`),
+  ...standalonePages.map((sp) => `<button class="nav-link" data-page="${sp.id}">${sp.label}</button>`),
 ].join("\n        ");
 
 const pageSections = [
@@ -105,9 +145,11 @@ const pageSections = [
       <article class="doc">${pageHtml[p.id]}</article>
     </section>`
   ),
-  `<section id="page-reference" class="page page-reference">
-      <iframe src="${basePath}/reference-table.html" title="Smile reference table" loading="lazy"></iframe>
-    </section>`,
+  ...standalonePages.map(
+    (sp) => `<section id="page-${sp.id}" class="page page-reference">
+      <iframe src="${basePath}/${sp.file}" title="${sp.title}" loading="lazy"></iframe>
+    </section>`
+  ),
 ].join("\n    ");
 
 const html = `<!doctype html>
@@ -144,6 +186,13 @@ const html = `<!doctype html>
     margin: 0 12px 16px;
     letter-spacing: 0.02em;
   }
+  .sidebar h3 {
+    color: #6b7280;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 16px 12px 6px;
+  }
   .nav-link {
     display: block;
     width: 100%;
@@ -160,10 +209,33 @@ const html = `<!doctype html>
   }
   .nav-link:hover { background: #111827; color: #d1d5db; }
   .nav-link.active { background: #1e293b; color: #fff; font-weight: 600; }
+  /* Section TOC, built at runtime from the active page's h2 headings. */
+  .search { display: block; width: 100%; margin: 0 0 12px; padding: 7px 10px; border-radius: 6px; border: 1px solid #1f2937; background: #030712; color: #e5e7eb; font: inherit; font-size: 0.85rem; }
+  .search:focus { outline: none; border-color: #3b82f6; }
+  .results { margin: 0 0 12px; }
+  .results .hit { display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer; padding: 6px 10px; border-radius: 6px; color: #d1d5db; font: inherit; font-size: 0.8rem; line-height: 1.35; }
+  .results .hit:hover { background: #111827; }
+  .results .hit .where { color: #6b7280; font-size: 0.7rem; display: block; }
+  .results .hit mark { background: #1d4ed8; color: #fff; border-radius: 2px; padding: 0 1px; }
+  .results .none { color: #6b7280; font-size: 0.78rem; padding: 6px 10px; }
+  .toc { margin: 2px 0 8px 18px; border-left: 1px solid #1f2937; }
+  .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
+  .toc a:hover { color: #d1d5db; background: #111827; }
+  .toc a.current { color: #93c5fd; }
+  .toc a.sub { padding-left: 26px; font-size: 0.72rem; color: #4b5563; }
+  .toc a.sub:hover, .toc a.sub.current { color: #93c5fd; }
+  .toc-row { display: flex; align-items: stretch; }
+  .toc-row > a { flex: 1; min-width: 0; }
+  .toc-caret { flex: 0 0 auto; width: 22px; border: none; background: none; color: #6b7280; cursor: pointer; font-size: 0.7rem; line-height: 1; padding: 0; border-radius: 4px; }
+  .toc-caret:hover { color: #d1d5db; background: #111827; }
+  .toc-caret::before { content: "\\25B8"; display: inline-block; transition: transform 0.12s; }
+  .toc-caret[aria-expanded="true"]::before { transform: rotate(90deg); }
+  .toc-children[hidden] { display: none; }
   .content { flex: 1; min-width: 0; }
   .page { display: none; }
   .page.active { display: block; }
   .doc { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  .doc a[id^="tab-"] { display: block; scroll-margin-top: 16px; }
   .page-reference { height: 100vh; }
   .page-reference iframe { width: 100%; height: 100%; border: none; display: block; }
   h1, h2, h3, h4 { color: #fff; font-weight: 700; line-height: 1.25; margin: 1.8em 0 0.6em; }
@@ -205,8 +277,10 @@ const html = `<!doctype html>
       overflow-x: auto;
       padding: 12px;
     }
-    .sidebar h2 { display: none; }
+    .sidebar h2, .sidebar h3 { display: none; }
     .nav-link { width: auto; white-space: nowrap; margin-right: 4px; margin-bottom: 0; }
+    .toc, .results { display: none; }
+    .search { width: 160px; margin: 0 8px 0 0; flex: 0 0 auto; }
     .page-reference { height: 80vh; }
   }
 </style>
@@ -215,6 +289,8 @@ const html = `<!doctype html>
   <div class="wiki">
     <nav class="sidebar">
       <h2>Smile Docs</h2>
+      <input class="search" type="search" placeholder="Search docs… ( / )" aria-label="Search docs" />
+      <div class="results" hidden></div>
       ${sidebarLinks}
     </nav>
     <div class="content">
@@ -226,7 +302,7 @@ const html = `<!doctype html>
     // mermaid import below never resolves (offline, blocked, jsDelivr down).
     // A failed top-level ES module import aborts the ENTIRE module, so
     // mermaid is loaded separately, dynamically, with its own try/catch.
-    var VALID_PAGES = ${JSON.stringify([...pages.map((p) => p.id), "reference"])};
+    var VALID_PAGES = ${JSON.stringify([...pages.map((p) => p.id), ...standalonePages.map((sp) => sp.id)])};
     var mermaidDone = new Set();
     var mermaidReady = null; // Promise<mermaid module> | null, set below
 
@@ -252,7 +328,9 @@ const html = `<!doctype html>
       catch (e) { console.error("mermaid render failed", e); }
     }
 
-    function showPage(id) {
+    // Hash forms: "#page" or "#page/anchor" — the app's Help link uses
+    // "#screens/tab-<id>" to land on the section for the tab in view.
+    function showPage(id, anchor) {
       if (VALID_PAGES.indexOf(id) === -1) id = VALID_PAGES[0];
       document.querySelectorAll(".page").forEach(function (el) { el.classList.remove("active"); });
       document.querySelectorAll(".nav-link").forEach(function (el) { el.classList.remove("active"); });
@@ -260,14 +338,143 @@ const html = `<!doctype html>
       section.classList.add("active");
       document.querySelector('.nav-link[data-page="' + id + '"]').classList.add("active");
       renderMermaidIn(section);
-      history.replaceState(null, "", "#" + id);
+      buildToc(id, section, anchor);
+      history.replaceState(null, "", "#" + id + (anchor ? "/" + anchor : ""));
+      if (anchor) {
+        var target = document.getElementById(anchor);
+        if (target) requestAnimationFrame(function () { target.scrollIntoView({ block: "start" }); });
+      } else {
+        window.scrollTo(0, 0);
+      }
+    }
+    // Sidebar TOC under the active page: one link per h2, using the
+    // <a id> anchor that precedes it (the Screens page's tab-<id>) or the
+    // heading's own id. Pages without addressable h2s get no TOC.
+    function buildToc(id, section, anchor) {
+      document.querySelectorAll(".toc").forEach(function (el) { el.remove(); });
+      // Flat list of {id, text, sub}, then grouped so each h3 nests under the
+      // preceding h2 as a collapsible child (default closed).
+      var items = [];
+      section.querySelectorAll("h2, h3").forEach(function (h) {
+        // marked wraps a bare <a id> line in a <p>: <p><a id="tab-margin"></a></p><h2>Margin</h2>
+        var prev = h.previousElementSibling;
+        if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
+        var target = prev && prev.tagName === "A" && prev.id ? prev.id : h.id;
+        if (target) items.push({ id: target, text: h.textContent.trim(), sub: h.tagName === "H3" });
+      });
+      if (items.length < 2) return;
+      var groups = [];
+      items.forEach(function (it) {
+        if (!it.sub || groups.length === 0) groups.push({ head: it, children: [] });
+        else groups[groups.length - 1].children.push(it);
+      });
+      var toc = document.createElement("div");
+      toc.className = "toc";
+      function mkLink(it) {
+        var a = document.createElement("a");
+        a.href = "#" + id + "/" + it.id;
+        a.textContent = it.text;
+        a.className = (it.sub ? "sub" : "") + (it.id === anchor ? " current" : "");
+        a.addEventListener("click", function (e) { e.preventDefault(); showPage(id, it.id); });
+        return a;
+      }
+      groups.forEach(function (g) {
+        if (g.children.length === 0) { toc.appendChild(mkLink(g.head)); return; }
+        var openHere = g.children.some(function (c) { return c.id === anchor; });
+        var row = document.createElement("div"); row.className = "toc-row";
+        var caret = document.createElement("button");
+        caret.className = "toc-caret"; caret.type = "button";
+        caret.setAttribute("aria-expanded", openHere ? "true" : "false");
+        caret.setAttribute("aria-label", "Toggle " + g.head.text + " subsections");
+        row.appendChild(caret); row.appendChild(mkLink(g.head));
+        toc.appendChild(row);
+        var kids = document.createElement("div"); kids.className = "toc-children"; kids.hidden = !openHere;
+        g.children.forEach(function (c) { kids.appendChild(mkLink(c)); });
+        toc.appendChild(kids);
+        caret.addEventListener("click", function () {
+          var open = caret.getAttribute("aria-expanded") === "true";
+          caret.setAttribute("aria-expanded", open ? "false" : "true");
+          kids.hidden = open;
+        });
+      });
+      var link = document.querySelector('.nav-link[data-page="' + id + '"]');
+      link.insertAdjacentElement("afterend", toc);
+      var cur = toc.querySelector(".current");
+      if (cur) cur.scrollIntoView({ block: "nearest" });
+    }
+    // Search: every page is already in the DOM, so index each h2 section's
+    // text once and substring-match on it. Plain and instant; no library.
+    var INDEX = null;
+    function buildIndex() {
+      INDEX = [];
+      document.querySelectorAll("section.page").forEach(function (section) {
+        var pageId = section.id.replace(/^page-/, "");
+        var link = document.querySelector('.nav-link[data-page="' + pageId + '"]');
+        var label = link ? link.textContent : pageId;
+        var body = section.querySelector("article") || section;
+        var cur = { page: pageId, label: label, anchor: "", heading: label, parts: [] };
+        var entries = [cur];
+        Array.prototype.forEach.call(body.children, function (el) {
+          if (el.tagName === "H2") {
+            var prev = el.previousElementSibling;
+            if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
+            var anchor = prev && prev.tagName === "A" && prev.id ? prev.id : el.id;
+            cur = { page: pageId, label: label, anchor: anchor, heading: el.textContent.trim(), parts: [] };
+            entries.push(cur);
+          } else {
+            cur.parts.push(el.textContent);
+          }
+        });
+        entries.forEach(function (e) {
+          e.text = e.parts.join(" ").replace(/\\s+/g, " ");
+          e.lower = (e.heading + " " + e.text).toLowerCase();
+          delete e.parts;
+          if (e.text) INDEX.push(e);
+        });
+      });
+    }
+    function escapeHtml(s) { return s.replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+    function snippet(e, q) {
+      var i = e.text.toLowerCase().indexOf(q);
+      if (i < 0) return escapeHtml(e.text.slice(0, 90)) + "…";
+      var a = Math.max(0, i - 40), b = Math.min(e.text.length, i + q.length + 50);
+      return (a > 0 ? "…" : "") + escapeHtml(e.text.slice(a, i)) + "<mark>" + escapeHtml(e.text.slice(i, i + q.length)) + "</mark>" + escapeHtml(e.text.slice(i + q.length, b)) + (b < e.text.length ? "…" : "");
+    }
+    var searchBox = document.querySelector(".search");
+    var resultsBox = document.querySelector(".results");
+    function runSearch() {
+      var q = searchBox.value.trim().toLowerCase();
+      if (q.length < 2) { resultsBox.hidden = true; resultsBox.innerHTML = ""; return; }
+      if (!INDEX) buildIndex();
+      var hits = INDEX.filter(function (e) { return e.lower.indexOf(q) !== -1; });
+      // Heading matches first, then in sidebar order.
+      hits.sort(function (a, b) { return (b.heading.toLowerCase().indexOf(q) !== -1) - (a.heading.toLowerCase().indexOf(q) !== -1); });
+      resultsBox.innerHTML = hits.length
+        ? hits.slice(0, 30).map(function (e, i) {
+            return '<button class="hit" data-i="' + i + '"><span class="where">' + escapeHtml(e.label) + (e.anchor ? " › " + escapeHtml(e.heading) : "") + "</span>" + snippet(e, q) + "</button>";
+          }).join("") + (hits.length > 30 ? '<div class="none">' + (hits.length - 30) + " more — narrow the search</div>" : "")
+        : '<div class="none">No matches</div>';
+      resultsBox.hidden = false;
+      resultsBox.querySelectorAll(".hit").forEach(function (btn, i) {
+        btn.addEventListener("click", function () { var e = hits[i]; showPage(e.page, e.anchor || undefined); });
+      });
+    }
+    searchBox.addEventListener("input", runSearch);
+    searchBox.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { searchBox.value = ""; runSearch(); searchBox.blur(); } });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "/" && document.activeElement !== searchBox && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { ev.preventDefault(); searchBox.focus(); }
+    });
+    function showHash(hash) {
+      var parts = (hash || "#overview").slice(1).split("/");
+      showPage(parts[0], parts[1]);
     }
 
     document.querySelectorAll(".nav-link").forEach(function (btn) {
       btn.addEventListener("click", function () { showPage(btn.dataset.page); });
     });
 
-    showPage((location.hash || "#overview").slice(1));
+    showHash(location.hash);
+    window.addEventListener("hashchange", function () { showHash(location.hash); });
 
     // Best-effort mermaid load — never blocks navigation or page rendering.
     mermaidReady = import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")

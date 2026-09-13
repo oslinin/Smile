@@ -3,7 +3,19 @@
 export const EXPLORER_TX: Record<number, string> = {
   1:        "https://etherscan.io/tx/",
   11155111: "https://sepolia.etherscan.io/tx/",
+  5042002:  "https://testnet.arcscan.app/tx/",
 };
+
+export const EXPLORER_ADDRESS: Record<number, string> = {
+  1:        "https://etherscan.io/address/",
+  11155111: "https://sepolia.etherscan.io/address/",
+  5042002:  "https://testnet.arcscan.app/address/",
+};
+
+export function explorerAddressUrl(chainId: number, address: string): string | null {
+  const base = EXPLORER_ADDRESS[chainId];
+  return base ? base + address : null;
+}
 
 // Returns a clickable explorer URL for the tx, or null when the chain has no
 // public explorer (callers should fall back to plain text in that case).

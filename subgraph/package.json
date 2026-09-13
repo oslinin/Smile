@@ -1,0 +1,22 @@
+{
+  "name": "smile-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Graph subgraph for Smile's AquaCollateralVault — replaces the frontend/copilot's capped, brute-force RPC scans (docs/limitations.md L12a) with indexed queries.",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "test": "graph test",
+    "create-local": "graph create --node http://localhost:8120/ smile/local",
+    "remove-local": "graph remove --node http://localhost:8120/ smile/local",
+    "deploy-local": "graph deploy --node http://localhost:8120/ --ipfs http://localhost:5001 --version-label v0.0.1 smile/local",
+    "node:up": "sudo docker compose -p smile-graph up -d",
+    "node:down": "sudo docker compose -p smile-graph down -v",
+    "node:logs": "sudo docker compose -p smile-graph logs -f graph-node"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.1",
+    "matchstick-as": "0.6.0"
+  }
+}

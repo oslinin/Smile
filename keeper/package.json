@@ -5,9 +5,13 @@
   "type": "module",
   "description": "S9 auto-roll keeper: LP-run, self-custodial covered-call / cash-secured-put roller",
   "scripts": {
-    "roll": "node roll.mjs"
+    "roll": "node roll.mjs",
+    "margin": "node margin.mjs",
+    "insurance:gateway": "node insurance-gateway.mjs",
+    "backstop:wallet": "node backstop-wallet.mjs"
   },
   "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "^10.8.0",
     "viem": "^2.52.2"
   }
 }

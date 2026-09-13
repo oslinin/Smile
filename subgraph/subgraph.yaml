@@ -1,0 +1,43 @@
+specVersion: 1.2.0
+description: Smile options — LP range authorizations and fills on AquaCollateralVault
+repository: https://github.com/oslinin/Smile
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AquaCollateralVault
+    network: sepolia
+    source:
+      abi: AquaCollateralVault
+      address: "0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D"
+      startBlock: 11677088
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Authorization
+        - Fill
+        - Instrument
+        - Position
+      abis:
+        - name: AquaCollateralVault
+          file: ./abis/AquaCollateralVault.json
+      eventHandlers:
+        - event: RangeAuthorized(indexed uint256,indexed
+            address,uint256,uint256,uint256,bool,uint256)
+          handler: handleRangeAuthorized
+        - event: AuthorizationRevoked(indexed uint256)
+          handler: handleAuthorizationRevoked
+        - event: OptionBought(indexed uint256,indexed address,indexed
+            address,uint256,uint256,uint256)
+          handler: handleOptionBought
+        - event: OptionClosed(indexed address,indexed address,uint256)
+          handler: handleOptionClosed
+        - event: Redeemed(indexed address,indexed address,uint256,uint256)
+          handler: handleRedeemed
+        - event: CollateralReleased(indexed address,indexed address,uint256)
+          handler: handleCollateralReleased
+        - event: PullFailed(indexed uint256,indexed address,indexed address,uint256)
+          handler: handlePullFailed
+      file: ./src/vault.ts

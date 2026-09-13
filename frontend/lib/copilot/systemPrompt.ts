@@ -5,11 +5,46 @@
 
 import { ALPHA, BETA, SIGMA_GLOBAL } from "@/lib/options";
 import { GLOSSARY, tocText } from "./knowledge";
+import { TABS, type TabId } from "./tabs";
+import { SKILLS } from "./skills";
 
 export interface CopilotContext {
   spot: number;
   chainId?: number;
   address?: string;
+  /** The app tab on screen (lib/copilot/tabs.ts). */
+  tab?: TabId;
+  /** Enabled built-in skill ids (undefined = all). Bodies are resolved server-side. */
+  skills?: string[];
+  /** User-added skills, body straight from the client (capped: 5 × 4,000 chars). */
+  customSkills?: { name: string; body: string }[];
+}
+
+const MAX_CUSTOM_SKILLS = 5;
+const MAX_CUSTOM_BODY = 4000;
+
+function activeSkillsText(ctx: CopilotContext): string {
+  const enabled = ctx.skills ? SKILLS.filter((s) => ctx.skills!.includes(s.id)) : SKILLS;
+  const custom = (ctx.customSkills ?? [])
+    .filter((c) => c && typeof c.name === "string" && typeof c.body === "string" && c.body.trim())
+    .slice(0, MAX_CUSTOM_SKILLS)
+    .map((c) => ({ name: c.name.slice(0, 80), body: c.body.slice(0, MAX_CUSTOM_BODY) }));
+  const all = [...enabled.map((s) => ({ name: s.name, body: s.body })), ...custom];
+  if (all.length === 0) return "(none enabled)";
+  return all.map((s) => `### Skill: ${s.name}\n${s.body}`).join("\n\n");
+}
+
+function tabBriefing(tab?: TabId): string {
+  if (!tab) return "";
+  const t = TABS[tab];
+  return `
+## Where the user is: the **${t.label}** tab
+- On screen: ${t.shows}
+- "Explain this" / "what am I looking at" / an unspecific question means THIS tab: describe what is on screen first, with live numbers from the tools, then what to do next here.
+- Read first when explaining: ${t.docs.map((d) => `\`${d}\``).join(", ")} (read_docs).
+- Good first move here: ${t.suggest}
+- If the request clearly belongs to another tab, answer it and name the tab to switch to.
+`;
 }
 
 export function buildSystemPrompt(ctx: CopilotContext): string {
@@ -19,7 +54,7 @@ export function buildSystemPrompt(ctx: CopilotContext): string {
 - ETH/USD spot: $${ctx.spot} (the same price the UI displays — use it everywhere)
 - Chain: ${ctx.chainId === 31337 || ctx.chainId === 1337 ? "Anvil local devnet" : ctx.chainId === 11155111 ? "Sepolia testnet" : `chain ${ctx.chainId ?? "unknown"}`}
 - Wallet: ${ctx.address ? ctx.address : "not connected (position/portfolio tools unavailable — ask the user to connect)"}
-
+${tabBriefing(ctx.tab)}
 ## The pricing model (SmileMath.sol — know this cold)
 Smile prices every option with a parametric volatility smile, not an order book:
 - sigma_strike = sigma_global * max(0.1, 1 + alpha*ln(K/S)^2 + beta*ln(K/S))
@@ -32,10 +67,19 @@ Smile prices every option with a parametric volatility smile, not an order book:
 ## Tools — non-negotiable rules
 - NEVER do options math in your head. Every premium, Greek, P&L, breakeven, or probability you state MUST come from a tool call in this conversation.
 - Use read_docs before answering questions about protocol economics, limitations, competitors (Panoptic, Deribit, Ribbon, Premia), or design trade-offs — cite the section id you read (e.g. "per limitations/l4-…").
+- For HOW-TO questions — how to buy or close, build a multi-leg trade, provide liquidity (one-click, write a range, spreads, margin, RFQ), what a margin call / auction / backstop does, which tab to use, which network — read the User Guide sections ("guide-…") first and answer step by step with the tab names. Pair the steps with live numbers from get_market_state / price_strategy / get_positions where they help.
 - Use get_market_state for spot/vol-surface numbers (ATM vol, risk reversal, butterfly, expected move).
 - Use price_strategy for any multi-leg pricing; use suggest_strategies when the user states a market view.
 - propose_trade renders an interactive card the user can load into the Payoff Builder — use it whenever you recommend a concrete trade. You can NEVER execute trades; the user always reviews and signs through the existing UI.
 - Strikes trade on a $50 grid; the default expiry is 30 days.
+- Tape tools, and only them: a hedge quantity (spot, calls or puts to reach a target delta) MUST come from hedge_suggestion — never divide deltas yourself; "what's cheap / expensive" from find_opportunities; where liquidity is thin or scarce from liquidity_map; the wallet's whole book (long AND written) from portfolio_greeks; the listed market's vol from reference_market; scheduled events from macro_calendar. A range to write goes out as a prepare_lp_range card, an RFQ quote as a prepare_rfq_quote card.
+
+## Data sources
+Tools that read the tape (positions, fills, ranges, open interest, liquidity, greeks) return a \`source\` field: "subgraph" = The Graph (public networks), "anvil-logs" = the local dev chain's event log. Say which one the numbers came from whenever it matters (a stale index, a dev chain, a discrepancy with the UI). Never invent positions, fills or balances — if a tool returns none, say so.
+
+## Active skills
+Follow the procedure of the matching skill when the user's request fits one. Skills describe HOW to use the tools; the tool rules above still apply.
+${activeSkillsText(ctx)}
 
 ## Rolls & adjustments
 When the user asks about rolling or modifying a position (roll out to a later expiry, roll up/down a strike, leg into a spread, close the tested side, take partial profits):

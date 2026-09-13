@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useChainId } from "wagmi";
 import {
   ComposedChart,
   Area,
@@ -17,6 +18,8 @@ import {
   DEFAULT_DTE,
   protocolPremium,
   pnlSeries,
+  pnlMatrix,
+  writerCollateral,
   breakevens as findBreakevens,
   strategyStats,
 } from "@/lib/options";
@@ -79,7 +82,7 @@ function PayoffChart({ legs, spot }: { legs: Leg[]; spot: number }) {
             labelFormatter={(v) => `S = $${Number(v).toLocaleString()}`}
             formatter={(v, name) => [
               `$${Number(v).toFixed(2)}`,
-              name === "now" ? "P&L today" : name === "expiry" ? "P&L at expiry" : null,
+              name === "now" ? "P&L today" : name === "mid" ? "P&L halfway to expiry" : name === "expiry" ? "P&L at expiry" : null,
             ]}
           />
 
@@ -105,10 +108,100 @@ function PayoffChart({ legs, spot }: { legs: Leg[]; spot: number }) {
 
           {/* T+0 value curve (dashed) — strategy marked to model today */}
           <Line type="monotone" dataKey="now" stroke="#c084fc" strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 2, fill: "#c084fc" }} isAnimationActive={false} />
+          {/* halfway-to-expiry curve */}
+          <Line type="monotone" dataKey="mid" stroke="#f472b6" strokeWidth={1} strokeDasharray="2 3" dot={false} activeDot={{ r: 2, fill: "#f472b6" }} isAnimationActive={false} />
           {/* expiry payoff line */}
           <Area type="monotone" dataKey="expiry" stroke="#93c5fd" strokeWidth={2} fill="none" dot={false} activeDot={{ r: 3, fill: "#93c5fd" }} baseValue={0} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── P&L heat map (price × date) ──────────────────────────────────────────────
+
+function HeatMap({ legs, spot }: { legs: Leg[]; spot: number }) {
+  const m = useMemo(() => pnlMatrix(legs, spot), [legs, spot]);
+  const scale = useMemo(() => Math.max(1, ...m.pnl.flat().map((v) => Math.abs(v))), [m]);
+  const cell = (v: number) => {
+    const a = Math.min(1, Math.abs(v) / scale) * 0.85 + 0.08;
+    return v >= 0 ? `rgba(34,197,94,${a})` : `rgba(239,68,68,${a})`;
+  };
+  return (
+    <div className="rounded-lg bg-gray-950 p-2 overflow-x-auto">
+      <div className="text-[9px] uppercase tracking-wide text-gray-600 mb-1">P&L by price and date</div>
+      <table className="text-[10px] font-mono border-separate border-spacing-0.5 min-w-full">
+        <thead>
+          <tr>
+            <th className="text-gray-600 text-right pr-2 font-normal">price ↓ / day →</th>
+            {m.days.map((d) => <th key={d} className="text-gray-500 font-normal px-1">{d === m.days[m.days.length - 1] ? `exp (${d}d)` : `+${d}d`}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {m.prices.map((p, i) => (
+            <tr key={p}>
+              <td className={`text-right pr-2 ${Math.abs(p - spot) < spot * 0.025 ? "text-white" : "text-gray-500"}`}>${p.toLocaleString()}</td>
+              {m.pnl[i].map((v, j) => (
+                <td key={j} className="text-center text-white rounded" style={{ background: cell(v), minWidth: 44 }} title={`$${p.toLocaleString()} on day ${m.days[j]}: ${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(0)}`}>
+                  {v >= 0 ? "+" : "−"}{Math.abs(v).toFixed(0)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── What the writer locks, rung by rung ──────────────────────────────────────
+
+function CollateralPanel({ legs, spot, chainId }: { legs: Leg[]; spot: number; chainId?: number }) {
+  const rows = useMemo(() => writerCollateral(legs, spot, chainId), [legs, spot, chainId]);
+  if (rows.length === 0) return null;
+  const usdcNative = chainId === 5042002;
+  const writable = rows.filter((r) => r.spread);
+  const sellSpread = (s: NonNullable<(typeof rows)[number]["spread"]>) =>
+    window.dispatchEvent(new CustomEvent("smile:sell-spread", { detail: { ...s, key: Date.now() } }));
+  return (
+    <div className="rounded-lg bg-gray-950 p-2 space-y-2">
+      <div className="text-[9px] uppercase tracking-wide text-gray-600 mb-1">What the writer locks on Smile, per unit — collateral token per chain</div>
+      <table className="text-[11px] w-full">
+        <thead><tr className="text-gray-600"><th className="text-left font-normal">sell leg</th><th className="text-right font-normal">main vault</th><th className="text-right font-normal">SpreadVault</th><th className="text-right font-normal">MarginVault</th></tr></thead>
+        <tbody>
+          {rows.map(({ leg, naked, netted, margined, debit }, i) => (
+            <tr key={i} className="text-gray-300">
+              <td className="font-mono">short {leg.isCall ? "call" : "put"} ${leg.strike.toLocaleString()}</td>
+              <td className="text-right font-mono text-gray-500">{naked}</td>
+              <td className="text-right font-mono text-green-400">{netted ?? (debit
+                ? <span className="text-gray-500">debit spread — you buy it</span>
+                : <span className="text-gray-700">— add a long {leg.isCall ? "call above" : "put below"}</span>)}</td>
+              <td className="text-right font-mono text-emerald-400">{margined ?? <span className="text-gray-700">puts only</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-[10px] text-gray-600">
+        {usdcNative
+          ? "On Arc every leg settles in USDC — call credit spreads are cash-settled, so no WETH. The main-vault covered call is a WETH stand-in (Arc has no ether)."
+          : "Calls collateralize in WETH, puts in USDC. Switch to Arc Testnet and every leg is USDC."}
+      </p>
+      {writable.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {writable.map(({ leg, spread }, i) => (
+            <button
+              key={i}
+              onClick={() => spread && sellSpread(spread)}
+              className="text-[11px] px-2.5 py-1 rounded-md bg-green-700 hover:bg-green-600 text-white font-medium"
+            >
+              Sell {leg.isCall ? "call" : "put"} spread ${spread!.k1.toLocaleString()}/${spread!.k2.toLocaleString()} →
+            </button>
+          ))}
+          {writable.length > 1 && (
+            <span className="text-[10px] text-gray-500 self-center">an iron condor is both — write each wing as its own range</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -122,15 +215,16 @@ function fmtUsd(v: number | null): string {
 }
 
 function StatsStrip({ legs, spot }: { legs: Leg[]; spot: number }) {
-  const stats = useMemo(() => {
+  const { stats, bes } = useMemo(() => {
     const data = pnlSeries(legs, spot);
-    return strategyStats(legs, spot, data);
+    return { stats: strategyStats(legs, spot, data), bes: findBreakevens(data) };
   }, [legs, spot]);
 
   const cells: [string, string, string?][] = [
     [stats.cost >= 0 ? "Net debit" : "Net credit", `$${Math.abs(stats.cost).toFixed(0)}`],
     ["Max profit", fmtUsd(stats.maxProfit), "text-green-400"],
     ["Max loss", fmtUsd(stats.maxLoss), "text-red-400"],
+    ["Breakeven", bes.length ? bes.map((b) => `$${Math.round(b).toLocaleString()}`).join(" · ") : "—", "text-yellow-300"],
     ["Prob. profit", `${(stats.pop * 100).toFixed(0)}%`],
     ["Δ", stats.greeks.delta.toFixed(2)],
     ["Γ", stats.greeks.gamma.toFixed(4)],
@@ -139,7 +233,7 @@ function StatsStrip({ legs, spot }: { legs: Leg[]; spot: number }) {
   ];
 
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+    <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
       {cells.map(([label, value, cls]) => (
         <div key={label} className="rounded bg-gray-950 px-2 py-1.5 text-center">
           <div className="text-[9px] uppercase tracking-wide text-gray-600">{label}</div>
@@ -157,10 +251,14 @@ interface PayoffBuilderProps {
   confirmedLegs?: Omit<Leg, "id">[];
   /** Copilot proposal: replaces all legs (unlike append-only confirmedLegs). `key` bumps per proposal. */
   proposal?: { legs: Omit<Leg, "id">[]; key: number } | null;
+  /** Fires with the current legs whenever they change (the price chart overlays them). */
+  onLegsChange?: (legs: Leg[]) => void;
 }
 
-export function PayoffBuilder({ spot, confirmedLegs = [], proposal }: PayoffBuilderProps) {
+export function PayoffBuilder({ spot, confirmedLegs = [], proposal, onLegsChange }: PayoffBuilderProps) {
+  const chainId = useChainId();
   const [legs, setLegs] = useState<Leg[]>([]);
+  useEffect(() => { onLegsChange?.(legs); }, [legs]);
   const [outlook, setOutlook] = useState<Outlook>("bullish");
   const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   const nextId = useRef(1);
@@ -327,6 +425,8 @@ export function PayoffBuilder({ spot, confirmedLegs = [], proposal }: PayoffBuil
         <>
           <PayoffChart legs={legs} spot={spot} />
           <StatsStrip legs={legs} spot={spot} />
+          <HeatMap legs={legs} spot={spot} />
+          <CollateralPanel legs={legs} spot={spot} chainId={chainId} />
         </>
       ) : (
         <div className="h-44 rounded-lg bg-gray-950 flex items-center justify-center text-gray-700 text-sm">
@@ -336,9 +436,10 @@ export function PayoffBuilder({ spot, confirmedLegs = [], proposal }: PayoffBuil
 
       {legs.length > 0 && (
         <p className="text-xs text-gray-700">
-          Solid line: P&L at nearest expiry · dashed: value today (T+0) · premiums quoted with the
-          on-chain smile · buy legs execute via <code className="text-gray-600">vault.buy()</code>, sell legs
-          via LP range writes
+          Solid: P&L at nearest expiry · purple dashed: today (T+0) · pink dotted: halfway · heat map: P&L by
+          price and date · premiums quoted with the on-chain smile · buy legs execute via{" "}
+          <code className="text-gray-600">vault.buy()</code>, sell legs via LP range writes on the vault that
+          fits (Spreads / Margin tabs for the netted and margined rungs)
         </p>
       )}
     </div>
