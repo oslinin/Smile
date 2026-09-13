@@ -188,7 +188,12 @@ export default function Home() {
   useEffect(() => {
     if (!latestAuth || !latestAuthId) return;
     const [lp, strikeMinWAD, strikeMaxWAD, expiry, , , collateralToken, isCall, active] = latestAuth;
-    if (!active) return;
+    if (!active) {
+      // The latest range was revoked/closed. If the chain is still showing it
+      // as the active range, drop it so its strikes stop looking buyable.
+      setActiveAuth(prev => (prev && prev.authId === latestAuthId ? null : prev));
+      return;
+    }
     setActiveAuth(prev => {
       // Only overwrite if caller hasn't manually set a newer auth
       if (prev && prev.authId >= latestAuthId) return prev;
