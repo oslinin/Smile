@@ -238,6 +238,10 @@ export interface WriterCollateralRow {
   margined: string | null;
   /** Present when this sell leg has a matching long → a writable credit spread. */
   spread: SpreadPrefill | null;
+  /** True when the paired long is on the debit side (a long call BELOW a short
+   * call, or a long put ABOVE a short put): the structure is a bought debit
+   * spread, not a written credit spread, so there's no writer collateral. */
+  debit: boolean;
 }
 
 /**
@@ -255,6 +259,7 @@ export function writerCollateral(legs: BuilderLeg[], spot: number, chainId?: num
       const longs = legs.filter((l) => l.direction === "buy" && l.isCall === leg.isCall && l.amount >= leg.amount);
       let netted: string | null = null;
       let spread: SpreadPrefill | null = null;
+      let debit = false;
       const units = leg.amount || 1;
       if (leg.isCall) {
         const cap = longs.filter((l) => l.strike > leg.strike).sort((a, b) => a.strike - b.strike)[0];
@@ -264,19 +269,25 @@ export function writerCollateral(legs: BuilderLeg[], spot: number, chainId?: num
             ? `$${(cap.strike - leg.strike).toLocaleString()} USDC`
             : `${((cap.strike - leg.strike) / cap.strike).toFixed(4)} WETH`;
           spread = { isCall: true, k1: leg.strike, k2: cap.strike, units };
+        } else if (longs.some((l) => l.strike < leg.strike)) {
+          // A long call BELOW the short → bull call spread (a bought debit spread).
+          debit = true;
         }
       } else {
         const cap = longs.filter((l) => l.strike < leg.strike).sort((a, b) => b.strike - a.strike)[0];
         if (cap) {
           netted = `$${(leg.strike - cap.strike).toLocaleString()} USDC`;
           spread = { isCall: false, k1: cap.strike, k2: leg.strike, units };
+        } else if (longs.some((l) => l.strike > leg.strike)) {
+          // A long put ABOVE the short → bear put spread (a bought debit spread).
+          debit = true;
         }
       }
       const naked = leg.isCall
         ? (usdcNative ? "1 WETH (mock on Arc)" : "1 WETH")
         : `$${leg.strike.toLocaleString()} USDC`;
       const margined = leg.isCall ? null : `$${Math.min(leg.strike, Math.max(leg.strike - spot, 0) + spot * 0.5).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC`;
-      return { leg, naked, netted, margined, spread };
+      return { leg, naked, netted, margined, spread, debit };
     });
 }
 

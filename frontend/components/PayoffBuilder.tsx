@@ -169,11 +169,13 @@ function CollateralPanel({ legs, spot, chainId }: { legs: Leg[]; spot: number; c
       <table className="text-[11px] w-full">
         <thead><tr className="text-gray-600"><th className="text-left font-normal">sell leg</th><th className="text-right font-normal">main vault</th><th className="text-right font-normal">SpreadVault</th><th className="text-right font-normal">MarginVault</th></tr></thead>
         <tbody>
-          {rows.map(({ leg, naked, netted, margined }, i) => (
+          {rows.map(({ leg, naked, netted, margined, debit }, i) => (
             <tr key={i} className="text-gray-300">
               <td className="font-mono">short {leg.isCall ? "call" : "put"} ${leg.strike.toLocaleString()}</td>
               <td className="text-right font-mono text-gray-500">{naked}</td>
-              <td className="text-right font-mono text-green-400">{netted ?? <span className="text-gray-700">— add a long {leg.isCall ? "call above" : "put below"}</span>}</td>
+              <td className="text-right font-mono text-green-400">{netted ?? (debit
+                ? <span className="text-gray-500">debit spread — you buy it</span>
+                : <span className="text-gray-700">— add a long {leg.isCall ? "call above" : "put below"}</span>)}</td>
               <td className="text-right font-mono text-emerald-400">{margined ?? <span className="text-gray-700">puts only</span>}</td>
             </tr>
           ))}
