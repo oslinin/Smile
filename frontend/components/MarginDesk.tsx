@@ -211,6 +211,7 @@ export function MarginDesk({ spot }: { spot: number }) {
   const rMin = range ? Number(range[1]) / 1e18 : 0;
   const rMax = range ? Number(range[2]) / 1e18 : 0;
   const rExpiry = range ? range[3] : ZERO_BI;
+  const rCap = range ? (range[4] as bigint) : ZERO_BI;   // maxCapacity, USDC margin depth
   const rActive = range ? range[5] : false;
   const rAutoTopUp = range ? range[6] : false;
   const rLp = range ? range[0] : ZERO;
@@ -428,6 +429,7 @@ export function MarginDesk({ spot }: { spot: number }) {
             <>
               <div className="rounded-lg bg-gray-800 p-3 text-xs space-y-1">
                 <div className="flex justify-between"><span className="text-gray-400">Range</span><span className="font-mono text-white">#{viewAuthId.toString()} · ${rMin.toLocaleString()} – ${rMax.toLocaleString()} · {rAutoTopUp ? "credit line on" : "no credit line"}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Margin capacity</span><span className="font-mono text-white">{fmtUsdc(rCap, 0)} · {Math.round((rMax - rMin) / 50) + 1} strikes on the $50 grid</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Expires</span><span className="font-mono text-white">{rExpiry > ZERO_BI ? new Date(Number(rExpiry) * 1000).toLocaleDateString() : "…"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={rActive ? "text-green-400" : "text-red-400"}>{rActive ? "active" : "closed"}</span></div>
                 {(isMyRange || freeMargin > ZERO_BI) && (
