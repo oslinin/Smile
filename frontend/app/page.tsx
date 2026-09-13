@@ -267,7 +267,7 @@ export default function Home() {
                 className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border transition-colors bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
               >
                 {switching ? "Switching…" : isConnected
-                  ? (currentChain?.name ?? `Chain ${chainId}`)
+                  ? (NETWORKS.find((n) => n.id === chainId)?.name ?? currentChain?.name ?? `Chain ${chainId}`)
                   : "Network"}
                 <svg className="w-3 h-3 opacity-60" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M6 8L1 3h10z"/>
