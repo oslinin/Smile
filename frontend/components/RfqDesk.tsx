@@ -386,7 +386,7 @@ export function RfqDesk({ spot }: { spot: number }) {
             <div className="rounded-lg bg-gray-800 p-3 text-xs space-y-1">
               <div className="flex justify-between"><span className="text-gray-400">Quote</span><span className="font-mono text-white">range #{taking.quote.authId.toString()} · ${(Number(taking.quote.strike) / 1e18).toLocaleString()} · up to {(Number(taking.quote.maxAmount) / 1e18).toLocaleString()} units</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Signed by</span><span className="font-mono text-gray-300">{taking.lp.slice(0, 6)}…{taking.lp.slice(-4)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={used || expiredQuote ? "text-red-400" : "text-green-400"}>{used ? "used / cancelled" : expiredQuote ? "expired" : `valid until ${new Date(Number(taking.quote.ttl) * 1000).toLocaleTimeString()}`}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={used || expiredQuote || !rActive ? "text-red-400" : "text-green-400"}>{used ? "used / cancelled" : !rActive ? "range revoked by LP" : expiredQuote ? "expired" : `valid until ${new Date(Number(taking.quote.ttl) * 1000).toLocaleTimeString()}`}</span></div>
             </div>
             <div><label className="text-xs text-gray-400 mb-1 block">Units to fill</label><input type="number" value={fillUnits} disabled={fillWorking} onChange={(e) => setFillUnits(e.target.value)} className={input} /></div>
             <div className="rounded-lg border border-green-900 bg-green-950/30 p-3 text-xs space-y-1">
@@ -396,7 +396,7 @@ export function RfqDesk({ spot }: { spot: number }) {
               {costError && <div className="text-red-400">{costError.message.split("\n")[0]}</div>}
             </div>
             {(approveUsdcError || fillError) && <div className="text-xs text-red-400">{(approveUsdcError || fillError)?.message.split("\n")[0]}</div>}
-            <button onClick={handleFill} disabled={fillWorking || !cost || !!used || expiredQuote || fillWad === ZERO_BI || fillWad > taking.quote.maxAmount} className={btn("bg-green-700 hover:bg-green-600")}>
+            <button onClick={handleFill} disabled={fillWorking || !cost || !!used || expiredQuote || !rActive || fillWad === ZERO_BI || fillWad > taking.quote.maxAmount} className={btn("bg-green-700 hover:bg-green-600")}>
               {fillStep === "approving" ? "Approving USDC…" : fillStep === "filling" ? (fillPending ? "Check wallet…" : "Filling…") : fillStep === "done" ? "Filled ✓ — fill another" : `Fill ${fillUnits || 0} unit${Number(fillUnits) === 1 ? "" : "s"} at the signed price`}
             </button>
             {fillStep === "done" && <div className="text-xs text-green-400">Filled. Collateral left the LP wallet at this block; the OptionToken is in yours.</div>}
