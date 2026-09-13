@@ -96,12 +96,12 @@ const slugify = (html) =>
     .replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
 const addHeadingIds = (html, pageId) => {
   const seen = new Set();
-  return html.replace(/<h2>(.*?)<\/h2>/g, (_, inner) => {
+  return html.replace(/<h([23])>(.*?)<\/h\1>/g, (_, level, inner) => {
     let id = slugify(inner) || "section";
     let n = 1;
     while (seen.has(id)) id = `${slugify(inner) || "section"}-${n++}`;
     seen.add(id);
-    return `<h2 id="${id}">${inner}</h2>`;
+    return `<h${level} id="${id}">${inner}</h${level}>`;
   });
 };
 const renderDoc = (relPath, pageId) => {
@@ -222,6 +222,8 @@ const html = `<!doctype html>
   .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
   .toc a:hover { color: #d1d5db; background: #111827; }
   .toc a.current { color: #93c5fd; }
+  .toc a.sub { padding-left: 22px; font-size: 0.72rem; color: #4b5563; }
+  .toc a.sub:hover, .toc a.sub.current { color: #93c5fd; }
   .content { flex: 1; min-width: 0; }
   .page { display: none; }
   .page.active { display: block; }
@@ -344,12 +346,12 @@ const html = `<!doctype html>
     function buildToc(id, section, anchor) {
       document.querySelectorAll(".toc").forEach(function (el) { el.remove(); });
       var items = [];
-      section.querySelectorAll("h2").forEach(function (h) {
+      section.querySelectorAll("h2, h3").forEach(function (h) {
         // marked wraps a bare <a id> line in a <p>: <p><a id="tab-margin"></a></p><h2>Margin</h2>
         var prev = h.previousElementSibling;
         if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
         var target = prev && prev.tagName === "A" && prev.id ? prev.id : h.id;
-        if (target) items.push({ id: target, text: h.textContent.trim() });
+        if (target) items.push({ id: target, text: h.textContent.trim(), sub: h.tagName === "H3" });
       });
       if (items.length < 2) return;
       var toc = document.createElement("div");
@@ -358,7 +360,7 @@ const html = `<!doctype html>
         var a = document.createElement("a");
         a.href = "#" + id + "/" + it.id;
         a.textContent = it.text;
-        if (it.id === anchor) a.className = "current";
+        a.className = (it.sub ? "sub" : "") + (it.id === anchor ? " current" : "");
         a.addEventListener("click", function (e) { e.preventDefault(); showPage(id, it.id); });
         toc.appendChild(a);
       });

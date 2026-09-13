@@ -68,6 +68,8 @@
   .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
   .toc a:hover { color: #d1d5db; background: #111827; }
   .toc a.current { color: #93c5fd; }
+  .toc a.sub { padding-left: 22px; font-size: 0.72rem; color: #4b5563; }
+  .toc a.sub:hover, .toc a.sub.current { color: #93c5fd; }
   .content { flex: 1; min-width: 0; }
   .page { display: none; }
   .page.active { display: block; }
@@ -190,7 +192,7 @@ files by <code>frontend/scripts/gen-help.mjs</code>.</p>
 </ul>
 </li>
 </ol>
-<h3>Competitive positioning: why not Panoptic?</h3>
+<h3 id="competitive-positioning-why-not-panoptic">Competitive positioning: why not Panoptic?</h3>
 <p><a href="https://panoptic.xyz">Panoptic</a> is the strongest live on-chain options design and
 deserves a direct answer. It synthesizes <strong>perpetual</strong> options out of Uniswap v3 LP
 positions and prices them off the pool&#39;s realized fee flow (&quot;streamia&quot;) — which
@@ -285,7 +287,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <td align="left">ERC-20 option position. Vault is owner, so can burn without allowance. Tradeable on any DEX for secondary-market price discovery.</td>
 </tr>
 </tbody></table>
-<h3>Official 1inch Aqua + SwapVM integration</h3>
+<h3 id="official-1inch-aqua-swapvm-integration">Official 1inch Aqua + SwapVM integration</h3>
 <p>The liquidity layer runs on the <strong>official contracts</strong> — <a href="https://github.com/1inch/aqua"><code>1inch/aqua</code></a> and <a href="https://github.com/1inch/swap-vm"><code>1inch/swap-vm</code></a> (release/1.2), vendored under <code>lib/</code> and compiled unmodified:</p>
 <ul>
 <li><strong><code>SmileSwapVMRouter</code></strong> (<code>src/swapvm/SmileSwapVMRouter.sol</code>) inherits the official <code>SwapVM</code> core + <code>AquaOpcodes</code> instruction set and registers one custom instruction at <strong>opcode 33</strong>: <code>_optionPremiumXD</code>. This router <em>is</em> the Aqua app LPs ship to.</li>
@@ -295,7 +297,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <li><strong>Covered calls</strong> execute as official SwapVM swaps (premium <code>Aqua.push()</code>ed to the LP wallet, collateral <code>Aqua.pull()</code>ed JIT). <strong>Cash-secured puts</strong> use the vault itself as an official <code>AquaApp</code> (same JIT <code>pull()</code>, under the official per-strategy reentrancy lock) since premium and collateral share one token (USDC).</li>
 <li><strong>Capacity is enforced by Aqua itself</strong>: over-buying a range underflows the maker&#39;s virtual balance inside the official <code>Aqua.pull()</code> — the vault keeps no parallel accounting. On a mainnet fork the deploy script reuses the <strong>production Aqua deployment</strong> (<code>0x4999…6D31</code>).</li>
 </ul>
-<h3>Revenue model (protocol fee via the official fee opcode)</h3>
+<h3 id="revenue-model-protocol-fee-via-the-official-fee-opcode">Revenue model (protocol fee via the official fee opcode)</h3>
 <p>Every option <strong>buy</strong> carries a protocol fee (default 1%, capped at 5%) that accrues to a fee recipient — e.g. the 1inch DAO treasury — routed through the <strong>official SwapVM fee instruction</strong>, not custom plumbing:</p>
 <ul>
 <li>The call-strategy program grows to five instructions: <code>salt → deadline → jumpIfTokenIn → aquaProtocolFee → optionPremium</code>. The official <code>Fee._aquaProtocolFeeAmountInXD</code> (opcode 28) grosses the fee up <strong>on top of the Ask</strong> — the buyer pays <code>ask + fee</code>, the fee recipient is paid through the official <code>Aqua.pull()</code>, and <strong>the LP always nets the full premium</strong>.</li>
@@ -303,7 +305,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <li>Puts (the vault-as-AquaApp leg) apply the identical gross-up vault-side.</li>
 <li>Fee terms are <strong>snapshotted per authorization</strong> — an LP sees the exact fee at ship time and it can never change under them; governance changes apply only to new ranges. Fee-enabled ranges ship with $25 of premium-token virtual headroom (an allowance number, no tokens move) because the official opcode pulls the fee before the buyer&#39;s premium push lands.</li>
 </ul>
-<h3>Collateralization Model</h3>
+<h3 id="collateralization-model">Collateralization Model</h3>
 <p><strong>V1 (current) — Cash-Secured / Covered (Fully Collateralized)</strong></p>
 <p>The simplest and safest model. To mint an ETH Call at a 3,500 strike, the LP backs it with 1 WETH (Covered Call). To mint a Put, the LP backs it with 3,500 USDC (Cash-Secured Put). The collateral is authorized JIT via Aqua — it never leaves the LP&#39;s wallet until a buyer matches — but it is always fully present and earmarked.</p>
 <p>Solvency is trivially guaranteed: if the option expires in-the-money, the locked assets are delivered to the buyer. No price oracle is needed for margining and no liquidation engine exists — there is nothing to liquidate.</p>
@@ -509,7 +511,7 @@ tier (<a href="#limitations">Limitations, R6</a>), where pros manage their own
 leverage off-chain and the trustless vault never underwrites it.</p>
 <hr>
 <h2 id="-mathematical-specification">📐 Mathematical Specification</h2>
-<h3>1. Multiparameter Volatility Surface</h3>
+<h3 id="1-multiparameter-volatility-surface">1. Multiparameter Volatility Surface</h3>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow></msub><mo stretchy="false">(</mo><mi>T</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>σ</mi><mrow><mi>t</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>r</mi></mrow></msub><mo stretchy="false">(</mo><mi>T</mi><mo stretchy="false">)</mo><mo>⋅</mo><mi>max</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mn>0.1</mn><mo separator="true">,</mo><mtext>  </mtext><mn>1</mn><mo>+</mo><mi>α</mi><mo>⋅</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>K</mi><mi mathvariant="normal">/</mi><mi>S</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>+</mo><mi>β</mi><mo>⋅</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>K</mi><mi mathvariant="normal">/</mi><mi>S</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo></mrow><annotation encoding="application/x-tex">\sigma_{strike}(T) = \sigma_{tenor}(T) \cdot \max\!\big(0.1,\; 1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S)\big)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight" style="margin-right:0.0315em;">ik</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord">0.1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1141em;vertical-align:-0.25em;"></span><span class="mop">ln</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">ln</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></span></p>
 <ul>
 <li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>σ</mi><mrow><mi>t</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>r</mi></mrow></msub><mo stretchy="false">(</mo><mi>T</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\sigma_{tenor}(T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mclose">)</span></span></span></span>: demand-driven IV stored <strong>per tenor bucket</strong> — <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>7</mn><mi>d</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[0,7d)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">7</span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>7</mn><mo separator="true">,</mo><mn>30</mn><mi>d</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[7,30d)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">7</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">30</span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>30</mn><mo separator="true">,</mo><mn>90</mn><mi>d</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[30,90d)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">30</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">90</span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>90</mn><mi>d</mi><mo separator="true">,</mo><mi mathvariant="normal">∞</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[90d,\infty)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">90</span><span class="mord mathnormal">d</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∞</span><span class="mclose">)</span></span></span></span> — the term structure of the surface (<code>OptionPricingHook.sigmaFor</code>).</li>
@@ -559,7 +561,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 </tbody></table>
 <p>*where <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mn>25</mn></msub><mo>=</mo><mo stretchy="false">∣</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>K</mi><mrow><mn>25</mn><mi mathvariant="normal">Δ</mi></mrow></msub><mi mathvariant="normal">/</mi><mi>S</mi><mo stretchy="false">)</mo><mo stretchy="false">∣</mo></mrow><annotation encoding="application/x-tex">k_{25} = \lvert\ln(K_{25\Delta}/S)\rvert</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">25</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">∣</span><span class="mop">ln</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">25Δ</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose">)∣</span></span></span></span>, the log-moneyness of the &quot;25-delta&quot; reference strikes — the OTM call and put with ~25% probability of finishing in the money, the near-universal convention for measuring the wings. The frontend computes RR/BF exactly (evaluating the smile at the true 25Δ strikes — <code>surfaceQuotes</code> in <code>frontend/lib/options.ts</code>) and shows them in the One-Click Income panel with plain-language captions.</p>
 <p>Two things this framing buys: <strong>(1) takers</strong> get a sanity check in familiar units — an expected-move band instead of an abstract α; <strong>(2) LPs</strong> see their <a href="#limitations">L6</a> surface-parameter risk in the same terms a Deribit market-maker manages daily — vega against the ATM level, RR-sensitivity against the skew, fly against the curvature — rather than as bespoke protocol exposures. (Client-facing greeks are untouched: takers always see plain Black-Scholes delta/gamma/theta/vega evaluated <em>at</em> the smile σ, whatever parameterization produces it.)</p>
-<h3>2. Premium Calculation</h3>
+<h3 id="2-premium-calculation">2. Premium Calculation</h3>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><munder><munder><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mo>±</mo><mo stretchy="false">(</mo><mi>S</mi><mo>−</mo><mi>K</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><mn>0</mn><mo stretchy="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>intrinsic (call/put)</mtext></munder><mo>+</mo><munder><munder><mrow><mi>S</mi><mo>⋅</mo><msub><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow></msub><mo>⋅</mo><msqrt><mi>T</mi></msqrt><mo>⋅</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>S</mi><mo separator="true">,</mo><mi>K</mi><mo stretchy="false">)</mo></mrow><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>S</mi><mo separator="true">,</mo><mi>K</mi><mo stretchy="false">)</mo></mrow></mfrac></mstyle></mrow><mo stretchy="true">⏟</mo></munder><mtext>moneyness-damped time-value</mtext></munder></mrow><annotation encoding="application/x-tex">P = \underbrace{\max(\pm(S - K),\, 0)}_{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.548em;vertical-align:-1.798em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span style="top:-1.377em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">intrinsic (call/put)</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span class="svg-align" style="top:-2.102em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
  35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
  0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
@@ -596,7 +598,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <li>A protocol fee (default 1%) is grossed up <strong>on top of</strong> the Ask via the official SwapVM fee opcode — the LP always nets the full premium. Sellbacks are fee-free.</li>
 </ul>
 <p>Gas-efficient on-chain approximation — omits <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">N(d_1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false">(</mo><msub><mi>d</mi><mn>2</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">N(d_2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> to avoid square-root-heavy distributions.</p>
-<h3>3. σ Feedback Loop (tenor-aware)</h3>
+<h3 id="3-σ-feedback-loop-tenor-aware">3. σ Feedback Loop (tenor-aware)</h3>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>σ</mi><mrow><mi>t</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>r</mi><mo separator="true">,</mo><mtext> </mtext><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>σ</mi><mrow><mi>t</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>r</mi><mo separator="true">,</mo><mtext> </mtext><mi>t</mi></mrow></msub><mo>+</mo><mi>γ</mi><mo>⋅</mo><mtext>sign</mtext><mo stretchy="false">(</mo><mtext>trade</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\sigma_{tenor,\,t+1} = \sigma_{tenor,\,t} + \gamma \cdot \text{sign}(\text{trade})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span><span class="mpunct mtight">,</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mord mathnormal mtight">t</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span><span class="mpunct mtight">,</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">sign</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">trade</span></span><span class="mclose">)</span></span></span></span></span></p>
 <ul>
 <li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">+\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord">+</span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span></span></span></span> on every <code>buy()</code> — bumps <strong>only the traded tenor bucket</strong>.</li>
@@ -627,7 +629,7 @@ nothing actually traded in.</li>
 <p>V1 keeps pricing on-chain and discrete; smooth interpolation is left for a future
 RFQ-style quoting layer.</p>
 </blockquote>
-<h3>4. Black-Scholes Delta (Frontend)</h3>
+<h3 id="4-black-scholes-delta-frontend">4. Black-Scholes Delta (Frontend)</h3>
 <p>Delta (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span>) is computed client-side for the matrix display. Not used in on-chain pricing.</p>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">Δ</mi><mo>=</mo><mi>N</mi><mo stretchy="false">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><msub><mi>d</mi><mn>1</mn></msub><mo>=</mo><mfrac><mrow><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>S</mi><mi mathvariant="normal">/</mi><mi>K</mi><mo stretchy="false">)</mo><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msubsup><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow><mn>2</mn></msubsup><mo>⋅</mo><mi>T</mi></mrow><mrow><msub><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow></msub><mo>⋅</mo><msqrt><mi>T</mi></msqrt></mrow></mfrac></mrow><annotation encoding="application/x-tex">\Delta = N(d_1), \qquad d_1 = \frac{\ln(S/K) + \frac{1}{2}\sigma_{strike}^2 \cdot T}{\sigma_{strike} \cdot \sqrt{T}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.5468em;vertical-align:-0.9667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.5801em;"><span style="top:-2.1833em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight" style="margin-right:0.0315em;">ik</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span><span style="top:-2.8867em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
 c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
@@ -645,7 +647,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <blockquote>
 <p>Delta ranges 0–1 for calls (0 = deep OTM, 1 = deep ITM). A 0.5-delta call is approximately ATM.</p>
 </blockquote>
-<h3>5. Expiry Settlement — Permissionless + Chainlink CRE</h3>
+<h3 id="5-expiry-settlement-permissionless-chainlink-cre">5. Expiry Settlement — Permissionless + Chainlink CRE</h3>
 <p>A parametric option is only as trustworthy as the price it settles against. At expiry every open series needs one <strong>final spot price</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mrow><mi>f</mi><mi>i</mi><mi>n</mi><mi>a</mi><mi>l</mi></mrow></msub></mrow><annotation encoding="application/x-tex">S_{final}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight">ina</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> written on-chain, because that single number decides every payout: holders redeem the in-the-money intrinsic and the LP reclaims the remainder (see <a href="#6-settlement--redemption">§6 flow</a>). Every series is registered with <code>AquaOptionSettlement</code> at first mint, and can then be settled by <strong>either of two paths</strong>:</p>
 <p><strong>Path A — permissionless Chainlink-round settlement (trustless).</strong> Anyone — a keeper, the holder, the LP — calls <code>settleWithChainlinkRound(seriesId, roundId)</code> with the Chainlink ETH/USD round covering expiry. The contract verifies on-chain that the round was updated <strong>at/after expiry</strong> and that its predecessor was updated <strong>before</strong> expiry (i.e. it is the <em>first</em> post-expiry round), so nobody can cherry-pick a later, more favorable price:</p>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>S</mi><mrow><mi>f</mi><mi>i</mi><mi>n</mi><mi>a</mi><mi>l</mi></mrow></msub><mo>=</mo><mrow><mi mathvariant="monospace">g</mi><mi mathvariant="monospace">e</mi><mi mathvariant="monospace">t</mi><mi mathvariant="monospace">R</mi><mi mathvariant="monospace">o</mi><mi mathvariant="monospace">u</mi><mi mathvariant="monospace">n</mi><mi mathvariant="monospace">d</mi><mi mathvariant="monospace">D</mi><mi mathvariant="monospace">a</mi><mi mathvariant="monospace">t</mi><mi mathvariant="monospace">a</mi><mo stretchy="false">(</mo><mi mathvariant="monospace">r</mi><mi mathvariant="monospace">o</mi><mi mathvariant="monospace">u</mi><mi mathvariant="monospace">n</mi><mi mathvariant="monospace">d</mi><mi mathvariant="monospace">I</mi><mi mathvariant="monospace">d</mi><mo stretchy="false">)</mo><mi mathvariant="monospace">.</mi><mi mathvariant="monospace">a</mi><mi mathvariant="monospace">n</mi><mi mathvariant="monospace">s</mi><mi mathvariant="monospace">w</mi><mi mathvariant="monospace">e</mi><mi mathvariant="monospace">r</mi></mrow><mtext>  </mtext><mtext>  </mtext><mo stretchy="false">(</mo><mtext>8-dec</mtext><mo stretchy="false">)</mo><mtext>  </mtext><mo>→</mo><mtext>  </mtext><mtext>WAD 18-dec</mtext></mrow><annotation encoding="application/x-tex">S_{final} = \mathtt{getRoundData(roundId).answer} \;\; (\text{8-dec}) \;\rightarrow\; \text{WAD 18-dec}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight">ina</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathtt">getRoundData</span><span class="mopen">(</span><span class="mord mathtt">roundId</span><span class="mclose">)</span><span class="mord mathtt">.answer</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mopen">(</span><span class="mord text"><span class="mord">8-dec</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">WAD 18-dec</span></span></span></span></span></span></p>
@@ -655,7 +657,7 @@ M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">�
 <blockquote>
 <p><strong>Design note.</strong> Because both paths resolve to the on-chain Chainlink feed, the DON&#39;s role is a <em>scheduled, trust-minimized keeper</em> (deterministic read + signed write) rather than novel off-chain data sourcing.</p>
 </blockquote>
-<h3>6. Quoting Oracle — Chainlink Data Feeds, with an Optional Pyth Pull-Oracle</h3>
+<h3 id="6-quoting-oracle-chainlink-data-feeds-with-an-optional-pyth-pull-oracle">6. Quoting Oracle — Chainlink Data Feeds, with an Optional Pyth Pull-Oracle</h3>
 <p>Settlement (§5 above) always resolves through Chainlink&#39;s on-chain round
 history — that&#39;s what makes permissionless expiry-bracketing verifiable, and
 it never changes. <strong>Quoting</strong> (pricing a live <code>buy()</code>/<code>close()</code>) is a
@@ -697,7 +699,7 @@ addresses above run).</p>
 <blockquote>
 <p>Color key: 🟢 1inch Aqua · 🩷 Uniswap · 🔵 Chainlink</p>
 </blockquote>
-<h3>0. System Overview</h3>
+<h3 id="0-system-overview">0. System Overview</h3>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Trader
     participant Frontend
@@ -731,7 +733,7 @@ addresses above run).</p>
     Maker-&gt;&gt;Aqua: reclaimCollateral(optionToken) → exact remainder
     end
 </code></pre>
-<h3>1. Range Authorization + Ship (LP)</h3>
+<h3 id="1-range-authorization-ship-lp">1. Range Authorization + Ship (LP)</h3>
 <p>The LP authorizes a strike range from one collateral pool, then ships it on the <strong>official Aqua registry</strong>. No collateral moves at any stage — it stays in the LP&#39;s wallet earning yield; <code>Aqua.ship()</code> only records virtual balances.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant LP
@@ -748,7 +750,7 @@ addresses above run).</p>
     Note over Aqua: strategy = real SwapVM bytecode (salt → deadline → jumpIfTokenIn → fee → optionPremium)
     Aqua--&gt;&gt;LP: ✓ range live — one balance quotes the whole chain
 </code></pre>
-<h3>2. Primary Market Buy (Trader)</h3>
+<h3 id="2-primary-market-buy-trader">2. Primary Market Buy (Trader)</h3>
 <p>With a Trading API key configured, premium payment is routed through the <strong>Uniswap Trading API</strong> (<code>EXACT_OUTPUT</code> ETH→USDC), giving an on-chain Uniswap tx before the vault call; otherwise the buyer&#39;s USDC is pulled directly.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Buyer
@@ -769,7 +771,7 @@ addresses above run).</p>
     Vault-&gt;&gt;Buyer: mint OptionToken
     Note over Vault: Hook bumps the traded tenor bucket σ += γ
 </code></pre>
-<h3>3. Close Position = Sellback at Bid (Holder)</h3>
+<h3 id="3-close-position-sellback-at-bid-holder">3. Close Position = Sellback at Bid (Holder)</h3>
 <p>A holder exits before expiry by <strong>selling the option back at the live Bid</strong> — a <em>reverse</em> swap through the same shipped SwapVM strategy. Escrowed collateral returns to the LP wallet via <code>Aqua.push()</code>, which <strong>restores the range&#39;s JIT capacity</strong>; the Bid premium is <code>Aqua.pull()</code>ed from the LP wallet straight to the holder (funded by premiums the LP already earned). Sellbacks are fee-free — the strategy bytecode jumps past the fee opcode in the reverse direction. This is also the path arbitrageurs use to monetize σ corrections.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Holder
@@ -788,7 +790,7 @@ addresses above run).</p>
     Note over Hook: traded tenor bucket σ -= γ
     Vault--&gt;&gt;Holder: ✓ sold back at Bid
 </code></pre>
-<h3>4. Arbitrageur as Emergent Market Maker</h3>
+<h3 id="4-arbitrageur-as-emergent-market-maker">4. Arbitrageur as Emergent Market Maker</h3>
 <p>When on-chain σ diverges from market IV, arbitrageurs capture the spread by buying at the Ask, delta-hedging on spot, and <strong>selling back at the Bid</strong> once their own demand re-rates σ. The sellback mechanism is what makes the round trip monetizable — their activity <em>is</em> the correction. This is the emergent market-making loop.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Arb as Arbitrageur
@@ -804,7 +806,7 @@ addresses above run).</p>
     Arb-&gt;&gt;UniPool: unwind delta hedge
     Note over Arb: profit = (σ_market - σ_entry) * vega
 </code></pre>
-<h3>5. Secondary Market Swap (Uniswap v4)</h3>
+<h3 id="5-secondary-market-swap-uniswap-v4">5. Secondary Market Swap (Uniswap v4)</h3>
 <p>Existing OptionTokens can be resold. The hook vetoes mispriced swaps and adjusts σ. Secondary market only — ERC-20 ownership transfers, no minting.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Seller
@@ -822,7 +824,7 @@ addresses above run).</p>
     Note over Hook: exactIn (sell) → σ -= γ
     Hook--&gt;&gt;Pool: ✓ σ updated
 </code></pre>
-<h3>6. Settlement &amp; Redemption</h3>
+<h3 id="6-settlement-redemption">6. Settlement &amp; Redemption</h3>
 <p>Every series is registered at first mint. At expiry it settles through either path — <strong>permissionlessly</strong> with the Chainlink round covering expiry (verified on-chain, no trusted writer), or via the scheduled <strong>CRE DON</strong>. Holders then redeem the cash-settled intrinsic from the vault&#39;s escrow; the LP reclaims the exact remainder — in any order, with full conservation.</p>
 <pre><code class="language-mermaid">sequenceDiagram
     participant Anyone
@@ -922,9 +924,9 @@ address, deploy hash and demo transaction: the Sepolia deployment notes;
 </blockquote>
 <hr>
 <h2 id="-how-to-run-the-project">🛠️ How to Run the Project</h2>
-<h3>1. View Live Site (GitHub Pages)</h3>
+<h3 id="1-view-live-site-github-pages">1. View Live Site (GitHub Pages)</h3>
 <p><strong>URL:</strong> <code>https://oslinin.github.io/Smile</code></p>
-<h3>2. Local Frontend Development</h3>
+<h3 id="2-local-frontend-development">2. Local Frontend Development</h3>
 <pre><code class="language-bash">cd frontend
 pnpm install
 pnpm run dev
@@ -947,11 +949,11 @@ on-chain <a href="src/hooks/OptionPricingHook.sol"><code>OptionPricingHook.bumpS
 — so the surface visibly re-rates as order flow arrives. Start it standalone with
 <code>./volsurface/run.sh</code> (it also comes up automatically with <code>./local.sh</code>); the tab
 shows a hint instead of a broken image when the service is offline.</p>
-<h3>3. Smart Contract Development (Foundry)</h3>
+<h3 id="3-smart-contract-development-foundry">3. Smart Contract Development (Foundry)</h3>
 <pre><code class="language-bash">forge build   # compile all contracts (incl. the vendored official 1inch stack)
 forge test    # run the 82-test suite
 </code></pre>
-<h3>4. Deploy to Anvil (Local)</h3>
+<h3 id="4-deploy-to-anvil-local">4. Deploy to Anvil (Local)</h3>
 <p>The quickest path: <code>./local.sh</code> starts Anvil, deploys all contracts, writes <code>frontend/.env.local</code>, launches the vol-surface renderer, and starts the dev server in one step.</p>
 <p>When you&#39;re done, stop everything it started:</p>
 <pre><code class="language-bash">fuser -k 8545/tcp 3000/tcp 8000/tcp
@@ -969,7 +971,7 @@ PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
   --broadcast \
   --skip-simulation
 </code></pre>
-<h3>5. Deploy to Sepolia</h3>
+<h3 id="5-deploy-to-sepolia">5. Deploy to Sepolia</h3>
 <p>Copy <code>.env.example</code> → <code>.env</code>, fill in <code>PRIVATE_KEY</code> and <code>RPC_SEPOLIA</code>, then:</p>
 <pre><code class="language-bash">source .env
 PRIVATE_KEY=&quot;$PRIVATE_KEY&quot; \
@@ -989,7 +991,7 @@ PRIVATE_KEY=&quot;$PRIVATE_KEY&quot; forge script script/Deploy.s.sol:Deploy \
   --verify \
   --etherscan-api-key &quot;$ETHERSCAN_API_KEY&quot;
 </code></pre>
-<h3>6. Chainlink CRE Workflow</h3>
+<h3 id="6-chainlink-cre-workflow">6. Chainlink CRE Workflow</h3>
 <p>The required Chainlink integration is a <strong>CRE workflow</strong> that performs an on-chain
 state change: on a cron schedule the DON reads the Chainlink ETH/USD feed at the
 last finalized block, reaches consensus, and the DON-signed report calls
@@ -1060,7 +1062,7 @@ locally. <code>cre workflow simulate</code> gates on auth — run <code>cre logi
 <code>CRE_API_KEY</code>) first.</p>
 </blockquote>
 <hr>
-<h3>6a. Demonstrate a successful CRE CLI simulation (the verified path)</h3>
+<h3 id="6a-demonstrate-a-successful-cre-cli-simulation-the-verified-path">6a. Demonstrate a successful CRE CLI simulation (the verified path)</h3>
 <p>First confirm it compiles (no auth needed):</p>
 <pre><code class="language-bash">cd cre-workflow
 cre workflow build settlement
@@ -1083,7 +1085,7 @@ a KeystoneForwarder that calls <code>onReport(bytes,bytes)</code> on the receive
 <code>onlyCRE</code>. Wiring the live on-chain write (an <code>onReport</code> entrypoint + registered
 forwarder) is a follow-up; the CRE CLI <strong>simulation above</strong> is the demonstrated path.</p>
 </blockquote>
-<h3>7. Explore the Codebase — Knowledge Graph</h3>
+<h3 id="7-explore-the-codebase-knowledge-graph">7. Explore the Codebase — Knowledge Graph</h3>
 <p>The repo ships a generated map of itself — <a href=".understand-anything/knowledge-graph.json"><code>.understand-anything/knowledge-graph.json</code></a> —
 166 nodes (files, functions, contracts) and 219 edges (imports, calls, contains)
 grouped into 5 architecture layers, plus a 13-step guided tour, produced by an
@@ -1154,13 +1156,13 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 </tbody></table>
 <hr>
 <h2 id="-glossary">📖 Glossary</h2>
-<h3>Ethereum / Blockchain Terms</h3>
+<h3 id="ethereum-blockchain-terms">Ethereum / Blockchain Terms</h3>
 <ul>
 <li><strong>EOA (Externally Owned Account):</strong> A standard Ethereum wallet controlled by a private key (e.g., MetaMask). LPs and traders use EOAs; the protocol never takes custody of their funds.</li>
 <li><strong>ERC-20:</strong> Standard interface for fungible tokens. <code>OptionToken</code> follows this standard so positions can be resold on any DEX.</li>
 <li><strong>Non-custodial:</strong> The protocol never holds user assets. Collateral stays in LP wallets until a buyer matches; the vault only moves funds atomically on match.</li>
 </ul>
-<h3>DeFi Terms</h3>
+<h3 id="defi-terms">DeFi Terms</h3>
 <ul>
 <li><strong>LP (Liquidity Provider):</strong> A participant who backs trades. Here, LPs authorize the vault to pull collateral JIT — they are yield-seeking covered-option writers, not market makers.</li>
 <li><strong>Maker:</strong> The option writer (LP). Authorizes a strike range, provides collateral JIT, receives premiums, reclaims collateral at expiry.</li>
@@ -1171,7 +1173,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 <li><strong>CRE (Chainlink Runtime Environment):</strong> Off-chain computation environment for custom DON workflows (successor to Chainlink Functions).</li>
 <li><strong>JIT (Just-In-Time) Liquidity:</strong> Capital pulled from an LP&#39;s wallet only at trade execution — never locked idle. Enabled by 1inch Aqua.</li>
 </ul>
-<h3>Options Terms</h3>
+<h3 id="options-terms">Options Terms</h3>
 <ul>
 <li><strong>Delta (Δ):</strong> Rate of change of premium per $1 move in spot. 0 = deep OTM, 1 = deep ITM for calls. Computed frontend-only via <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">N(d_1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> using smile-adjusted <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\sigma_{strike}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight" style="margin-right:0.0315em;">ik</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>.</li>
 <li><strong>Strike Price (K):</strong> Price at which the option holder has the right to buy (call) or sell (put) at expiry.</li>
@@ -1184,7 +1186,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 <li><strong>Volatility Smile:</strong> OTM/ITM options trade at higher IV than ATM; modeled by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>⋅</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>K</mi><mi mathvariant="normal">/</mi><mi>S</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\alpha \cdot \ln(K/S)^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mop">ln</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> curvature.</li>
 <li><strong>Black-Scholes:</strong> Mathematical option pricing model. This protocol uses a parametric approximation (gas-efficient, no <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">N(d_1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> on-chain).</li>
 </ul>
-<h3>Protocol-Specific Terms</h3>
+<h3 id="protocol-specific-terms">Protocol-Specific Terms</h3>
 <ul>
 <li><strong>Range Authorization:</strong> LP&#39;s single on-chain commitment to write options at any strike <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>∈</mo><mo stretchy="false">[</mo><msub><mi>K</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub><mo separator="true">,</mo><msub><mi>K</mi><mrow><mi>m</mi><mi>a</mi><mi>x</mi></mrow></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">K \in [K_{min}, K_{max}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ma</span><span class="mord mathnormal mtight">x</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span> from one collateral pool. First buy at a new strike deploys an OptionToken lazily.</li>
 <li><strong>Yield Double-Dip:</strong> LP earns staking/lending yield on collateral (because it stays in their wallet via Aqua JIT) <em>and</em> option premium from buyers. Impossible in vault-locking designs.</li>
@@ -1238,7 +1240,7 @@ what was built during EthOnline 2026 (September 5–13, 2026) on branch
 the honest scope decisions behind them are in the plans (feature overview ·
 SpreadVault / MarginVault · The Graph subgraph · Arc). The task-by-task
 status page is <strong>Help → Continuation Track</strong> in the app.</p>
-<h3>Feature · reason · integration</h3>
+<h3 id="feature-reason-integration">Feature · reason · integration</h3>
 <table>
 <thead>
 <tr>
@@ -1303,7 +1305,7 @@ status page is <strong>Help → Continuation Track</strong> in the app.</p>
 <td>infrastructure</td>
 </tr>
 </tbody></table>
-<h3>Integration &amp; feature map</h3>
+<h3 id="integration-feature-map">Integration &amp; feature map</h3>
 <p>Blue is what Smile already was on September 5; green is what the event
 added. Integrations and infrastructure alike.</p>
 <pre><code class="language-mermaid">flowchart TB
@@ -1360,7 +1362,7 @@ added. Integrations and infrastructure alike.</p>
   TV &amp; MD --&gt; Chart
   Chart --&gt; UI
 </code></pre>
-<h3>What the event added</h3>
+<h3 id="what-the-event-added">What the event added</h3>
 <table>
 <thead>
 <tr>
@@ -1431,7 +1433,7 @@ added. Integrations and infrastructure alike.</p>
   App -- &quot;NEXT_PUBLIC_SUBGRAPH_URL&quot; --&gt; Graph
   Graph -- &quot;events + bound authorizations() calls&quot; --&gt; Vault
 </code></pre>
-<h3>SpreadVault in one table</h3>
+<h3 id="spreadvault-in-one-table">SpreadVault in one table</h3>
 <p>A taker buys the structure; the writer&#39;s escrow is the S12 true max loss,
 pulled JIT through the SpreadVault&#39;s own Aqua strategy, and settlement is
 one price through one formula per structure:</p>
@@ -1492,7 +1494,7 @@ OTM, between the strikes, and far ITM: <code>holder payout + writer reclaim == e
     T-&gt;&gt;SV: redeem(authId, units) → net intrinsic, capped by escrow
     W-&gt;&gt;SV: reclaim(authId) → escrow − what outstanding holders are owed
 </code></pre>
-<h3>The app, as a visitor sees it</h3>
+<h3 id="the-app-as-a-visitor-sees-it">The app, as a visitor sees it</h3>
 <p><code>./local.sh</code> opens on <strong>Overview</strong>: which chain you are on and what is real
 there, the ladder — naked put $3,000 → credit spread $200 → margined put
 $1,500 (read live from MarginVault&#39;s mark) → signed quote — with a jump
@@ -1507,7 +1509,7 @@ Monitor</strong> shows every margined position&#39;s health and the liquidation
 timeline as it happens; <strong>My Positions</strong> reads The Graph where it exists;
 <strong>Receipts</strong> lists every deployment. The copilot (bottom-right) has read
 the <a href="#guide">User Guide</a> and can drive any of it.</p>
-<h3>Running the new pieces</h3>
+<h3 id="running-the-new-pieces">Running the new pieces</h3>
 <pre><code class="language-bash">./local.sh                          # Anvil + all contracts incl. SpreadVault + the app (Spreads tab)
 ./script/spread-lifecycle.sh        # open → ship → buy → expiry → settle → redeem → reclaim, conservation-checked
 ./script/margin-lifecycle.sh        # margined put: fill (IM only) → crash → flag → auction → backstop absorbs → settle → redeem
@@ -1521,7 +1523,7 @@ cp .env.sepolia.example frontend/.env.local                  # point the app (+ 
 cp .env.arc.example frontend/.env.local                      # point the app at the Arc testnet deployment
 PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills on Arc, as plain cast sends
 </code></pre>
-<h3>Honest status of each track</h3>
+<h3 id="honest-status-of-each-track">Honest status of each track</h3>
 <ul>
 <li><strong>SpreadVault</strong>: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional <code>SpreadPremiumInstruction</code> SwapVM opcode for the call-credit leg was not attempted.</li>
 <li><strong>MarginVault</strong>: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range <code>maxBlockNotional</code> not ported (the global backstop-coupled ceiling bounds exposure instead); no <code>close()</code> by design (a sigma-priced buyback paid from margin is L7&#39;s attack). Full lifecycle on Anvil via <code>script/margin-lifecycle.sh</code> and the keeper; deployed to Sepolia and Arc, with a real-USDC margined fill on Arc (1.50 locked instead of 3.00). <a href="#limitations">L13</a> is the honest list of what it does not promise.</li>
@@ -1617,19 +1619,19 @@ curve today / halfway / at expiry, a price × date P&amp;L heat map,
 breakevens, probability of profit, net greeks, and — Smile-specific —
 what a writer would have to lock for each sell leg on each vault.</p>
 <h2 id="earning-as-a-liquidity-provider">Earning as a liquidity provider</h2>
-<h3>One-Click (Earn · One-Click)</h3>
+<h3 id="one-click-earn-one-click">One-Click (Earn · One-Click)</h3>
 <p>The simplest way in: choose <em>covered calls</em> (hold WETH) or <em>cash-secured
 puts</em> (hold USDC), a delta band and a tenor; the app authorizes a range at
 those deltas and ships it to Aqua. <code>keeper/roll.mjs</code> can roll it every
 expiry with your own key.</p>
-<h3>Write a Range (Earn · Write a Range)</h3>
+<h3 id="write-a-range-earn-write-a-range">Write a Range (Earn · Write a Range)</h3>
 <p>The full form: strike range, expiry, capacity, optional per-block cap and
 your own vol multiplier (your quote versus the surface — competing ranges
 <em>are</em> the vol discovery). Three steps: approve Aqua for the collateral,
 <code>authorizeRange</code>, <code>Aqua.ship</code>. Nothing leaves your wallet until a fill.
 Your positions and fills are on <strong>My Positions</strong> (read from The Graph on
 Sepolia, from RPC elsewhere).</p>
-<h3>Spreads (SpreadVault)</h3>
+<h3 id="spreads-spreadvault">Spreads (SpreadVault)</h3>
 <p>Write a <strong>credit spread</strong> — call credit (short K1, long K2) or put credit
 (short K2, long K1) — and only the structure&#39;s true maximum loss is
 escrowed: <code>(K2−K1)/K2</code> WETH per unit for calls, <code>K2−K1</code> USDC for puts.
@@ -1637,7 +1639,7 @@ For a 3000/3200 call credit that is 0.0625 WETH instead of 1 WETH. The
 taker buys the whole structure as one SpreadToken and pays Ask(long leg)
 − Bid(short leg). Settlement is one price through one formula; the payout
 can never exceed the escrow.</p>
-<h3>Margin (MarginVault, opt-in)</h3>
+<h3 id="margin-marginvault-opt-in">Margin (MarginVault, opt-in)</h3>
 <p>Write puts posting <strong>initial margin</strong> instead of the strike: intrinsic
 plus a 50% buffer of the <em>worst-of-hour</em> Chainlink mark, capped at the
 strike — 1,500 USDC for an at-the-money 3,000 put. This is the one tier
@@ -1663,7 +1665,7 @@ into a paragraph.</p>
 <p>Deposits and withdrawals of free balance go through <code>deposit</code> /
 <code>withdraw</code>; a withdrawal is refused while you are flagged, in debt, or if
 it would take any position below initial margin.</p>
-<h3>RFQ (RfqVault)</h3>
+<h3 id="rfq-rfqvault">RFQ (RfqVault)</h3>
 <p>Ship a range as above, then <strong>sign quotes</strong> in your wallet — no gas — for
 a strike, size cap, price, and time-to-live. Price them off any model you
 like; the tab shows the formula Ask next to your quote. A taker fills the
@@ -1688,7 +1690,7 @@ range look like right now?&quot;</em>, <em>&quot;build me an iron condor around 
 20%?&quot;</em>, <em>&quot;explain the last liquidation&quot;</em> (from the Risk Monitor), <em>&quot;how do
 I sign an RFQ quote?&quot;</em>. It reads the connected chain, The Graph (on Sepolia
 and Arc), Deribit for reference vol, and these docs.</p>
-<h3>Trading with the tape</h3>
+<h3 id="trading-with-the-tape">Trading with the tape</h3>
 <p>On Sepolia and Arc every range, fill and position is indexed by The Graph
 (<code>subgraph/</code>), and the copilot&#39;s trading tools read that tape — with no
 cap on how many ranges exist. Ask it:</p>
@@ -1901,7 +1903,7 @@ ETH candles.</p>
 <p><a id="tab-chain"></a></p>
 <h2 id="trade">Trade</h2>
 <p>The buyer&#39;s tab: the price chart with the strategy drawn on it, the option chain (the matrix of quotes by strike), and the strategy payoff builder.</p>
-<h3>Price chart</h3>
+<h3 id="price-chart">Price chart</h3>
 <table>
 <thead>
 <tr>
@@ -1961,7 +1963,7 @@ ETH candles.</p>
 <td>Empty tape.</td>
 </tr>
 </tbody></table>
-<h3>Option chain</h3>
+<h3 id="option-chain">Option chain</h3>
 <table>
 <thead>
 <tr>
@@ -2030,7 +2032,7 @@ ETH candles.</p>
 <p><strong>Buy panel.</strong> <code>Amount (contracts)</code> is the number of units. <code>Call · K $2,500 · 12.34 USDC premium</code> is <code>Ask × amount</code> in USDC (the Ask WAD scaled to 6 decimals). The three steps are: <code>1. Swap 0.00512 ETH → 12.34 USDC</code> (only when a Uniswap API key is configured; an <code>EXACT_OUTPUT</code> quote from the Trading API for exactly the premium, executed through the Universal Router and shown afterwards as <code>✓ Swapped via Uniswap (0x…) ↗</code>), <code>2. Approve USDC</code> (an ERC-20 approval for twice the premium, to the vault), and <code>3. Buy N Call</code> which calls <code>AquaCollateralVault.buy(authId, strike, amount, maxPremium)</code>. The yellow line &quot;Size exceeds the LP&#39;s firm depth…&quot; appears when the collateral the fill would pull (amount WETH for calls, amount × strike USDC for puts) exceeds the firm depth, and the buy button is disabled.</p>
 <p><strong>Sell panel</strong> (writing from the matrix). <code>Call</code>/<code>Put</code>, <code>K_min</code>, <code>K_max</code>, <code>×</code> size, <code>receive ~$N USDC</code> (Bid × size), <code>lock N WETH</code> for calls or <code>lock $N USDC</code> (size × K_max) for puts; expiry <code>1d 7d 30d</code>; &quot;range write · collateral splits across N strikes&quot; counts $50 steps between the bounds. It runs approve → <code>authorizeRange</code> → <code>Aqua.ship</code>, reporting <code>Confirm approval… / Approving… / Registering… / Shipping to Aqua… / ✓ Written</code>.</p>
 <p><strong>Close panel.</strong> <code>Close position · 0.0100 contracts</code> is your OptionToken balance (18 decimals); &quot;Burns OptionToken · releases LP collateral · decrements σ&quot; describes <code>AquaCollateralVault.close(optionToken, lp, balance, minPayout = 0)</code>: the payout is the on-chain Bid, accepted as is.</p>
-<h3>Strategy Payoff Builder</h3>
+<h3 id="strategy-payoff-builder">Strategy Payoff Builder</h3>
 <table>
 <thead>
 <tr>
@@ -2766,7 +2768,7 @@ deliberately, usually exchanging some market-making efficiency for
 trustlessness. The point of this document is that you should know the price.</p>
 <hr>
 <h2 id="part-1-the-concepts-in-plain-language">Part 1 — The concepts, in plain language</h2>
-<h3>What an LP on Smile actually is</h3>
+<h3 id="what-an-lp-on-smile-actually-is">What an LP on Smile actually is</h3>
 <p>When you authorize a strike range, you are not &quot;depositing into a pool.&quot; You
 are becoming a <strong>market maker</strong>: someone who posts standing prices and waits
 for other people to trade against them. The protocol quotes two prices on your
@@ -2782,7 +2784,7 @@ buys at the Ask, later sells at the Bid) pays you the spread.</p>
 <p>The natural question is: why does the spread need to exist at all? Why not
 quote one fair price? The answer is the single most important concept in this
 document.</p>
-<h3>Adverse selection, from zero</h3>
+<h3 id="adverse-selection-from-zero">Adverse selection, from zero</h3>
 <p>Start away from finance. You&#39;re selling a used car for a fixed, posted,
 non-negotiable price of $10,000. Two kinds of buyers show up:</p>
 <ol>
@@ -2829,7 +2831,7 @@ spreads; a market that could magically exclude snipers could quote nearly
 zero spread. Every limitation in Part 2 is a variation on this theme, and
 every recommendation in Part 3 is an attempt to shrink the insurance premium
 honest users have to pay.</p>
-<h3>The Greeks, briefly</h3>
+<h3 id="the-greeks-briefly">The Greeks, briefly</h3>
 <p>The <strong>Greeks</strong> measure how an option position&#39;s value moves when market
 conditions move. For a Smile LP the relevant four are:</p>
 <table>
@@ -2898,7 +2900,7 @@ that touch each protocol. L14 records that the Uniswap v4 hook entrance
 (<code>beforeSwap</code>/<code>afterSwap</code>) has never run outside tests; L15 that
 self-fills are permitted and why the demo receipts are ones.</p>
 </blockquote>
-<h3>L1. Stale-quote sniping — the oracle latency gap</h3>
+<h3 id="l1-stale-quote-sniping-the-oracle-latency-gap">L1. Stale-quote sniping — the oracle latency gap</h3>
 <p>The premium is computed from Chainlink&#39;s last published price
 (<code>OptionPremiumInstruction.sol</code> reads <code>latestRoundData()</code>). Between real-world
 price changes and the next Chainlink update, every quote is stale, and stale
@@ -2907,7 +2909,7 @@ quotes are free money for whoever notices first (Part 1). The
 <code>AquaCollateralVault.sol:725-728</code> for the vault&#39;s put pricing) rejects quotes
 against an <em>old</em> round — but it cannot reject quotes against a <em>fresh round
 that is already wrong</em>.</p>
-<h3>L2. The invisible window — sub-threshold drift is undetectable</h3>
+<h3 id="l2-the-invisible-window-sub-threshold-drift-is-undetectable">L2. The invisible window — sub-threshold drift is undetectable</h3>
 <p>Chainlink ETH/USD publishes on a 0.5% deviation or a heartbeat. Inside that
 threshold the off-chain price can drift up to 0.5% with <strong>no on-chain signal
 of any kind</strong>. No contract check can detect what the chain has never been
@@ -2916,7 +2918,7 @@ only defense is pricing: the LP&#39;s edge per trade must exceed the expected
 adverse move within the threshold — roughly <strong>Δ × 0.5% × spot</strong> of premium per
 option. The current spread (asymmetric Ask/Bid rounding plus the smile
 markup) is not explicitly calibrated to this floor.</p>
-<h3>L3. Repricing happens after the trade, not during it</h3>
+<h3 id="l3-repricing-happens-after-the-trade-not-during-it">L3. Repricing happens after the trade, not during it</h3>
 <p>Demand feedback exists — every buy bumps the tenor bucket&#39;s σ by
 <code>GAMMA = 0.005e18</code> (0.5 vol points) and every sellback bumps it down
 (<code>OptionPricingHook.sol:90-105</code>, called from <code>AquaCollateralVault.sol:405</code> and
@@ -2924,14 +2926,14 @@ markup) is not explicitly calibrated to this floor.</p>
 the pre-bump price. A market maker who repriced only after each fill would be
 run over; the on-chain analog is that a sniper pays no price impact on the
 trade where it matters.</p>
-<h3>L4. One transaction can drain a whole range</h3>
+<h3 id="l4-one-transaction-can-drain-a-whole-range">L4. One transaction can drain a whole range</h3>
 <p>There is no per-block or per-trade size limit — a single <code>buy()</code> may consume
 an authorization&#39;s entire remaining <code>maxCollateral</code> at one price. Combined
 with L1–L3, the worst case is: oracle goes stale → sniper drains the full
 range in one transaction at one wrong price → σ bump fires too late to matter.
 The loss per staleness event is bounded by <code>maxCollateral</code>, not by anything
 smaller.</p>
-<h3>L5. On-chain rules cannot reject informed traders</h3>
+<h3 id="l5-on-chain-rules-cannot-reject-informed-traders">L5. On-chain rules cannot reject informed traders</h3>
 <p>It is tempting to ask the contract (or the v4 hook) to &quot;reject malicious
 trades.&quot; It can&#39;t, for a structural reason: <strong>every on-chain rule is public.</strong>
 A sniper simulates your rejection logic before submitting and only sends
@@ -2940,7 +2942,7 @@ staleness, size, rate — but never <em>information</em>, because informedness i
 observable on-chain. (If you could identify informed traders, Part 1 says you
 wouldn&#39;t need a spread at all.) Rejection is therefore the wrong frame;
 <strong>pricing is the right one</strong> — make toxic flow pay for its toxicity (see R1–R4).</p>
-<h3>L6. Passive LPs inherit the protocol&#39;s pricing model</h3>
+<h3 id="l6-passive-lps-inherit-the-protocols-pricing-model">L6. Passive LPs inherit the protocol&#39;s pricing model</h3>
 <p>The LP delegates pricing entirely to on-chain state: the σ tenor buckets, the
 smile curvature α, and the skew β. This creates a second-order exposure beyond
 the ordinary Greeks — <strong>parameter risk</strong>: ∂P/∂α ∝ vega·ln²(K/S) and
@@ -2951,7 +2953,7 @@ protocol Greeks (see the Overview&#39;s &quot;Reading the surface like a trader&
 governance moves α/β, or the demand-feedback loop walks a σ bucket away from
 fair, every open quote in every affected range marks against the LP with no
 action on their part. There is currently no dashboard surfacing this exposure.</p>
-<h3>L7. The demand-feedback loop is nudgeable</h3>
+<h3 id="l7-the-demand-feedback-loop-is-nudgeable">L7. The demand-feedback loop is nudgeable</h3>
 <p>σ bumps are triggered by trades, and trades can be manufactured. Buying bumps
 σ up; selling back bumps it down. An attacker who wants a cheaper entry could
 sell back options to walk σ down before buying size. The attack is <em>costly</em> —
@@ -2959,7 +2961,7 @@ each round trip pays the full bid-ask spread, and the protocol fee (1% on the
 Ask, none on sellbacks) taxes re-entry — and <code>GAMMA</code> is small, so moving σ
 materially takes many paid round trips. It is a bounded nuisance rather than a
 free lunch, but the loop is not manipulation-proof.</p>
-<h3>L8. Full collateralization is capital-inefficient — on purpose</h3>
+<h3 id="l8-full-collateralization-is-capital-inefficient-on-purpose">L8. Full collateralization is capital-inefficient — on purpose</h3>
 <p>Every call locks 1 WETH per unit regardless of strike
 (<code>AquaCollateralVault.sol:395</code>); every put locks the full strike value in USDC
 (<code>:398</code>). A margin system would let the same capital write 5–20× the notional.
@@ -2978,7 +2980,7 @@ USDC for an ATM 3000 put instead of 3,000) and <em>does</em> give up that
 property, which is why it is opt-in and why L13 exists. The main vault
 itself is unchanged.</p>
 </blockquote>
-<h3>L9. Settlement still depends on one oracle</h3>
+<h3 id="l9-settlement-still-depends-on-one-oracle">L9. Settlement still depends on one oracle</h3>
 <p><code>settleWithChainlinkRound</code> is permissionless and verifies that the supplied
 round actually brackets expiry — nobody can cherry-pick a favorable round —
 but the <em>value</em> settled is still whatever Chainlink published. A wrong or
@@ -2990,7 +2992,7 @@ there settles against a <code>MockV3Aggregator</code> that anyone can set; a kee
 mirrors Sepolia&#39;s Chainlink answer into it every 30 minutes so the price is
 real, but the trust is not (the Arc deployment notes, &quot;Oracle tick&quot;).
 Settlement on Arc is a demonstration of the mechanism, not of the trust model.</p>
-<h3>L10. The off-chain alternative has its own price</h3>
+<h3 id="l10-the-off-chain-alternative-has-its-own-price">L10. The off-chain alternative has its own price</h3>
 <p>The known cure for L1–L5 is moving pricing off-chain (an RFQ model: the LP
 runs a server that streams live vol, reprices in milliseconds, scores
 counterparty toxicity, and signs short-lived quotes; the chain only verifies
@@ -3011,7 +3013,7 @@ dislike is precisely the permission the protocol promised not to require.</li>
 </ul>
 <p>See R6 for the hybrid that captures most of the benefit without giving up the
 on-chain floor.</p>
-<h3>L11. Aqua liquidity is soft — quoted depth can be phantom</h3>
+<h3 id="l11-aqua-liquidity-is-soft-quoted-depth-can-be-phantom">L11. Aqua liquidity is soft — quoted depth can be phantom</h3>
 <p>The flip side of unrehypothecation (L8&#39;s virtue): because the balance backing
 a quote sits in the LP&#39;s own wallet, it can be spent, transferred, or
 de-approved at any moment. A displayed quote is an unfunded intention until
@@ -3025,7 +3027,7 @@ is firm; an Aqua quote is indicative. Mitigations — honest depth display,
 slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
 <a href="#solutions">Solutions</a> (S1–S4).</p>
-<h3>L12a. No indexer — lifted by the subgraph (EthOnline 2026)</h3>
+<h3 id="l12a-no-indexer-lifted-by-the-subgraph-ethonline-2026">L12a. No indexer — lifted by the subgraph (EthOnline 2026)</h3>
 <p><strong>Was:</strong> there was no subgraph or indexing service. <code>LPDashboard</code> found the
 connected wallet&#39;s active range by scanning <code>RangeAuthorized</code> logs from
 block 0 and reading each match; the copilot&#39;s <code>readAuths</code> looped every
@@ -3051,7 +3053,7 @@ it — plan G6); a transferred position shows on the original buyer until it
 is closed or redeemed. The Studio endpoints are rate-limited dev endpoints;
 publishing to the network and querying through the gateway with an API key
 (<code>SUBGRAPH_URL</code>, proxied by <code>/api/subgraph</code>) is the production path.</p>
-<h3>L13. Bad debt in the opt-in margin tier</h3>
+<h3 id="l13-bad-debt-in-the-opt-in-margin-tier">L13. Bad debt in the opt-in margin tier</h3>
 <p><code>MarginVault</code> (S13) is the one place Smile&#39;s &quot;a written option always pays&quot;
 promise can break, and it is opt-in precisely because of that. What can go
 wrong, honestly:</p>
@@ -3087,7 +3089,7 @@ entire position in a series; partial-unit takeover is on the plan&#39;s cut
 list. Per-range <code>maxBlockNotional</code> (R1) is not implemented in this vault;
 the global ceiling bounds exposure instead.</li>
 </ul>
-<h3>L14. The Uniswap v4 hook path has never run live</h3>
+<h3 id="l14-the-uniswap-v4-hook-path-has-never-run-live">L14. The Uniswap v4 hook path has never run live</h3>
 <p><code>OptionPricingHook</code> has two entrances. The one every trade uses is direct:
 the vault reads <code>sigmaFor()</code> to price and calls <code>bumpSigma()</code> after each
 fill and sellback (<code>AquaCollateralVault.sol:553</code>, <code>:830</code>), gated
@@ -3105,7 +3107,7 @@ about pricing or the demand loop depends on it: the vault path carries the
 whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
 not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
 hook&#39;s <code>poolManager</code> set to the real one (see the Uniswap page).</p>
-<h3>L15. Self-fills are allowed — and economically null</h3>
+<h3 id="l15-self-fills-are-allowed-and-economically-null">L15. Self-fills are allowed — and economically null</h3>
 <p>An LP can buy from its own range: nothing in any vault requires
 <code>buyer != lp</code>. A broker forbids this (a self-cross is a wash trade: it
 prints volume and a price no counterparty agreed to), and can enforce it
@@ -3130,7 +3132,7 @@ index. They are labelled as self-fills. A <code>buyer != lp</code> check was
 considered for the three sibling vaults as a guard against accidental
 self-fills and left out on purpose: it would be cosmetic, and the main
 vault is unchanged.</p>
-<h3>L12. The per-trade gas floor — and where it actually comes from</h3>
+<h3 id="l12-the-per-trade-gas-floor-and-where-it-actually-comes-from">L12. The per-trade gas floor — and where it actually comes from</h3>
 <p>Every fill pays a fixed gas overhead, which sets a minimum economical trade
 size: below it, gas dominates the premium. Measured (<code>test/GasProbe.t.sol</code>,
 reproduce with <code>forge test --match-contract GasProbeTest -vv</code>):</p>
@@ -3187,7 +3189,7 @@ pricing design, demand strategy, and phase gates — in
 <p>Ordered by benefit-to-complexity. Phases 1–2 are contained contract changes;
 each is testable in isolation. The guiding principle, from L5: <strong>stop trying
 to reject bad flow; price it.</strong></p>
-<h3>Phase 1 — On-chain hardening (cheap, high value)</h3>
+<h3 id="phase-1-on-chain-hardening-cheap-high-value">Phase 1 — On-chain hardening (cheap, high value)</h3>
 <p><strong>R1. Per-block notional cap per authorization.</strong> Track
 <code>(lastTradeBlock, blockNotional)</code> per auth and cap fills per block at an
 LP-chosen fraction of <code>maxCollateral</code>. Converts the L4 worst case from &quot;lose
@@ -3209,7 +3211,7 @@ the pre-bump price. Change to <code>SmileMath</code> + <code>OptionPremiumInstru
 as an instruction arg). This is the L2 insurance premium made explicit — the
 minimum edge at which quoting inside the invisible window is
 positive-expected-value.</p>
-<h3>Phase 2 — Shrink the staleness window itself</h3>
+<h3 id="phase-2-shrink-the-staleness-window-itself">Phase 2 — Shrink the staleness window itself</h3>
 <p><strong>R5. Pyth pull-oracle integration.</strong> Pyth delivers ~400ms-fresh prices <em>in
 the taker&#39;s own transaction</em> (the taker submits the signed price update
 alongside the trade; the contract verifies and prices against it). This
@@ -3219,7 +3221,7 @@ deterministic — no LP server, no signatures from the LP, no last look.
 Contained change to the instruction&#39;s oracle read plus a freshness check.
 <strong>Phases 1+2 together likely capture ~80% of the RFQ benefit at ~10% of its
 complexity — ship these before considering R6.</strong></p>
-<h3>Phase 3 — Hybrid RFQ, only if flow data demands it</h3>
+<h3 id="phase-3-hybrid-rfq-only-if-flow-data-demands-it">Phase 3 — Hybrid RFQ, only if flow data demands it</h3>
 <p><strong>R6. Signed-quote tier on top of the on-chain floor.</strong> Two tiers, tradfi&#39;s
 &quot;NBBO + price improvement&quot; structure: tier 1 is the existing on-chain surface
 — permissionless, composable, always live, and the guaranteed fallback for
@@ -3242,7 +3244,7 @@ for the same range. Nonces are single-use and cancellable. The markout
 gate above was skipped; the tier is opt-in per range,
 so tier 1 is untouched for anyone who does not sign.</p>
 </blockquote>
-<h3>Phase 4 — LP risk tooling</h3>
+<h3 id="phase-4-lp-risk-tooling">Phase 4 — LP risk tooling</h3>
 <p><strong>R7. Range-Greeks panel in the LP dashboard.</strong> Show, per authorization:
 ex-post Greeks of actually-sold series; ex-ante expected Greeks under an
 assumed fill distribution over <code>[strikeMin, strikeMax]</code>; worst-case Greeks
@@ -3412,7 +3414,7 @@ way: firm central-limit-order-book quotes coexist with indicative RFQ streams.</
 </tbody></table>
 <hr>
 <h2 id="p1-soft-liquidity-price-firmness-instead-of-assuming-it">P1 — Soft liquidity: price firmness instead of assuming it</h2>
-<h3>S1. Honest depth display (frontend only — ship first)</h3>
+<h3 id="s1-honest-depth-display-frontend-only-ship-first">S1. Honest depth display (frontend only — ship first)</h3>
 <p>Quoted depth for an authorization must be
 <code>min(maxCollateral − usedCollateral, wallet balance, Aqua allowance)</code>,
 computed live via <code>staticcall</code> before display, not the authorized maximum.
@@ -3422,7 +3424,7 @@ any quoting API. This doesn&#39;t <em>solve</em> softness — the balance can st
 between quote and fill — but it eliminates the routine case and the
 adversarial &quot;display depth you never intended to honor&quot; case becomes a
 one-block race instead of a standing lie.</p>
-<h3>S2. Firmness bond (small contract change)</h3>
+<h3 id="s2-firmness-bond-small-contract-change">S2. Firmness bond (small contract change)</h3>
 <p>At <code>authorizeRange</code>, the LP escrows a small slashable bond in the vault
 (e.g. <code>max($25, 25 bps × maxCollateral)</code>, owner-tunable). If a fill fails
 because the JIT <code>Aqua.pull()</code> reverts — balance moved, allowance revoked —
@@ -3431,13 +3433,13 @@ gas and adverse selection (they revealed their trading intention for
 nothing). Bond returns in full at deauthorization. Economics: quoting stays
 nearly free, but <em>lying</em> about depth now has a price. The bond also creates
 the on-chain event needed for S3.</p>
-<h3>S3. Fill-reliability score</h3>
+<h3 id="s3-fill-reliability-score">S3. Fill-reliability score</h3>
 <p>The vault already knows when a pull fails (the S2 path). Persist a per-LP
 counter <code>(fills, failedPulls)</code> and expose it. Frontends sort and badge LPs by
 reliability; routers de-prioritize unreliable ones. Reputation is the cheap
 complement to the bond: the bond prices a single failure, the score prices a
 pattern.</p>
-<h3>S4. Firm tier: escrowed ranges with yield-bearing collateral</h3>
+<h3 id="s4-firm-tier-escrowed-ranges-with-yield-bearing-collateral">S4. Firm tier: escrowed ranges with yield-bearing collateral</h3>
 <p>The structural answer. A parallel <code>authorizeRangeFirm</code> path where collateral
 is escrowed in the vault at ship time — firm by construction, <code>pull()</code> cannot
 fail — but denominated in <strong>yield-bearing collateral</strong> so the lockup costs
@@ -3502,7 +3504,7 @@ seconds-tight freshness bound; Chainlink rounds stay for settlement.</li>
 <h2 id="p3-vol-discovery-let-lps-quote-vol-route-to-the-best">P3 — Vol discovery: let LPs quote vol, route to the best</h2>
 <p>This is the deepest change and the one that most directly answers &quot;can the
 pricing ever be competitive.&quot;</p>
-<h3>S5. Per-range LP-quoted vol</h3>
+<h3 id="s5-per-range-lp-quoted-vol">S5. Per-range LP-quoted vol</h3>
 <p>Today every LP is a price-taker of one global surface (σ buckets + α + β set
 by the protocol). Add an LP-chosen <code>sigmaBps</code> multiplier (or absolute σ
 override) to each authorization, serialized into the strategy&#39;s instruction
@@ -3511,7 +3513,7 @@ for passive LPs; opinionated LPs quote their own vol — exactly how
 professional options markets quote (in vol, not price). An LP who thinks the
 surface is rich undercuts it and wins the flow; one who thinks it&#39;s cheap
 quotes higher and only fills when they&#39;re happy to.</p>
-<h3>S6. Best-quote routing across ranges</h3>
+<h3 id="s6-best-quote-routing-across-ranges">S6. Best-quote routing across ranges</h3>
 <p><code>buy(authId, …)</code> currently targets one explicit authorization
 (<code>AquaCollateralVault.sol:381</code>) — the frontend auto-picks the latest one.
 Add a router view <code>bestQuote(strike, expiry, isCall, amount)</code> that scans
@@ -3523,7 +3525,7 @@ different σ opinions form an order book in vol space, and the touch — the
 best bid/ask across LPs — <em>is</em> the discovered market vol. No oracle for IV
 needed; discovery emerges from the same mechanism as every other market:
 competition.</p>
-<h3>S7. Optional external IV anchor</h3>
+<h3 id="s7-optional-external-iv-anchor">S7. Optional external IV anchor</h3>
 <p>If range competition stays thin early on, anchor the <em>default</em> surface&#39;s σ
 buckets to an external implied-vol reference (e.g. a curated feed of
 Deribit ATM IV, or an on-chain vol index) with the demand-feedback loop
@@ -3533,14 +3535,14 @@ pragmatic bridge, not the destination — S5/S6 is the trust-minimized
 endgame — and it adds an oracle dependency, so gate it on evidence that the
 default surface is drifting (persistent negative markouts on the passive
 tier).</p>
-<h3>S8. Markout instrumentation (R8 — decision infrastructure)</h3>
+<h3 id="s8-markout-instrumentation-r8-decision-infrastructure">S8. Markout instrumentation (R8 — decision infrastructure)</h3>
 <p>Off-chain job: for every fill, record the surface&#39;s own re-quote at +1/+5/+30
 minutes. Every phase gate below reads this data. Build it first; it is the
 protocol&#39;s profit-and-loss telescope and every argument about &quot;is pricing
 fair&quot; is a guess without it.</p>
 <hr>
 <h2 id="p4-demand-sell-the-wedge-not-the-option">P4 — Demand: sell the wedge, not the option</h2>
-<h3>S9. One-click covered-call / cash-secured-put product</h3>
+<h3 id="s9-one-click-covered-call-cash-secured-put-product">S9. One-click covered-call / cash-secured-put product</h3>
 <p>The LP-first product: pick an asset and a yield target → the app ships a
 sensible OTM range (e.g. 10-delta to 25-delta calls, 30 days) → auto-rolls
 at expiry, harvesting premium. Ribbon proved retail wants this UX and locked
@@ -3562,14 +3564,14 @@ and re-ships a fresh range at the same delta band against TODAY&#39;s spot.
 Verified live on Anvil: open → fill → expiry → settle → reclaim → roll to
 the new spot, one command.</p>
 </blockquote>
-<h3>S10. Distribution through the 1inch ecosystem</h3>
+<h3 id="s10-distribution-through-the-1inch-ecosystem">S10. Distribution through the 1inch ecosystem</h3>
 <p>The Aqua/SwapVM integration isn&#39;t just plumbing — it&#39;s a distribution
 channel. Options premiums are quoted by a SwapVM strategy, so 1inch
 aggregation/Fusion can route into them like any other liquidity source, and
 option tokens are plain ERC-20s tradable anywhere. Pursue: listing in the
 1inch ecosystem registry, the Aqua Revenue Stream Incubator grant, and resolver integrations.
 Demand-side flow arrives through integrators, not a standalone venue&#39;s UI.</p>
-<h3>S11. Long-tail listings</h3>
+<h3 id="s11-long-tail-listings">S11. Long-tail listings</h3>
 <p>Deribit lists three assets. Smile can permissionlessly list options on
 anything with a reliable price feed — LST/LRT tokens, majors&#39; L2 variants,
 blue-chip DeFi tokens. Long-tail is where an on-chain venue has <em>no</em>
@@ -3580,10 +3582,10 @@ parameters (wider spread floors, lower caps, longer staleness bounds — all
 per-authorization args that already exist or arrive in Phase 1).</p>
 <hr>
 <h2 id="p5-capital-efficiency">P5 — Capital efficiency</h2>
-<h3>S4 (again). Yield-bearing collateral</h3>
+<h3 id="s4-again-yield-bearing-collateral">S4 (again). Yield-bearing collateral</h3>
 <p>Solves the largest chunk: collateral earns its native yield while escrowed,
 so &quot;full collateral&quot; stops meaning &quot;dead capital.&quot;</p>
-<h3>S12. Defined-risk netting (later)</h3>
+<h3 id="s12-defined-risk-netting-later">S12. Defined-risk netting (later)</h3>
 <p>Full collateralization is per-option today: a call spread (long K₁, short K₂)
 locks collateral for the short leg as if naked, though the structure&#39;s true
 worst case is <code>K₂ − K₁</code>. Vault-level netting for recognized two-leg
@@ -3609,7 +3611,7 @@ vault&#39;s own Aqua strategy, settled at one price through one formula with
 wei-exact conservation (<code>test/SpreadSettlement.t.sol</code>). Iron condors are
 strike-validated but not priced or fillable.</p>
 </blockquote>
-<h3>S13. MarginVault — opt-in true margin (rung 4)</h3>
+<h3 id="s13-marginvault-opt-in-true-margin-rung-4">S13. MarginVault — opt-in true margin (rung 4)</h3>
 <p>Rung 4 of the ladder is the one that can break &quot;a written option always
 pays&quot;, so it is a <strong>separate, opt-in</strong> tier — <code>src/periphery/MarginVault.sol</code>,
 puts only, USDC only, its own settlement and its own backstop pool; the main
@@ -3716,7 +3718,7 @@ is wrong — pivot the protocol to S5-only (all vol LP-quoted, protocol
 provides settlement + custody rails, no house model). If firm-tier
 fill-reliability and covered-call retention are strong but taker flow never
 arrives, pivot distribution-first (S10) before adding any further mechanism.</p>
-<h3>What this plan deliberately does <em>not</em> do</h3>
+<h3 id="what-this-plan-deliberately-does-not-do">What this plan deliberately does <em>not</em> do</h3>
 <ul>
 <li><strong>Drop Aqua.</strong> Its softness is priced (S1–S3) and competed against (S4)
 instead. The zero-commitment funnel is worth keeping.</li>
@@ -3821,7 +3823,7 @@ answer comes from one of these (<code>frontend/lib/copilot/tools.ts</code>):</p>
 <td>Asks one interactive multiple-choice question, scored against a real pricing-tool answer.</td>
 </tr>
 </tbody></table>
-<h3>Tools over the tape — The Graph as the copilot&#39;s chain data (EthOnline 2026)</h3>
+<h3 id="tools-over-the-tape-the-graph-as-the-copilots-chain-data-ethonline-2026">Tools over the tape — The Graph as the copilot&#39;s chain data (EthOnline 2026)</h3>
 <p>The second set reads <strong>the tape</strong>: every range, instrument, fill and
 position, from The Graph on Sepolia and Arc (<code>subgraph/</code>, Studio
 <code>smile-sepolia</code> / <code>smile-arc-testnet</code>) and, only on the local Anvil chain,
@@ -4083,7 +4085,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 </ul>
 <p><strong>Against the alternatives.</strong> Deribit offers firm depth but custody and margin risk on a centralized venue. Panoptic removes the pricing oracle by streaming fees from Uniswap v3 positions, but has no expiries, no upfront credit, and forced liquidations. Ribbon-style DOVs lock capital at one strike. Smile keeps the instrument traders already know, fixed-expiry vanillas with known premiums, and rebuilds the market-making stack around Aqua so that quoting the whole chain is nearly free.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>The custody model: ship, then pull under the reentrancy guard</h3>
+<h3 id="the-custody-model-ship-then-pull-under-the-reentrancy-guard">The custody model: ship, then pull under the reentrancy guard</h3>
 <p>An LP calls <code>authorizeRange</code> on a vault, which records the range and computes a <em>strategy hash</em>. For calls this hash is the hash of a SwapVM order; for puts it is the hash of an abi-encoded terms blob, with the vault itself as the Aqua application. The LP then calls <code>Aqua.ship(app, strategy, tokens, amounts)</code> with the parameters the vault exposes through <code>getShipParams</code>. Nothing moves at ship time.</p>
 <p>When a taker buys a put, the vault re-enters itself through an external function so that Aqua&#39;s <code>nonReentrantStrategy</code> guard brackets the pull. The premium goes straight from the buyer to the LP, the fee to the fee recipient, and then exactly <code>collateralNeeded</code> is pulled from the LP wallet into the vault.</p>
 <p><code>src/vaults/AquaCollateralVault.sol</code></p>
@@ -4112,7 +4114,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <p><code>src/vaults/AquaCollateralVault.sol</code></p>
 <pre><code class="language-solidity">        require(isCall ? collateralToken != premiumToken : collateralToken == premiumToken, BadTokenPair());
 </code></pre>
-<h3>The SwapVM opcode: pricing inside the swap</h3>
+<h3 id="the-swapvm-opcode-pricing-inside-the-swap">The SwapVM opcode: pricing inside the swap</h3>
 <p><code>SmileSwapVMRouter</code> is a SwapVM with the official Aqua opcode set (indices 0 through 32) plus one custom instruction at index 33. The dispatcher tries the custom opcode first and falls through to the official set otherwise.</p>
 <p><code>src/swapvm/SmileSwapVMRouter.sol</code></p>
 <pre><code class="language-solidity">contract SmileSwapVMRouter is Simulator, SwapVM, AquaOpcodes, OptionPremiumInstruction {
@@ -4188,7 +4190,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
                 uint8(28), uint8(feeArgs.length), feeArgs               // Fee._aquaProtocolFeeAmountInXD
             );
 </code></pre>
-<h3>The shared premium library</h3>
+<h3 id="the-shared-premium-library">The shared premium library</h3>
 <p>At the event the vault&#39;s premium math was lifted into <code>SmilePremiumLib</code> so that every sibling vault prices off the same surface. The Ask rounds up and grosses the fee up on top; the Bid rounds down and carries no fee.</p>
 <p><code>src/periphery/SmilePremiumLib.sol</code></p>
 <pre><code class="language-solidity">    function quote(Terms memory t, uint256 amountWad, bool isBuy, uint8 premiumDecimals, uint32 feeBps)
@@ -4207,7 +4209,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
         }
     }
 </code></pre>
-<h3>SpreadVault: escrow the true maximum loss</h3>
+<h3 id="spreadvault-escrow-the-true-maximum-loss">SpreadVault: escrow the true maximum loss</h3>
 <p>A credit spread is a short option plus a long option at the same expiry, where the long leg caps the loss. <code>SpreadVault</code> prices the taker&#39;s side as the long leg at the Ask minus the short leg at the Bid, and escrows only the structure&#39;s maximum loss: <code>(K2 − K1) / K2</code> WETH per unit for a call credit spread, <code>K2 − K1</code> USDC for a put credit spread. Both round in the writer&#39;s favor (<code>Ceil</code>).</p>
 <p><code>src/periphery/SpreadVault.sol</code></p>
 <pre><code class="language-solidity">        if (s.kind == Kind.CallCredit) {
@@ -4245,7 +4247,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
     }
 </code></pre>
 <p>Settlement uses one price and one floored payout formula whose maximum over the settlement price equals the escrow exactly, so <code>holder payout + writer reclaim == escrow</code> to the wei. <code>test/SpreadSettlement.t.sol</code> fuzzes this conservation over 256 settlement prices. The Anvil lifecycle at a 3,100 settlement pulled 62,500,000,000,000,000 wei, paid holders 32,258,064,516,129,032, and returned 30,241,935,483,870,968 to the writer.</p>
-<h3>MarginVault: initial margin, then a waterfall</h3>
+<h3 id="marginvault-initial-margin-then-a-waterfall">MarginVault: initial margin, then a waterfall</h3>
 <p><code>MarginVault</code> is puts-only and USDC-only, so margin, premium, penalties, the backstop and the insurance fund are all one token and the waterfall needs no swap. The margin requirement reads the Chainlink oracle only, never the vol hook: intrinsic value plus a spot buffer of 50% for initial margin (IM) or 30% for maintenance margin (MM), capped at the strike. The mark is the lowest Chainlink answer in the last hour.</p>
 <p><code>src/periphery/MarginVault.sol</code></p>
 <pre><code class="language-solidity">    function marginRequirement(uint256 strike, uint256 units, uint256 spotWad, bool initial)
@@ -4304,7 +4306,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
         }
 </code></pre>
 <p><code>MarginBackstop</code> is a share-based USDC pool with a 24-hour withdrawal delay; withdrawals cannot drop below the pool&#39;s standing requirement and freeze while any expired series is unfinalized. The Anvil lifecycle fills a put locking 1,500 USDC, crashes spot to 2,000, flags, auctions, absorbs drawing only 175 USDC, settles at 2,000, and pays the holder exactly 1,000 USDC of intrinsic.</p>
-<h3>RfqVault: a signed price, the same custody</h3>
+<h3 id="rfqvault-a-signed-price-the-same-custody">RfqVault: a signed price, the same custody</h3>
 <p><code>RfqVault</code> implements the hybrid request-for-quote (RFQ) tier. The LP ships a range exactly as on tier 1 and then signs EIP-712 typed-data quotes off-chain, with no gas and from any pricing model. A taker submits the quote and signature to <code>fill</code>, which checks the range, the size cap, the time-to-live and the single-use nonce, recovers the signer, and only then pulls collateral through the vault&#39;s Aqua strategy. The event records the formula price alongside the signed price so the improvement is auditable on-chain.</p>
 <p><code>src/periphery/RfqVault.sol</code></p>
 <pre><code class="language-solidity">        require(amount &lt;= q.maxAmount, OverQuoteSize());
@@ -4465,7 +4467,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <p><strong>A single, auditable settlement number per series.</strong> Every series is registered once with the settlement registry and its settlement price is written exactly once, by either path, with an event naming the settler. Holders, writers, the subgraph, and the AI copilot all read the same number.</p>
 <p><strong>A scheduled closer without a trusted operator.</strong> The CRE workflow is not a privileged server. It is a workflow executed by a decentralized oracle network that reads the feed at the last finalized block, so every node observes the same value, and delivers a signed report. The only address that can write through that path is the forwarder fixed at deployment.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>Quoting: the staleness-guarded feed read</h3>
+<h3 id="quoting-the-staleness-guarded-feed-read">Quoting: the staleness-guarded feed read</h3>
 <p>Every quote begins with a read of <code>latestRoundData()</code>. The read is rejected if the answer is not positive or if the round is older than <code>maxStaleness</code> seconds. The age is returned as well, so that the spread can widen with it. The three copies of this read are deliberately identical; the library comment records that the new vaults&#39; wei-exact tests depend on the arithmetic order.</p>
 <p><code>src/swapvm/OptionPremiumInstruction.sol</code></p>
 <pre><code class="language-solidity">function _oracleSpotWad(address oracle, uint256 maxStaleness)
@@ -4507,7 +4509,7 @@ function readSpot(IPriceOracle oracle, uint256 maxStaleness)
 uint256 halfSpreadBps = uint256(pricing.baseSpreadBps) + (uint256(pricing.stalenessSpreadBpsPerHour) * ageSec) / 3600;
 if (halfSpreadBps &gt; MAX_HALF_SPREAD_BPS) halfSpreadBps = MAX_HALF_SPREAD_BPS;
 </code></pre>
-<h3>Settlement, path A: permissionless round bracketing</h3>
+<h3 id="settlement-path-a-permissionless-round-bracketing">Settlement, path A: permissionless round bracketing</h3>
 <p>The settlement registry stores one record per series and accepts a settlement price exactly once. The permissionless path takes a round identifier from the caller and verifies, on-chain, that it is the first round at or after expiry. The predecessor lookup is wrapped in <code>try</code>, because Chainlink proxies renumber rounds at a <em>phase boundary</em> (a change of the underlying aggregator), and the round before a boundary may not resolve.</p>
 <p><code>src/vaults/AquaOptionSettlement.sol</code></p>
 <pre><code class="language-solidity">function settleWithChainlinkRound(bytes32 seriesId, uint80 roundId) external {
@@ -4557,7 +4559,7 @@ function _pendingSeries(bytes32 seriesId) internal view returns (Series storage 
 }
 </code></pre>
 <p><code>script/spread-lifecycle.sh</code> exercises the same call for <code>SpreadVault</code> on Anvil, and the keeper&#39;s <code>settleAndUnwind</code> follows settlement with <code>reclaimCollateral</code> and a fresh range at the new spot.</p>
-<h3>Settlement, path B: the CRE workflow</h3>
+<h3 id="settlement-path-b-the-cre-workflow">Settlement, path B: the CRE workflow</h3>
 <p>The CRE workflow is a cron-triggered program compiled to WebAssembly and executed by a DON. It reads the feed at the last finalized block, scales the eight-decimal answer to eighteen decimals, and delivers a DON-signed report that calls <code>settleSeries</code>.</p>
 <p><code>cre-workflow/settlement/workflow.ts</code></p>
 <pre><code class="language-typescript">const callResult = evmClient
@@ -4608,7 +4610,7 @@ function settleSeries(bytes32 seriesId, uint256 settlementPriceWad) external onl
 }
 </code></pre>
 <p>The CRE simulation notes hold the verified transcript of <code>cre workflow simulate settlement</code> against the live Sepolia feed (CLI v1.11.0, exit code 0). The schedule in <code>cre-workflow/settlement/config.json</code> is every six hours.</p>
-<h3>The margin mark: worst of the last hour</h3>
+<h3 id="the-margin-mark-worst-of-the-last-hour">The margin mark: worst of the last hour</h3>
 <p><code>MarginVault</code> computes its mark by walking the feed&#39;s rounds backwards from the latest, keeping the lowest positive answer among rounds updated within <code>MARK_WINDOW</code> (one hour), and stopping at the first round outside the window, at a phase boundary, or after <code>MAX_MARK_ROUNDS</code> (sixty-four) rounds. The function never reverts on staleness; instead, <code>isMarkStale</code> reports whether the newest round is older than <code>MARK_STALE_AFTER</code> (ninety minutes), and <code>buy</code> and the margin-call path require a fresh mark.</p>
 <p><code>src/periphery/MarginVault.sol</code></p>
 <pre><code class="language-solidity">function markSpot() public view returns (uint256 spotWad, uint256 latestUpdatedAt, uint256 roundsUsed) {
@@ -4655,7 +4657,7 @@ function isMarkStale() public view returns (bool) {
 }
 </code></pre>
 <p>When an auction is started after a margin call, the vault re-marks using only rounds published <em>after</em> the flag, so a position cannot be auctioned on the strength of the same stale round that flagged it (<code>startAuction</code> requires <code>latestAt &gt; pos.flaggedAt</code>). Tests: <code>test_markSpot_isWorstOfHour</code>, <code>test_markSpot_ignoresRoundsOlderThanTheWindow</code>, <code>test_markSpot_staleFlagButNoRevert</code>, <code>test_buy_revertsOnStaleMark</code> in <code>test/MarginVault.t.sol</code>.</p>
-<h3>One registry per vault</h3>
+<h3 id="one-registry-per-vault">One registry per vault</h3>
 <p>Each vault built at the event is wired to its own <code>AquaOptionSettlement</code>, constructed with the same Chainlink feed. The vault is the registry&#39;s sole registrar and registers a series on its first mint.</p>
 <p><code>script/Deploy.s.sol</code></p>
 <pre><code class="language-solidity">SpreadVault spread = new SpreadVault(aquaAddr, oracleAddr, hookAddr, deployer, wethAddr, usdcAddr);
@@ -4664,7 +4666,7 @@ AquaOptionSettlement spreadSettlement = new AquaOptionSettlement(deployer, deplo
 spread.setSettlement(address(spreadSettlement));
 </code></pre>
 <p>The Sepolia addresses of the three additional registries are listed in the Sepolia deployment notes; the Arc addresses in the Arc deployment notes.</p>
-<h3>The contrast: a pull oracle for quoting only</h3>
+<h3 id="the-contrast-a-pull-oracle-for-quoting-only">The contrast: a pull oracle for quoting only</h3>
 <p>Chainlink&#39;s data feed is a <em>push</em> oracle: nodes publish updates on their own schedule and a contract reads the last one. Pyth is a <em>pull</em> oracle: prices are signed off-chain roughly every 400 milliseconds and the trader posts the update inside their own transaction. <code>PythSpotAdapter</code> exposes a Pyth feed through the Chainlink <code>latestRoundData()</code> shape so that the instruction and the vaults need no change, and it is enabled per deployment by setting <code>PYTH</code> and <code>PYTH_PRICE_ID</code>. Settlement is deliberately excluded: only Chainlink&#39;s on-chain round history supports verifiable expiry bracketing.</p>
 <p><code>src/oracles/PythSpotAdapter.sol</code></p>
 <pre><code class="language-solidity">/// @notice Chainlink-compatible read of the freshest posted Pyth price.
@@ -4891,7 +4893,7 @@ for the exact premium amount (an <code>EXACT_OUTPUT</code> quote), a buyer who h
 only ETH sees a single flow: swap, approve, buy. The premium is a USDC amount
 throughout the protocol; the swap is the on-ramp.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>The surface: tenor buckets and <code>sigmaFor</code></h3>
+<h3 id="the-surface-tenor-buckets-and-sigmafor">The surface: tenor buckets and <code>sigmaFor</code></h3>
 <p>Sigma is stored per <em>tenor bucket</em>, that is, per band of time to expiry. Four
 bands cover the term structure, and <code>sigmaFor</code> returns the band a given expiry
 falls into. Values are in WAD, the fixed-point convention in which <code>1e18</code>
@@ -4924,7 +4926,7 @@ function _bucketOf(uint256 timeToExpiry) internal pure returns (uint256) {
     return 3;
 }
 </code></pre>
-<h3>The smile: alpha and beta</h3>
+<h3 id="the-smile-alpha-and-beta">The smile: alpha and beta</h3>
 <p>The tenor sigma is the volatility <em>at the money</em>, that is, for a strike equal
 to spot. Strikes away from spot are priced with a multiplier in log-moneyness
 <code>ln(K/S)</code>. Alpha sets the curvature (how much more the wings cost than the
@@ -4961,7 +4963,7 @@ function smileVol(
 hook&#39;s deployer through <code>setBeta</code>; a negative value makes puts richer than
 calls at equal distance from spot, which matches observed equity and crypto
 markets.</p>
-<h3>The feedback loop: <code>bumpSigma</code> and <code>afterSwap</code></h3>
+<h3 id="the-feedback-loop-bumpsigma-and-afterswap">The feedback loop: <code>bumpSigma</code> and <code>afterSwap</code></h3>
 <p>The primary market (the vault&#39;s own <code>buy()</code> and <code>close()</code>) knows which expiry
 traded, so it bumps only that tenor&#39;s bucket. A secondary-market swap through
 the Uniswap v4 pool carries no expiry, so <code>afterSwap</code> treats it as a
@@ -5006,7 +5008,7 @@ if (address(hook) != address(0)) hook.bumpSigma(true, auth.expiry - block.timest
     hook.bumpSigma(false, auth.expiry &gt; block.timestamp ? auth.expiry - block.timestamp : 0);
 }
 </code></pre>
-<h3>The veto: <code>beforeSwap</code></h3>
+<h3 id="the-veto-beforeswap">The veto: <code>beforeSwap</code></h3>
 <p>On the secondary market, the hook computes a fair value from the pricing
 engine and rejects any swap whose execution price is more than 5% away from
 it. Hook data carries the option&#39;s spot, strike, expiry and alpha.</p>
@@ -5023,7 +5025,7 @@ uint256 diff = executionPrice &gt; fairValue
 
 require(diff * WAD / fairValue &lt;= PRICE_TOLERANCE, &quot;price outside oracle bounds&quot;);
 </code></pre>
-<h3>How a quote reaches the hook</h3>
+<h3 id="how-a-quote-reaches-the-hook">How a quote reaches the hook</h3>
 <p>When a liquidity provider authorises a range, the vault records the hook&#39;s
 address as the strategy&#39;s sigma source, and the SwapVM instruction reads that
 source inside the swap. This is the atomic read described above: the
@@ -5054,7 +5056,7 @@ uint256 sigmaStrike = SmileMath.smileVol(t.spotWad, t.strike, sigma, ALPHA, t.be
 <p><code>MarginVault</code> is the deliberate exception: it prices premiums off the hook
 but computes <em>margin</em> from the Chainlink oracle only, never from <code>sigmaFor</code>,
 so that trading cannot move margin requirements.</p>
-<h3>Live spot from the Trading API</h3>
+<h3 id="live-spot-from-the-trading-api">Live spot from the Trading API</h3>
 <p>The application&#39;s spot price comes from a Uniswap Trading API quote for one
 WETH into USDC on mainnet, refreshed every 60 seconds, with a Chainlink
 on-chain read as the second source and a static value as the last resort.</p>
@@ -5085,7 +5087,7 @@ on-chain read as the second source and a static value as the last resort.</p>
   return Math.round(price);
 }
 </code></pre>
-<h3>Premium routing through the Universal Router</h3>
+<h3 id="premium-routing-through-the-universal-router">Premium routing through the Universal Router</h3>
 <p>The buy flow asks the Trading API for an <code>EXACT_OUTPUT</code> quote (native ETH in,
 exactly the premium in USDC out) and then for the calldata, which the wallet
 sends to the Universal Router before the approve and <code>buy()</code> steps.</p>
@@ -5099,7 +5101,7 @@ export async function fetchUniswapSwapQuote(
   apiKey: string,
 ): Promise&lt;UniswapSwapQuote&gt; {
 </code></pre>
-<h3>The trader&#39;s dictionary</h3>
+<h3 id="the-traders-dictionary">The trader&#39;s dictionary</h3>
 <p>The frontend evaluates the smile at the two strikes that have roughly 25%
 probability of finishing in the money, one call and one put, and reports the
 three desk numbers.</p>
@@ -5120,14 +5122,14 @@ three desk numbers.</p>
   };
 }
 </code></pre>
-<h3>The Vol Surface tab</h3>
+<h3 id="the-vol-surface-tab">The Vol Surface tab</h3>
 <p>The <strong>Vol Surface</strong> tab renders a 3-D surface of <code>sigma_strike(K, T)</code> from a
 small Python service in <code>volsurface/</code>. Every confirmed buy or sell is posted
 to the service, which bumps the traded tenor bucket by the same gamma the
 hook applies (<code>GAMMA = 0.005</code> in <code>volsurface/server.py</code>), so the surface
 visibly re-rates as order flow arrives. The 7, 30 and 90 day bucket edges
 appear as terraces on the plot.</p>
-<h3>Deployment and tests</h3>
+<h3 id="deployment-and-tests">Deployment and tests</h3>
 <p><code>script/Deploy.s.sol</code> deploys the hook with the pricing engine and an initial
 sigma, then wires it before any range is authorised so that every strategy
 snapshots it as its sigma source (<code>vault.setHook(address(hook))</code>,
@@ -5489,7 +5491,7 @@ per unit and the implied volatility of each fill for a chosen instrument,
 so a trader sees whether the vault&#39;s volatility feedback loop has moved
 the price of a strike, not only the price of the underlying.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>Entities</h3>
+<h3 id="entities">Entities</h3>
 <p>The schema defines four entities. <code>Instrument</code> is one strike of one range,
 identified by its <code>OptionToken</code> address; open interest is bought minus
 closed minus redeemed.</p>
@@ -5517,7 +5519,7 @@ and <code>fillCount</code>. <code>Fill</code> is one <code>OptionBought</code> e
 transaction hash and log index. <code>Position</code> is one holder&#39;s balance in one
 instrument, credited on <code>OptionBought</code> and debited on <code>OptionClosed</code> and
 <code>Redeemed</code>.</p>
-<h3>Handlers and the bound-call refresh</h3>
+<h3 id="handlers-and-the-bound-call-refresh">Handlers and the bound-call refresh</h3>
 <p>The <code>RangeAuthorized</code> event does not carry the collateral token or a live
 <code>usedCollateral</code>, and the vault&#39;s just-in-time pull accounting is not
 something to re-implement in AssemblyScript. Instead, one bound contract
@@ -5555,7 +5557,7 @@ writes the fill, and refreshes the authorisation:</p>
 <code>OptionBought</code>, <code>OptionClosed</code>, <code>Redeemed</code>, <code>CollateralReleased</code> and
 <code>PullFailed</code> (a dishonoured just-in-time pull deactivates the range
 on-chain, and the handler mirrors it).</p>
-<h3>Deployments</h3>
+<h3 id="deployments">Deployments</h3>
 <table>
 <thead>
 <tr>
@@ -5580,7 +5582,7 @@ on-chain, and the handler mirrors it).</p>
 </tbody></table>
 <p>Both endpoints are recorded per chain in <code>frontend/lib/deployments.ts</code> and
 report <code>hasIndexingErrors: false</code> with the testnets&#39; real fills.</p>
-<h3>The tape query</h3>
+<h3 id="the-tape-query">The tape query</h3>
 <p>The frontend client defines the queries once as strings and mirrors the
 entities as TypeScript interfaces.</p>
 <p><code>frontend/lib/subgraph.ts</code>:</p>
@@ -5591,7 +5593,7 @@ export const POSITIONS_BY_HOLDER = `query PositionsByHolder($holder: Bytes!) {
   positions(where: { holder: $holder, balance_gt: &quot;0&quot; }, first: 1000) { ${POSITION_FIELDS} }
 }`;
 </code></pre>
-<h3>The chain-id gate</h3>
+<h3 id="the-chain-id-gate">The chain-id gate</h3>
 <p><code>readTape</code> is the single entry point for ranges, instruments, fills and
 positions. A subgraph endpoint is used whenever one resolves for the chain.
 Only the local Anvil chain (chain id 31337 or 1337) may rebuild the same
@@ -5607,7 +5609,7 @@ call throws rather than scanning.</p>
 </code></pre>
 <p>Every <code>Tape</code> carries a <code>source</code> field, <code>&quot;subgraph&quot;</code> or <code>&quot;anvil-logs&quot;</code>, and
 the copilot is instructed to state where its numbers came from.</p>
-<h3>The proxy and the per-chain gateway URL</h3>
+<h3 id="the-proxy-and-the-per-chain-gateway-url">The proxy and the per-chain gateway URL</h3>
 <p>A gateway URL carries the API key in its path, so it must never reach a
 browser. It is configured server-side, per chain, and the browser reaches
 it through <code>/api/subgraph</code>, which forwards the request body unchanged.
@@ -5642,7 +5644,7 @@ for server-side callers such as the copilot&#39;s tape tools; in the browser
 that function returns the proxy path when the build has a server, and the
 Studio endpoint directly on the static GitHub Pages export, which has no
 server and therefore no key.</p>
-<h3>Published to The Graph Network</h3>
+<h3 id="published-to-the-graph-network">Published to The Graph Network</h3>
 <p>A subgraph on The Graph exists in two places with different guarantees. A
 <strong>Studio deployment</strong> is served by The Graph&#39;s own upgrade indexer from a
 rate-limited development endpoint with no key. <strong>Publishing</strong> records the
@@ -5684,7 +5686,7 @@ as the fallback for the browser on the static export and for any
 environment without the key. The same key is the bearer token for The
 Graph&#39;s Subgraph MCP server (next sections), so one credential covers both
 the data path and the agent path.</p>
-<h3>The copilot</h3>
+<h3 id="the-copilot">The copilot</h3>
 <p>The copilot is a chat panel in the application and one server route,
 <code>POST /api/copilot/</code>. The route exists only on server builds (the Vercel
 deployment); the static GitHub Pages export has no server, so the widget
@@ -5829,7 +5831,7 @@ after three days without a trade and expiring within three days.
 interest on the holder&#39;s own ranges. Every tape tool returns the tape&#39;s
 <code>source</code> field, <code>&quot;subgraph&quot;</code> on public networks or <code>&quot;anvil-logs&quot;</code> on the
 local chain.</p>
-<h3>MCP servers</h3>
+<h3 id="mcp-servers">MCP servers</h3>
 <p>The Model Context Protocol (MCP) is an open standard by which an AI model
 connects to external tool servers over HTTP. In Smile, MCP is how the
 copilot&#39;s toolset grows without a rebuild.</p>
@@ -5912,7 +5914,7 @@ budget per server, and the routing quality of the model in use; the free
 routed model on the live deployment follows explicit tool rules well and
 open-ended tool choice less well, so a server with many similar tools
 benefits from a skill that names which one to call.</p>
-<h3>The seeded tape</h3>
+<h3 id="the-seeded-tape">The seeded tape</h3>
 <p>A chart and a screener need trades to look at. <code>script/seed-tape.sh</code>
 writes three ranges (two call expiries and one put) and one hundred trades
 on the local chain. On Anvil the trades are split into ten batches about
@@ -6153,7 +6155,7 @@ strikes, option amounts and WETH collateral in the schema.</li>
 <p><strong>For the protocol treasury.</strong> The backstop pool is a yield-bearing treasury position: depositors receive shares and earn the absorbed positions&#39; upside, and naked notional across the vault is capped at seven times the pool. Funding it from a Circle-custodied wallet and topping up the insurance fund through Gateway turn &quot;the treasury&quot; from a spreadsheet entry into an auditable set of on-chain transactions originating from a wallet Smile does not hold the key to.</p>
 <p><strong>Compared with USD-settled centralized venues.</strong> Deribit settles its USDC products against an index it computes and holds the customer&#39;s collateral. Smile-on-Arc settles against an on-chain price round, holds no customer funds before a match, and lets the customer verify every transfer on the explorer. The comparison is not that Smile is more liquid, which it is not, but that it delivers the same single-currency experience without custody.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>The deploy script&#39;s Arc branch</h3>
+<h3 id="the-deploy-scripts-arc-branch">The deploy script&#39;s Arc branch</h3>
 <p>The deploy script selects token and oracle addresses by chain id. On Arc it deploys a mock WETH and a mock ETH/USD aggregator, then points the USDC slot at Circle&#39;s real contract.</p>
 <p><code>script/Deploy.s.sol</code></p>
 <pre><code class="language-solidity">} else if (block.chainid == 5042002) {
@@ -6172,7 +6174,7 @@ strikes, option amounts and WETH collateral in the schema.</li>
     oracleAddr = address(arcOracle);
 </code></pre>
 <p>The full stack cost about 0.46 USDC of gas to deploy on 2026-09-10; the margin and RFQ siblings cost about 0.58 USDC more the same evening. Every address is listed in the Arc deployment notes.</p>
-<h3>Demo transactions as <code>cast send</code></h3>
+<h3 id="demo-transactions-as-cast-send">Demo transactions as <code>cast send</code></h3>
 <p>Foundry&#39;s <code>forge script</code> simulates every transaction locally before broadcasting. Arc&#39;s USDC is a native-asset system contract, and the local simulator (revm) cannot execute it from fetched bytecode; it fails with <code>StackUnderflow</code> before anything is sent. The node itself, and MetaMask, execute it without difficulty. The demo scripts therefore use <code>cast send</code>, which skips the local simulation.</p>
 <p><code>script/arc-smoke.sh</code></p>
 <pre><code class="language-bash">send() { cast send --rpc-url &quot;$RPC&quot; --private-key &quot;<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mi>R</mi><mi>I</mi><mi>V</mi><mi>A</mi><mi>T</mi><msub><mi>E</mi><mi>K</mi></msub><mi>E</mi><mi>Y</mi><mi mathvariant="normal">&quot;</mi><mo>−</mo><mo>−</mo><mi>j</mi><mi>s</mi><mi>o</mi><mi>n</mi><mi mathvariant="normal">&quot;</mi></mrow><annotation encoding="application/x-tex">PRIVATE_KEY&quot; --json &quot;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mord">&quot;</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mord mathnormal">so</span><span class="mord mathnormal">n</span><span class="mord">&quot;</span></span></span></span>@&quot; | python3 -c &#39;import json,sys; d=json.load(sys.stdin); print(d[&quot;transactionHash&quot;], &quot;status&quot;, d[&quot;status&quot;])&#39;; }
@@ -6218,7 +6220,7 @@ echo &quot;buy $UNITS @ 3000: $(send $VAULT &#39;buy(uint256,uint256,uint256,uin
 <td>formula Ask was 0.695819; 0.001 WETH pulled just in time</td>
 </tr>
 </tbody></table>
-<h3>The wallet configuration and address map</h3>
+<h3 id="the-wallet-configuration-and-address-map">The wallet configuration and address map</h3>
 <p>The application defines Arc as a chain in the wagmi configuration. The native currency is USDC, shown with 18 decimals in the native view; the ERC-20 view at <code>0x3600…0000</code> has 6 decimals.</p>
 <p><code>frontend/config/wagmi.ts</code></p>
 <pre><code class="language-ts">export const arcTestnet = defineChain({
@@ -6231,7 +6233,7 @@ echo &quot;buy $UNITS @ 3000: $(send $VAULT &#39;buy(uint256,uint256,uint256,uin
 });
 </code></pre>
 <p>One build serves every chain. The connected chain id selects its own contract addresses, subgraph endpoint and explorer from <code>frontend/lib/deployments.ts</code>; the Arc entry carries the subgraph URL <code>https://api.studio.thegraph.com/query/44448/smile-arc-testnet/v0.0.1</code> and the note &quot;Circle&#39;s native USDC — premium, collateral, margin, backstop, and gas&quot;. For local development, <code>.env.arc.example</code> holds the same addresses and is copied to <code>frontend/.env.local</code>.</p>
-<h3>Circle Gateway: funding the insurance fund from another chain</h3>
+<h3 id="circle-gateway-funding-the-insurance-fund-from-another-chain">Circle Gateway: funding the insurance fund from another chain</h3>
 <p>Circle Gateway maintains a unified USDC balance: a depositor places USDC into a Gateway wallet contract on any supported chain, signs a burn intent, receives an attestation from Circle, and mints native USDC on the destination chain. The keeper script performs that sequence from Sepolia (domain 0) to Arc (domain 26) and then deposits the minted USDC into <code>MarginVault.fundInsurance</code>. No bridge contract of Smile&#39;s is involved and no wrapped token is created.</p>
 <p><code>keeper/insurance-gateway.mjs</code></p>
 <pre><code class="language-js">const burnIntent = { maxBlockHeight, maxFee, spec };
@@ -6247,7 +6249,7 @@ const mintHash = await arcWal.writeContract({ address: GATEWAY_MINTER, abi: MINT
 </code></pre>
 <p>Recorded run (2026-09-12): a 5 USDC Gateway balance already on the Sepolia domain carried a 3 USDC burn intent (Gateway requires value plus fee to fit the balance); Circle returned attestation <code>ee4b1e71-…</code> with a 0.000001 USDC fee, <code>GatewayMinter.gatewayMint</code> credited 2.997032 native USDC on Arc (<code>0xa5baa3e5…</code>) and <code>MarginVault.fundInsurance</code> took the fund from 4.003514 to 7.000546 USDC (<code>0xc5493a8e…</code>).</p>
 <p>The script is idempotent in the sense that a Gateway balance already credited on the source domain is spent before a new deposit is made, and it waits for source-chain finality (about nineteen minutes on Sepolia) by polling Circle&#39;s balance endpoint. It is run with <code>PRIVATE_KEY=0x… AMOUNT=5 node insurance-gateway.mjs</code> from the <code>keeper</code> directory.</p>
-<h3>Circle Developer-Controlled Wallets: the treasury that funds the backstop</h3>
+<h3 id="circle-developer-controlled-wallets-the-treasury-that-funds-the-backstop">Circle Developer-Controlled Wallets: the treasury that funds the backstop</h3>
 <p>A developer-controlled wallet is an account whose key Circle generates and holds; the developer authorizes transactions through Circle&#39;s API using an entity secret that Circle encrypts with the entity&#39;s public key. The keeper script registers that secret once, creates a wallet set named &quot;Smile treasury&quot; with one externally owned account on <code>ARC-TESTNET</code>, and then submits ordinary contract executions: <code>USDC.approve(backstop)</code> followed by <code>MarginBackstop.deposit</code>.</p>
 <p><code>keeper/backstop-wallet.mjs</code></p>
 <pre><code class="language-js">// A contract call through Circle: they build, sign and broadcast it; we poll
@@ -6269,7 +6271,7 @@ if (cmd === &quot;deposit&quot;) {
 </code></pre>
 <p>Recorded run (2026-09-12): the treasury wallet <code>0x61bd6c481248f2e5bfd6d0aadf5215f353dc3368</code>, funded with 1.5 USDC by the deployer (<code>0x2c25a967…</code>), submitted <code>USDC.approve</code> (<code>0x95005ec6…</code>) and <code>MarginBackstop.deposit</code> of 1 USDC (<code>0xbfd2db0a…</code>), taking the pool from 30.002108 to 31.002108 USDC; both transactions were built, signed and broadcast by Circle. The Margin tab lists them under &quot;Funded through Circle App Kits&quot;.</p>
 <p>The script has four commands: <code>setup</code> (generate and register the entity secret; a recovery file is written next to the script), <code>wallet</code> (create or show the Arc wallet), <code>deposit</code> (approve and deposit <code>AMOUNT</code> USDC into the backstop pool) and <code>withdraw</code> (request withdrawal of all shares; <code>withdraw()</code> opens after the pool&#39;s 24-hour delay). Wallet state lives in <code>keeper/.circle-wallet.json</code>; that file, the recovery file and the <code>.env</code> holding the API key and entity secret are all ignored by git. The treasury wallet created on 2026-09-12 is <code>0x61bd6c481248f2e5bfd6d0aadf5215f353dc3368</code>.</p>
-<h3>Arc, in Circle&#39;s own terms</h3>
+<h3 id="arc-in-circles-own-terms">Arc, in Circle&#39;s own terms</h3>
 <p>Circle describes Arc in terms of programmable money flows, automation, yield and treasury. Each is an existing Smile flow that runs on Arc unchanged:</p>
 <ul>
 <li><strong>Conditional payments.</strong> An option is a conditional payment instrument: premium now, payout contingent on the settlement price. Aqua&#39;s just-in-time pull is itself conditional: collateral leaves the writer&#39;s wallet only when a buyer matches.</li>
@@ -6277,7 +6279,7 @@ if (cmd === &quot;deposit&quot;) {
 <li><strong>On-chain automation.</strong> <code>keeper/roll.mjs</code> settles, reclaims, revokes and re-ships a writer&#39;s range at the new spot with no human in the loop; <code>keeper/margin.mjs</code> drives margin calls, auctions, absorptions and settlement for the margin tier.</li>
 <li><strong>Yield and treasury.</strong> One-Click Income presets (covered calls and cash-secured puts with an estimated premium APR) are the yield product; the backstop pool and insurance fund, funded through Circle&#39;s App Kits, are the treasury.</li>
 </ul>
-<h3>The Arc subgraph</h3>
+<h3 id="the-arc-subgraph">The Arc subgraph</h3>
 <p>The Graph Studio subgraph <code>smile-arc-testnet</code> indexes <code>AquaCollateralVault</code> at <code>0xE37ED711F7D1dc5aC045206b4A6367C55229C789</code> from block 61,227,750 (<code>subgraph/networks.json</code>). On Arc, as on Sepolia, the application and the AI copilot read positions only from The Graph; there is no RPC scan on public networks. The Graph page in this sidebar covers the subgraph in detail.</p>
 <h2 id="limitations">Limitations</h2>
 <ul>
@@ -6458,7 +6460,7 @@ if (cmd === &quot;deposit&quot;) {
 <p><strong>For a liquidity provider</strong>, the Earn tabs and the Spreads, Margin and RFQ desks show the capital each tier locks for the same trade, and the LP Dashboard and Risk Monitor show what happens to that capital afterwards. A writer can compare a naked put, a credit spread, and a margined put on one screen before choosing a rung.</p>
 <p><strong>For a reviewer or an integrator</strong>, the Overview tab&#39;s receipts and the Receipts tab link every recorded testnet transaction to its explorer, per chain. The Vercel build carries the copilot, so the AI trading agent described on The Graph page can be tried without any setup.</p>
 <h2 id="technical-details">Technical details</h2>
-<h3>The chart: TradingView Lightweight Charts</h3>
+<h3 id="the-chart-tradingview-lightweight-charts">The chart: TradingView Lightweight Charts</h3>
 <p><strong>What it is.</strong> Lightweight Charts is TradingView&#39;s open-source charting engine, published as the <code>lightweight-charts</code> npm package under the Apache-2.0 licence. It is the renderer behind TradingView&#39;s charts, not the TradingView website or its embeddable widget: it draws candles, lines and price lines on a canvas from data the application supplies, with no account, no data feed and no network calls of its own. Smile pins version 5.2.1 (<code>frontend/package.json</code>).</p>
 <p><strong>Why this library.</strong> There is no open-source OptionStrat, and the nearest React project draws expiry payoffs only, so the builder stayed in-house. For charting, a component was needed rather than a product; OpenCharts, an MIT-licensed terminal built on the same engine, is a full standalone application, not a component to embed. Using TradingView&#39;s engine directly gives a trader the chart they already know, in a component the page controls.</p>
 <p><strong>What is drawn.</strong> Hourly ETH/USD candles from Coinbase Exchange&#39;s public candles endpoint, with Kraken&#39;s OHLC endpoint as the fallback; the protocol&#39;s spot as a dotted line; every leg&#39;s strike as a solid line, green for long and red for short; each breakeven as a dashed yellow line; and, in the lower third, one selected instrument&#39;s traded premium per unit and the implied volatility that premium means, computed in the browser by inverting Black-Scholes against the candle close at that hour. Market data is context for the trade; the protocol prices off its oracle, not off these candles.</p>
@@ -6511,7 +6513,7 @@ if (cmd === &quot;deposit&quot;) {
 }
 </code></pre>
 <p>The legend names the tape&#39;s source (&quot;The Graph&quot; or &quot;Anvil event log&quot;) so a viewer knows where the fills came from.</p>
-<h3>One build, three chains</h3>
+<h3 id="one-build-three-chains">One build, three chains</h3>
 <p>Recorded testnet addresses live in <code>DEPLOYED_ADDRESSES</code>; the environment supplies the Anvil addresses that <code>./local.sh</code> writes. <code>CONTRACTS</code> is a proxy that resolves each key against the chain the page has set, so every component reads the right vault without knowing which chain it is on:</p>
 <p><code>frontend/config/wagmi.ts</code></p>
 <pre><code class="language-ts">let activeChainId = 0;
@@ -6542,7 +6544,7 @@ export type Deployment = {
 <pre><code class="language-tsx">  const dep = chainId ? DEPLOYMENTS[chainId] : undefined;
   const treasury = dep?.demo.filter((t) =&gt; t.label.startsWith(&quot;Treasury ·&quot;)) ?? [];
 </code></pre>
-<h3>The Overview ladder</h3>
+<h3 id="the-overview-ladder">The Overview ladder</h3>
 <p>The landing tab computes the at-the-money strike from the live spot and reads <code>MarginVault.marginRequirement</code> for it, then draws four rungs whose bar widths are the collateral each tier locks for the same trade:</p>
 <p><code>frontend/components/Story.tsx</code></p>
 <pre><code class="language-ts">  const ladder = [
@@ -6552,7 +6554,7 @@ export type Deployment = {
     { title: &quot;Signed quote&quot;, sub: &quot;RfqVault · LP-signed price, same collateral rules&quot;, value: k, note: &quot;any price the LP signs — the custody model never changes&quot;, color: &quot;bg-teal-700&quot;, cta: &quot;RFQ&quot;, tab: &quot;rfq&quot; as TabId, tone: &quot;new&quot; as const },
   ];
 </code></pre>
-<h3>The tape and its chain-id gate</h3>
+<h3 id="the-tape-and-its-chain-id-gate">The tape and its chain-id gate</h3>
 <p>Every read of ranges, instruments, fills or positions goes through <code>readTape</code>. On a chain with a subgraph endpoint the tape comes from The Graph; on the local Anvil chain, where no graph-node runs on this project&#39;s arm64 host, the same entities are rebuilt from <code>eth_getLogs</code>; on any other chain without a subgraph the call throws rather than falling back to a capped scan:</p>
 <p><code>frontend/lib/tape.ts</code></p>
 <pre><code class="language-ts">export class SubgraphRequiredError extends Error {
@@ -6570,7 +6572,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
 }
 </code></pre>
 <p>In the browser on the server build, <code>subgraphUrlFor</code> returns the proxy path <code>/api/subgraph/?chainId=…</code>; the route resolves a per-chain gateway URL (<code>SUBGRAPH_URL_11155111</code>, <code>SUBGRAPH_URL_5042002</code>) or a global one from server-side environment variables and otherwise forwards to the recorded Studio endpoint. The static export has no route and calls the Studio endpoint directly.</p>
-<h3>The builder&#39;s heat map</h3>
+<h3 id="the-builders-heat-map">The builder&#39;s heat map</h3>
 <p>The strategy builder draws three profit-and-loss curves with Recharts and a price × date heat map as a table whose cell colour scales with the profit or loss at that price on that day. The matrix comes from <code>pnlMatrix</code> in <code>frontend/lib/options.ts</code> (fifteen prices by eight dates by default):</p>
 <p><code>frontend/components/PayoffBuilder.tsx</code></p>
 <pre><code class="language-tsx">function HeatMap({ legs, spot }: { legs: Leg[]; spot: number }) {
@@ -6582,7 +6584,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
   };
 </code></pre>
 <p>The builder&#39;s greeks (delta, gamma, theta per day, vega) come from <code>strategyStats</code>, which uses the <code>black-scholes</code> and <code>greeks</code> npm packages; the per-leg &quot;what the writer locks on each vault&quot; panel comes from <code>writerCollateral</code>, which reports the naked, netted and margined collateral for every leg.</p>
-<h3>The Risk Monitor</h3>
+<h3 id="the-risk-monitor">The Risk Monitor</h3>
 <p>The monitor reads every <code>MarginVault</code> event (<code>MarginLocked</code>, <code>Flagged</code>, <code>AuctionStarted</code>, <code>TakenOver</code>, <code>Absorbed</code>, <code>PositionSettled</code>, <code>SeriesFinalized</code>, <code>HolderHaircut</code>, and others) every five seconds, derives the set of positions from them, and reads each position&#39;s <code>health</code> from the vault. A bar shows the locked margin against the maintenance and initial thresholds:</p>
 <p><code>frontend/components/RiskMonitor.tsx</code></p>
 <pre><code class="language-tsx">        &lt;div className={`absolute inset-y-0 left-0 ${healthy ? (locked &gt;= im ? &quot;bg-green-600&quot; : &quot;bg-yellow-600&quot;) : &quot;bg-red-600&quot;} transition-all duration-700`} style={{ width: pct(locked) }} /&gt;
@@ -6590,7 +6592,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
         &lt;div className=&quot;absolute inset-y-0 w-0.5 bg-white/30&quot; style={{ left: pct(im) }} title=&quot;initial&quot; /&gt;
 </code></pre>
 <p>The timeline renders each event as a sentence a writer can act on; the &quot;Explain with the copilot&quot; button, shown only when the copilot is enabled, hands the recent events to the chat.</p>
-<h3>The RFQ desk</h3>
+<h3 id="the-rfq-desk">The RFQ desk</h3>
 <p>The LP signs a quote as EIP-712 typed data in the wallet, with no gas, through wagmi&#39;s <code>useSignTypedData</code>; the taker&#39;s fill is an ordinary contract call:</p>
 <p><code>frontend/components/RfqDesk.tsx</code></p>
 <pre><code class="language-ts">  const { signTypedDataAsync, isPending: signing, error: signError } = useSignTypedData();
@@ -6598,15 +6600,15 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
 <pre><code class="language-ts">    const signature = await signTypedDataAsync({
       types: QUOTE_TYPES, primaryType: &quot;Quote&quot;, message: quote,
 </code></pre>
-<h3>The copilot panel</h3>
+<h3 id="the-copilot-panel">The copilot panel</h3>
 <p>The floating panel sends the visible spot, chain id, wallet address and the active tab with every request so the server prices exactly what the screen shows. A per-tab briefing (<code>frontend/lib/copilot/tabs.ts</code>) tells the model what is on screen, which guide sections explain it, and which tools fit; the panel shows that tab&#39;s starter prompts. The Skills menu toggles the eight built-in trader skills and accepts user-written ones; the settings gear holds a bring-your-own-key provider choice and the list of MCP servers, with a one-click preset for The Graph&#39;s Subgraph MCP:</p>
 <p><code>frontend/components/copilot/CopilotSettings.tsx</code></p>
 <pre><code class="language-ts">const THEGRAPH_MCP: McpServer = { name: &quot;thegraph&quot;, url: &quot;https://subgraphs.mcp.thegraph.com/sse&quot;, transport: &quot;sse&quot; };
 </code></pre>
 <p>The two preparation cards (<code>prepare_lp_range</code>, <code>prepare_rfq_quote</code>) hand the agent&#39;s proposed numbers to the matching form, where the user reviews and signs; the copilot never holds a key. The Graph page documents the tools, skills and MCP in full.</p>
-<h3>The help site and the knowledge pack</h3>
+<h3 id="the-help-site-and-the-knowledge-pack">The help site and the knowledge pack</h3>
 <p><code>frontend/scripts/gen-help.mjs</code> renders the README, the User Guide, Limitations, Solutions, the copilot page and the six integration pages (the Integrations group in the sidebar) into <code>public/help.html</code>, with KaTeX for the README&#39;s formulae and Mermaid for its diagrams; the Reference Table and Continuation Track pages are embedded as standalone documents. <code>frontend/scripts/gen-knowledge.mjs</code> compiles the same documents into a token-cheap table of contents for the copilot&#39;s system prompt and full sections served on demand through its <code>read_docs</code> tool. Both run on <code>predev</code> and <code>prebuild</code>, so the site and the pack are never stale relative to the docs.</p>
-<h3>Two builds</h3>
+<h3 id="two-builds">Two builds</h3>
 <p><code>frontend/next.config.ts</code> switches on one variable: when <code>NEXT_PUBLIC_BASE_PATH</code> is set (the GitHub Pages workflow sets it to <code>/Smile</code>), the build is a static export served from a subpath, and route handlers are excluded; when it is unset, the build is a normal server build that carries <code>/api/copilot</code> and <code>/api/subgraph</code>. The Pages workflow runs on pushes to <code>main</code> and the continuation branch and on documentation changes; the Vercel project builds the continuation branch as production with the copilot provider, model, keys and MCP seed held as server-side environment variables.</p>
 <h2 id="limitations">Limitations</h2>
 <ul>
@@ -6726,12 +6728,12 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
     function buildToc(id, section, anchor) {
       document.querySelectorAll(".toc").forEach(function (el) { el.remove(); });
       var items = [];
-      section.querySelectorAll("h2").forEach(function (h) {
+      section.querySelectorAll("h2, h3").forEach(function (h) {
         // marked wraps a bare <a id> line in a <p>: <p><a id="tab-margin"></a></p><h2>Margin</h2>
         var prev = h.previousElementSibling;
         if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
         var target = prev && prev.tagName === "A" && prev.id ? prev.id : h.id;
-        if (target) items.push({ id: target, text: h.textContent.trim() });
+        if (target) items.push({ id: target, text: h.textContent.trim(), sub: h.tagName === "H3" });
       });
       if (items.length < 2) return;
       var toc = document.createElement("div");
@@ -6740,7 +6742,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
         var a = document.createElement("a");
         a.href = "#" + id + "/" + it.id;
         a.textContent = it.text;
-        if (it.id === anchor) a.className = "current";
+        a.className = (it.sub ? "sub" : "") + (it.id === anchor ? " current" : "");
         a.addEventListener("click", function (e) { e.preventDefault(); showPage(id, it.id); });
         toc.appendChild(a);
       });
