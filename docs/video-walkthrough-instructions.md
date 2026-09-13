@@ -28,7 +28,9 @@ minutes including setup.
    wider — the ladder and the chart need width). Tab B:
    `https://thegraph.com/studio/subgraph/smile-sepolia` playground, and
    `https://testnet.arcscan.app/tx/0x0938c5be639e8daf30b88d15b82d5ec80dd5d3a68096e5b796051f00791a4d02`
-   ready in a third tab. Close everything else; hide bookmarks.
+   ready in a third tab (the Arc margined-put fill), and
+   `https://testnet.arcscan.app/tx/0x0f23f6a1042733952f44fb54c2640085d0d816ce848a807fe1304551fc9a237b`
+   in a fourth (the cash-settled call spread on Arc — 2.00 USDC of escrow, no WETH). Close everything else; hide bookmarks.
 4. **Copilot.** Make sure the copilot key is in `frontend/.env.local`
    (`./local.sh` preserves it). Open the panel once so it is warm.
 5. **Second terminal** (optional, for the Sepolia/Arc receipts) — not
@@ -166,25 +168,34 @@ candles (TradingView Lightweight Charts).
 > skills, and it talks to The Graph's Subgraph MCP — or any MCP server you
 > add."**
 
-Switch MetaMask to **Arc Testnet**; Overview flips to the Arc receipts;
-click the MarginVault fill → arcscan. Then the **Margin** tab: scroll to
+Switch MetaMask to **Arc Testnet**; Overview flips to the Arc receipts
+(the spot badge now reads *mock feed* — Arc's oracle is mirrored from
+Sepolia's Chainlink every 30 minutes, so it is the real price); click the
+SpreadVault fill → arcscan (2.00 USDC pulled: K₂−K₁ per unit, cash-settled
+— Arc has no ether, so ETH is only the reference price here), then the
+MarginVault fill → arcscan. Then the **Margin** tab: scroll to
 the pool panel — **"Funded through Circle App Kits"** lists three
 receipts (Wallets-kit deposit into the backstop, Gateway mint, Gateway →
 insurance fund); click one → arcscan.
 
-> **"And on Circle's Arc, with native USDC as premium, margin, backstop
-> and gas: a margined put locking 1.50 USDC instead of 3.00, and a signed
-> RFQ fill. The whole ladder settles in Circle's dollar. The safety pools
+> **"And on Circle's Arc, with native USDC as premium, collateral, margin,
+> backstop and gas — ETH is only the price being traded: a call spread
+> escrowing two dollars of USDC, a margined put locking 1.50 USDC instead
+> of 3.00, and a signed RFQ fill. The whole ladder settles in Circle's
+> dollar. The safety pools
 > are funded by Circle's App Kits — a developer-controlled wallet Circle
 > signs for, and Gateway bringing USDC in from Sepolia — no treasury key
 > in the repo."**
 
 ### 4:20 — Close (15 s)
 
-Back to **Overview**; open **Help ↗ → Continuation Track** and scroll it;
-flick past the **Sponsors** group in the sidebar (1inch Aqua, Chainlink,
-Uniswap, The Graph, Circle · Arc, Frontend — one page each: features,
-why, value, code, limitations, plans).
+Back to **Overview**; open **Help ↗** — it lands on the Screens section
+for the tab you were on, with the page's sections listed under it in the
+sidebar. Type `cash-settled` in the sidebar search box (results across
+every page, click one), then open **Continuation Track** and scroll it;
+flick past the **Integrations** group (1inch Aqua, Chainlink, Uniswap,
+The Graph, Circle · Arc, Frontend — one page each: features, why, value,
+code, limitations, plans).
 
 > **"Two hundred Foundry tests, one task per commit, every milestone in
 > the plan reached except the ones that needed hardware we don't have.
@@ -220,8 +231,14 @@ why, value, code, limitations, plans).
   collateral, margin, backstop", "Sepolia with Circle USDC too", "Circle
   Gateway and a developer-controlled wallet funded the insurance fund and
   the backstop — no treasury key in the repo"; be honest that FX/EURC was
-  cut because Arc testnet has no EUR/USD feed and that WETH and the price
-  feed are mocks on Arc.
+  cut because Arc testnet has no EUR/USD feed, that the Arc price feed is
+  a mock (mirrored from Sepolia's Chainlink by a keeper), and that the
+  main vault's covered calls use a WETH stand-in on Arc — spreads are
+  cash-settled in USDC, puts/margin/RFQ-puts were USDC from the start.
+- **Wording to avoid**: don't call the surface's σ an "80% implied vol" —
+  say "the surface's σ parameter". It prices about 2.5× a Black-Scholes IV
+  at the money (Overview §2 says so); the chart's IV line is the
+  back-solved Black-Scholes number.
 
 ## Editing notes
 
