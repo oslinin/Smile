@@ -34,16 +34,18 @@ interface IBetaSource {
 /// surface the main vault uses (SmilePremiumLib is that math lifted into a
 /// library), so a spread is purely a collateral-accounting layer.
 ///
-/// Scope so far: A1 scaffold, A2 quote, A3 buy, A4 settle/redeem/reclaim
-/// (call credit + put credit; iron condor is strike-validated but not
-/// priced, fillable, or settleable yet).
+/// Scope: A1 scaffold, A2 quote, A3 buy, A4 settle/redeem/reclaim for call
+/// credit, put credit, and — on a cash-settled (USDC-native) vault — the iron
+/// condor, which escrows max(putWidth, callWidth) USDC in one structure, not
+/// the sum of two separate spreads.
 contract SpreadVault is AquaApp, Ownable {
     using SafeERC20 for IERC20;
 
     enum Kind { CallCredit, PutCredit, IronCondor }
 
     /// @dev strikes layout: CallCredit uses [2]=K1,[3]=K2; PutCredit uses
-    /// [0]=K1,[1]=K2; IronCondor uses all four (put K1<K2 <= call K1<K2).
+    /// [0]=K1,[1]=K2; IronCondor uses all four: long put K0 < short put K1 <=
+    /// short call K2 < long call K3.
     struct Structure {
         address lp;
         Kind kind;
@@ -112,6 +114,7 @@ contract SpreadVault is AquaApp, Ownable {
     error UnknownStructure();
     error StructureInactive();
     error UnsupportedKind();
+    error CondorNeedsCashSettle();
     error PremiumAboveMax();
     error SelfOnly();
     error NotLp();
@@ -187,6 +190,10 @@ contract SpreadVault is AquaApp, Ownable {
         } else if (kind == Kind.PutCredit) {
             require(strikes[0] < strikes[1], InvalidStrikes());
         } else {
+            // Iron condor: long put K0, short put K1, short call K2, long call K3.
+            // Escrow is max(put wing, call wing) in ONE token, so both wings
+            // must be USDC — only a cash-settled vault (no WETH) qualifies.
+            require(cashSettledCalls, CondorNeedsCashSettle());
             require(strikes[0] < strikes[1] && strikes[1] <= strikes[2] && strikes[2] < strikes[3], InvalidStrikes());
         }
 
@@ -263,7 +270,20 @@ contract SpreadVault is AquaApp, Ownable {
             // K2-K1 USDC per unit.
             escrow = SmileMath.scaleFromWad(Math.ceilDiv(units * (s.strikes[1] - s.strikes[0]), 1e18), usdcDecimals, true);
         } else {
-            revert UnsupportedKind();
+            // Iron condor = put credit spread (K0,K1) + call credit spread (K2,K3),
+            // both cash-settled. Premium is the sum of the two wings' net debits;
+            // escrow is the WIDER wing, not their sum — price can't be below K1
+            // and above K2 at once, so only one wing ever pays out (A4).
+            (uint256 putAsk,) = SmilePremiumLib.quote(_terms(authId, s.strikes[1], false), units, true, usdcDecimals, 0);
+            (uint256 putBid,) = SmilePremiumLib.quote(_terms(authId, s.strikes[0], false), units, false, usdcDecimals, 0);
+            (uint256 callAsk,) = SmilePremiumLib.quote(_terms(authId, s.strikes[2], true), units, true, usdcDecimals, 0);
+            (uint256 callBid,) = SmilePremiumLib.quote(_terms(authId, s.strikes[3], true), units, false, usdcDecimals, 0);
+            ask = putAsk + callAsk;
+            bid = putBid + callBid;
+            uint256 putWidth = s.strikes[1] - s.strikes[0];
+            uint256 callWidth = s.strikes[3] - s.strikes[2];
+            uint256 width = putWidth > callWidth ? putWidth : callWidth;
+            escrow = SmileMath.scaleFromWad(Math.ceilDiv(units * width, 1e18), usdcDecimals, true);
         }
 
         premium = ask > bid ? ask - bid : 0;
@@ -371,7 +391,14 @@ contract SpreadVault is AquaApp, Ownable {
             uint256 c = settlementPrice < k1 ? k1 : settlementPrice > k2 ? k2 : settlementPrice;
             return (units * (k2 - c)) / 1e30;
         }
-        revert UnsupportedKind();
+        // Iron condor (cash-settled): sum of the two wings' payouts. At most one
+        // is non-zero (S below K1 → put wing; S above K2 → call wing), so this
+        // sum never exceeds max(putWidth, callWidth) = the escrow.
+        uint256 pc = settlementPrice < s.strikes[0] ? s.strikes[0] : settlementPrice > s.strikes[1] ? s.strikes[1] : settlementPrice;
+        uint256 putPayout = (units * (s.strikes[1] - pc)) / 1e30; // long K1 put vs short K0 put
+        uint256 cc = settlementPrice < s.strikes[2] ? s.strikes[2] : settlementPrice > s.strikes[3] ? s.strikes[3] : settlementPrice;
+        uint256 callPayout = (units * (cc - s.strikes[2])) / 1e30; // long K2 call vs short K3 call
+        return putPayout + callPayout;
     }
 
     /// @notice Holder burns `units` of the structure's SpreadToken after
@@ -470,16 +497,19 @@ contract SpreadVault is AquaApp, Ownable {
     ) internal returns (address token) {
         token = spreadTokens[authId];
         if (token == address(0)) {
+            bool condor = s.kind == Kind.IronCondor;
             bool isCall = s.kind == Kind.CallCredit;
-            (uint256 lo, uint256 hi) = isCall ? (s.strikes[2], s.strikes[3]) : (s.strikes[0], s.strikes[1]);
+            // Condor token spans the outer strikes K0..K3; the settlement
+            // registry's strike/isCall are metadata, payout reads all four.
+            (uint256 lo, uint256 hi) = condor ? (s.strikes[0], s.strikes[3]) : isCall ? (s.strikes[2], s.strikes[3]) : (s.strikes[0], s.strikes[1]);
             token = address(
                 new SpreadToken(
                     string(
                         abi.encodePacked(
-                            isCall ? "CALL-SPREAD-" : "PUT-SPREAD-", _uint2str(lo / 1e18), "-", _uint2str(hi / 1e18)
+                            condor ? "CONDOR-" : isCall ? "CALL-SPREAD-" : "PUT-SPREAD-", _uint2str(lo / 1e18), "-", _uint2str(hi / 1e18)
                         )
                     ),
-                    isCall ? "CSPRD" : "PSPRD",
+                    condor ? "CNDR" : isCall ? "CSPRD" : "PSPRD",
                     lo,
                     hi,
                     s.expiry,
@@ -490,7 +520,7 @@ contract SpreadVault is AquaApp, Ownable {
             spreadTokens[authId] = token;
             structureOf[token] = authId;
             if (settlement != address(0)) {
-                AquaOptionSettlement(settlement).registerSeries(seriesId(authId), token, s.expiry, isCall ? lo : hi, isCall);
+                AquaOptionSettlement(settlement).registerSeries(seriesId(authId), token, s.expiry, hi, isCall);
             }
         }
 
@@ -506,6 +536,8 @@ contract SpreadVault is AquaApp, Ownable {
     /// condor's max-not-sum requirement isn't wired yet — it inherits the
     /// USDC slot for now.
     function _collateralToken(Kind kind) internal view returns (address) {
+        // Iron condor is cash-settled USDC (gated at openStructure); call
+        // credit is WETH only on a non-cash-settled vault.
         return kind == Kind.CallCredit && !cashSettledCalls ? weth : usdc;
     }
 
