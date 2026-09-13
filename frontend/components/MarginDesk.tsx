@@ -452,14 +452,29 @@ export function MarginDesk({ spot }: { spot: number }) {
             <div className="flex justify-between"><span className="text-gray-400">Insurance fund</span><span className="font-mono text-white">{fmtUsdc(insurance, 0)}</span></div>
             <div className="text-gray-500 pt-1">Waterfall: writer margin → free balance → takeover bidder → backstop → insurance → (haircut, loudly).</div>
             {treasury.length > 0 && dep && (
-              <div className="pt-2 border-t border-gray-700 space-y-0.5">
+              <div className="pt-2 border-t border-gray-700 space-y-1">
                 <div className="text-gray-400">Funded through Circle App Kits</div>
-                {treasury.map((t) => (
-                  <div key={t.hash} className="flex justify-between gap-2">
-                    <span className="text-gray-500">{t.label.replace("Treasury · ", "")}{t.note ? ` — ${t.note}` : ""}</span>
-                    <a href={`${dep.explorer}/tx/${t.hash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:underline shrink-0">{t.hash.slice(0, 10)}…</a>
-                  </div>
-                ))}
+                {treasury.map((t) => {
+                  const kit = /wallet/i.test(t.label) ? "Circle Wallets" : "Circle Gateway";
+                  return (
+                    <div key={t.hash} className="flex justify-between gap-2 items-baseline">
+                      <span className="text-gray-500 min-w-0">
+                        <span className="inline-block text-[10px] px-1.5 py-0.5 mr-1.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-800 align-middle">{kit}</span>
+                        {t.label.replace("Treasury · ", "").replace(/^Wallets kit → |^Gateway → /, "")}{t.note ? ` — ${t.note}` : ""}
+                      </span>
+                      <a href={`${dep.explorer}/tx/${t.hash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:underline shrink-0">{t.hash.slice(0, 10)}…</a>
+                    </div>
+                  );
+                })}
+                <div className="text-gray-600 text-[10px] pt-0.5">No treasury private key in the repo — Circle custodies the Wallets signer; Gateway brings USDC from Sepolia.</div>
+              </div>
+            )}
+            {treasury.length === 0 && dep && (
+              <div className="pt-2 border-t border-gray-700">
+                <div className="text-gray-500 text-[11px]">
+                  <span className="inline-block text-[10px] px-1.5 py-0.5 mr-1.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-800 align-middle">Circle App Kits</span>
+                  The backstop and insurance fund are funded through Circle Wallets and Gateway on <span className="text-gray-300">Arc Testnet</span> — switch networks to see the receipts. On {dep.name} these pools are seeded directly.
+                </div>
               </div>
             )}
           </div>
