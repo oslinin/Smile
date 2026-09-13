@@ -55,6 +55,11 @@
   }
   .nav-link:hover { background: #111827; color: #d1d5db; }
   .nav-link.active { background: #1e293b; color: #fff; font-weight: 600; }
+  /* Section TOC, built at runtime from the active page's h2 headings. */
+  .toc { margin: 2px 0 8px 18px; border-left: 1px solid #1f2937; }
+  .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
+  .toc a:hover { color: #d1d5db; background: #111827; }
+  .toc a.current { color: #93c5fd; }
   .content { flex: 1; min-width: 0; }
   .page { display: none; }
   .page.active { display: block; }
@@ -103,6 +108,7 @@
     }
     .sidebar h2, .sidebar h3 { display: none; }
     .nav-link { width: auto; white-space: nowrap; margin-right: 4px; margin-bottom: 0; }
+    .toc { display: none; }
     .page-reference { height: 80vh; }
   }
 </style>
@@ -6702,6 +6708,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
       section.classList.add("active");
       document.querySelector('.nav-link[data-page="' + id + '"]').classList.add("active");
       renderMermaidIn(section);
+      buildToc(id, section, anchor);
       history.replaceState(null, "", "#" + id + (anchor ? "/" + anchor : ""));
       if (anchor) {
         var target = document.getElementById(anchor);
@@ -6709,6 +6716,35 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
       } else {
         window.scrollTo(0, 0);
       }
+    }
+    // Sidebar TOC under the active page: one link per h2, using the
+    // <a id> anchor that precedes it (the Screens page's tab-<id>) or the
+    // heading's own id. Pages without addressable h2s get no TOC.
+    function buildToc(id, section, anchor) {
+      document.querySelectorAll(".toc").forEach(function (el) { el.remove(); });
+      var items = [];
+      section.querySelectorAll("h2").forEach(function (h) {
+        // marked wraps a bare <a id> line in a <p>: <p><a id="tab-margin"></a></p><h2>Margin</h2>
+        var prev = h.previousElementSibling;
+        if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
+        var target = prev && prev.tagName === "A" && prev.id ? prev.id : h.id;
+        if (target) items.push({ id: target, text: h.textContent.trim() });
+      });
+      if (items.length < 2) return;
+      var toc = document.createElement("div");
+      toc.className = "toc";
+      items.forEach(function (it) {
+        var a = document.createElement("a");
+        a.href = "#" + id + "/" + it.id;
+        a.textContent = it.text;
+        if (it.id === anchor) a.className = "current";
+        a.addEventListener("click", function (e) { e.preventDefault(); showPage(id, it.id); });
+        toc.appendChild(a);
+      });
+      var link = document.querySelector('.nav-link[data-page="' + id + '"]');
+      link.insertAdjacentElement("afterend", toc);
+      var cur = toc.querySelector(".current");
+      if (cur) cur.scrollIntoView({ block: "nearest" });
     }
     function showHash(hash) {
       var parts = (hash || "#overview").slice(1).split("/");
