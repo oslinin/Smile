@@ -87,6 +87,7 @@ const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 const ZERO_BI = BigInt(0);
 const ONE_BI = BigInt(1);
 const WAD = BigInt(10) ** BigInt(18);
+const RFQ_QUOTE_KEY = "smile:rfq:lastSignedQuote";
 const EXPIRY_PRESETS = [
   { label: "7 days", seconds: 7 * 86_400 },
   { label: "30 days", seconds: 30 * 86_400 },
@@ -229,10 +230,19 @@ export function RfqDesk({ spot }: { spot: number }) {
     const s = { quote, signature, lp: address };
     setSigned(s);
     setPasted(serialize(s));
+    // Persist so the fill card keeps the quote across an account switch or
+    // reload (the demo signs on one wallet, fills on another on the same box).
+    try { window.localStorage.setItem(RFQ_QUOTE_KEY, serialize(s)); } catch { /* private mode */ }
   };
 
   // ── 3. Taker fills ──────────────────────────────────────────────────────
   const [pasted, setPasted] = useState("");
+  // On mount, load the last signed quote so it's already in card 3 after the
+  // signer switches to the taker account (switching wallets can remount this).
+  useEffect(() => {
+    if (pasted) return;
+    try { const saved = window.localStorage.getItem(RFQ_QUOTE_KEY); if (saved) setPasted(saved); } catch { /* private mode */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const taking = parse(pasted) ?? signed;
   const [fillUnits, setFillUnits] = useState("1");
   const fillWad = BigInt(Math.round((Number(fillUnits) || 0) * 1e18));

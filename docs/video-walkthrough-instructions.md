@@ -150,7 +150,10 @@ second writer takes the position over instead.
 
 Click **RFQ**. Account #0: ship a call range (capacity 1), then in card 2
 set *100 bps inside the formula*, **Sign Quote** (MetaMask signature, no
-gas). Switch to account #1, the quote is already in card 3, **Fill**.
+gas) — the signed quote drops into card 3's box. Switch MetaMask to account
+#1; card 3 keeps the quote (it's saved across the account switch), so just
+set units and **Fill**. (If the box is ever empty, copy the JSON from card 2
+and paste it into card 3 — that always works.)
 
 > **"Tier two: the LP signs a price off-chain — any model they like — and
 > the taker fills it. The vault recovers the signer, checks the nonce and
