@@ -119,14 +119,23 @@ Click **Risk Monitor** and leave it on screen. In the terminal:
 
 Narrate as the timeline fills (it takes ~20 s):
 
-> **"A margined put: the writer locks 1,500 USDC of initial margin, not
-> the 3,000 strike. ETH crashes to 2,000 — maintenance is now above what's
-> locked, the keeper flags, an hour of grace, a post-flag round confirms,
-> the auction opens, nobody bids, the backstop pool absorbs it and draws
-> only the 175 USDC shortfall. Expiry, permissionless settlement, the
-> holder redeems exactly 1,000 USDC of intrinsic. Every step is a real
-> transaction; the position card went red, then to the pool, then
-> settled."**
+> **"A writer sells a 3,000 put with ETH at 3,000 — at the money, so it
+> locks only 1,500 USDC of initial margin, not the 3,000 the main vault
+> cash-secures. ETH crashes to 2,000: the put is now 1,000 in the money,
+> so maintenance margin — that 1,000 plus a 30% buffer, 1,600 — climbs
+> above the 1,500 locked, and the keeper flags it. An hour of grace, a
+> post-flag round confirms, the auction opens. Nobody bids, so the backstop
+> pool — mutualized LP capital — steps into the writer's short and draws
+> just the 175 USDC shortfall; the writer is liquidated. At expiry, ETH at
+> 2,000, the holder redeems the put's intrinsic — 3,000 minus 2,000, so
+> 1,000 USDC in cash, not the 3,000 strike — and they were never touched
+> by the crash. Every step is a real transaction."**
+
+The script prints the same math line by line as it runs, so a viewer can
+read the IM-vs-MM numbers if they pause. For the takeover variant,
+`MODE=takeover ./script/margin-lifecycle.sh`, the line to speak is: *"here
+a second writer bids instead — they take over the short, post fresh margin,
+and collect a bonus out of the liquidated writer's collateral."*
 
 Click **Explain with the copilot →**. Let it narrate for ~10 s (cut in
 the edit if long).
