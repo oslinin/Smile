@@ -925,8 +925,65 @@ address, deploy hash and demo transaction: the Sepolia deployment notes;
 </blockquote>
 <hr>
 <h2 id="-how-to-run-the-project">🛠️ How to Run the Project</h2>
-<h3 id="1-view-live-site-github-pages">1. View Live Site (GitHub Pages)</h3>
-<p><strong>URL:</strong> <code>https://oslinin.github.io/Smile</code></p>
+<h3 id="1-view-the-live-sites">1. View the Live Sites</h3>
+<p>Two builds of the same code:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>URL</th>
+<th>What it carries</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Vercel (server build)</strong></td>
+<td><a href="https://smile-frontend-omega.vercel.app">smile-frontend-omega.vercel.app</a></td>
+<td>The full app: Sepolia + Arc Testnet, the AI copilot (<code>/api/copilot</code>), the subgraph proxy (<code>/api/subgraph</code>, gateway key stays server-side), the help site at <code>/help.html</code></td>
+</tr>
+<tr>
+<td><strong>GitHub Pages (static export)</strong></td>
+<td><a href="https://oslinin.github.io/Smile">oslinin.github.io/Smile</a></td>
+<td>The same app without the server routes — no copilot, subgraph read directly from Studio</td>
+</tr>
+</tbody></table>
+<p><strong>Deploying to Vercel.</strong> The Vercel project points at this repository with <strong>root directory <code>frontend</code></strong> and the continuation-track branch as its production branch; every push builds and promotes automatically. <code>frontend/next.config.ts</code> produces a server build whenever <code>NEXT_PUBLIC_BASE_PATH</code> is unset (the Pages workflow is the only thing that sets it), so no Vercel-specific configuration file exists. Environment variables set in the Vercel project (Production):</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>COPILOT_PROVIDER</code>, <code>COPILOT_MODEL</code></td>
+<td>Which LLM backs the copilot (<code>anthropic</code> / <code>openai</code> / <code>google</code> / <code>openrouter</code>) and the model id</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>GOOGLE_GENERATIVE_AI_API_KEY</code> / <code>OPENROUTER_API_KEY</code></td>
+<td>The one key matching the provider</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_COPILOT=1</code></td>
+<td>Shows the copilot button (unset on the static build)</td>
+</tr>
+<tr>
+<td><code>SUBGRAPH_URL</code></td>
+<td>The Graph gateway URL with its API key, used only by <code>/api/subgraph</code></td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_WC_PROJECT_ID</code></td>
+<td>WalletConnect project id for phone wallets</td>
+</tr>
+<tr>
+<td><code>COPILOT_RPC_SEPOLIA</code>, <code>COPILOT_RPC_ARC</code> (optional)</td>
+<td>RPCs the copilot&#39;s server-side reads use</td>
+</tr>
+<tr>
+<td><code>COPILOT_MCP_SERVERS</code> (optional)</td>
+<td>JSON seed of MCP servers offered in the copilot&#39;s ⚙ menu</td>
+</tr>
+</tbody></table>
+<p>Contract addresses are not environment variables on either live site: <code>frontend/config/wagmi.ts</code> carries the Sepolia and Arc address maps and resolves them from the connected chain. To deploy your own copy: import the repo in Vercel, set the root directory to <code>frontend</code>, add the variables above, push.</p>
 <h3 id="2-local-frontend-development">2. Local Frontend Development</h3>
 <pre><code class="language-bash">cd frontend
 pnpm install

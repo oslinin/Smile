@@ -580,9 +580,28 @@ address, deploy hash and demo transaction: the Sepolia deployment notes;
 
 ## 🛠️ How to Run the Project
 
-### 1. View Live Site (GitHub Pages)
+### 1. View the Live Sites
 
-**URL:** `https://oslinin.github.io/Smile`
+Two builds of the same code:
+
+| | URL | What it carries |
+|---|---|---|
+| **Vercel (server build)** | [smile-frontend-omega.vercel.app](https://smile-frontend-omega.vercel.app) | The full app: Sepolia + Arc Testnet, the AI copilot (`/api/copilot`), the subgraph proxy (`/api/subgraph`, gateway key stays server-side), the help site at `/help.html` |
+| **GitHub Pages (static export)** | [oslinin.github.io/Smile](https://oslinin.github.io/Smile) | The same app without the server routes — no copilot, subgraph read directly from Studio |
+
+**Deploying to Vercel.** The Vercel project points at this repository with **root directory `frontend`** and the continuation-track branch as its production branch; every push builds and promotes automatically. `frontend/next.config.ts` produces a server build whenever `NEXT_PUBLIC_BASE_PATH` is unset (the Pages workflow is the only thing that sets it), so no Vercel-specific configuration file exists. Environment variables set in the Vercel project (Production):
+
+| Variable | Purpose |
+|---|---|
+| `COPILOT_PROVIDER`, `COPILOT_MODEL` | Which LLM backs the copilot (`anthropic` / `openai` / `google` / `openrouter`) and the model id |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENROUTER_API_KEY` | The one key matching the provider |
+| `NEXT_PUBLIC_COPILOT=1` | Shows the copilot button (unset on the static build) |
+| `SUBGRAPH_URL` | The Graph gateway URL with its API key, used only by `/api/subgraph` |
+| `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect project id for phone wallets |
+| `COPILOT_RPC_SEPOLIA`, `COPILOT_RPC_ARC` (optional) | RPCs the copilot's server-side reads use |
+| `COPILOT_MCP_SERVERS` (optional) | JSON seed of MCP servers offered in the copilot's ⚙ menu |
+
+Contract addresses are not environment variables on either live site: `frontend/config/wagmi.ts` carries the Sepolia and Arc address maps and resolves them from the connected chain. To deploy your own copy: import the repo in Vercel, set the root directory to `frontend`, add the variables above, push.
 
 ### 2. Local Frontend Development
 
