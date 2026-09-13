@@ -550,8 +550,9 @@
           <td>
             <strong>Long-option positions via dynamic data sources (stretch)</strong> — indexes each lazily-deployed `OptionToken`'s own Transfer events (a subgraph "data source template," instantiated the first time `OptionBought` reveals a new token address), replacing `chain.ts`'s `MAX_STRIKES_PER_AUTH`-bounded strike-grid scan entirely.
             <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/src/optionToken.ts</span>; modifies <span class="code">subgraph/subgraph.yaml</span>, <span class="code">subgraph/schema.graphql</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-11, differently</span>a <span class="code">Position</span> entity (holder, instrument, balance) is kept from the vault's own events — <span class="code">OptionBought</span> adds, sellback and redemption subtract — so no data-source template and no per-token <span class="code">Transfer</span> indexing was needed. Consequence: an OptionToken transferred wallet-to-wallet is not seen by the subgraph (noted in the mapping). <span class="code">subgraph/src/vault.ts</span>, <span class="code">lib/subgraph.ts</span> <span class="code">positions(where: holder)</span>.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M9')">M9</span></span></td>
         </tr>
@@ -561,8 +562,9 @@
           <td>
             <strong>Subgraph MCP for local dev (stretch, AI-tooling half of the feature)</strong> — documents pointing Claude Code/Cursor/ChatGPT at The Graph's own hosted Subgraph MCP server so a contributor can query `smile-sepolia` in natural language during development. Opt-in tooling doc, not app code — the feature's other path alongside C1-C5's "AI agent using live chain data."
             <div class="impl"><span class="impl-label">Planned files</span>the subgraph notes (MCP section); possibly repo-root <span class="code">.mcp.json</span></div>
+            <div class="impl"><span class="impl-label">Done 2026-09-12</span>repo-root <span class="code">.mcp.json.example</span> (The Graph's hosted Subgraph MCP with a Gateway key header), the subgraph notes' MCP section, and the app copilot's own "Add The Graph Subgraph MCP" preset (<span class="code">lib/copilot/mcp.ts</span>); the Overview's Continuation Track table and The Graph page describe the setup.</div>
           </td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C5')">C5</span><span class="ref-link" onclick="scrollTo('M10')">M10</span></span></td>
         </tr>
@@ -652,16 +654,18 @@
         <tr class="row-M">
           <td><span class="code">M9</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Copilot answers "what options do I hold" without the strike-grid scan (stretch)</strong> — proves the dynamic data-source pattern actually replaces the bounded RPC scan, not just supplements it.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>Copilot answers "what options do I hold" without the strike-grid scan (stretch)</strong> — proves the dynamic data-source pattern actually replaces the bounded RPC scan, not just supplements it.
+            <div class="impl"><span class="impl-label">Done 2026-09-11</span>on Sepolia and Arc the copilot's <span class="code">get_positions</span> and the LP dashboard read holder positions from the subgraph (<span class="code">readWalletPositions</span> reports <span class="code">source: "subgraph"</span>); the bounded strike-grid scan survives only for Anvil and as the fallback when the tape read fails.</div></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C6')">C6</span></span></td>
         </tr>
         <tr class="row-M">
           <td><span class="code">M10</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>README documents Subgraph MCP setup for contributors (stretch)</strong> — a natural-language query against the Subgraph MCP correctly resolves `smile-sepolia` and returns M8's live data.</td>
-          <td><span class="status not-started">Not started</span></td>
+          <td><strong>README documents Subgraph MCP setup for contributors (stretch)</strong> — a natural-language query against the Subgraph MCP correctly resolves `smile-sepolia` and returns M8's live data.
+            <div class="impl"><span class="impl-label">Done 2026-09-12</span>documented in the Overview (Continuation Track table) and on The Graph page: copy <span class="code">.mcp.json.example</span>, add a Gateway key, ask the agent for <span class="code">smile-sepolia</span>.</div></td>
+          <td><span class="status done">Done</span></td>
           <td>Day 5</td>
           <td><span class="refs"><span class="ref-link" onclick="scrollTo('C7')">C7</span></span></td>
         </tr>
@@ -671,7 +675,7 @@
     <div class="legend">
       <strong>Legend</strong>
       <div class="legend-item"><strong>Code:</strong> Unique identifier (A = Part A/SpreadVault task, B = Part B/MarginVault task, C = Part C/Subgraph task, M = Milestone)</div>
-      <div class="legend-item"><strong>Status:</strong> every row is "Not started" — no file this page references exists in the repo yet; this table tracks a plan, not shipped work</div>
+      <div class="legend-item"><strong>Status:</strong> "Done" rows carry a dated note with the commit or test that proves it; "Gated" means blocked by the environment (arm64 host); the one remaining "Not started" (A5, long OptionToken as collateral) was cut on purpose</div>
       <div class="legend-item"><strong>Target:</strong> the day target from each plan's own milestone table, assuming work starts day 0 (Parts A/B and Part C run on independent day-counts from their own plan docs, not one shared calendar)</div>
       <div class="legend-item"><strong>References:</strong> the task/milestone each row depends on or feeds into — click any to scroll to it</div>
       <div class="legend-item" style="margin-top: 12px; font-size: 11px;">
