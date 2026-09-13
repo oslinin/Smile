@@ -449,13 +449,13 @@ export function MarginDesk({ spot }: { spot: number }) {
               </div>
               {chainStrikes.length > 0 && (
                 <div className="rounded-lg bg-gray-950 overflow-hidden">
-                  <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · click a row to load it</div>
+                  <div className="text-[9px] uppercase tracking-wide text-gray-600 px-3 pt-2">Puts by strike · per 1 unit · you pay the Ask · click a row to load it</div>
                   <table className="w-full text-[11px]">
                     <thead>
                       <tr className="text-gray-600">
                         <th className="text-left font-normal px-3 py-1">Strike</th>
-                        <th className="text-right font-normal px-3 py-1">Ask (premium)</th>
-                        <th className="text-right font-normal px-3 py-1">Initial margin</th>
+                        <th className="text-right font-normal px-3 py-1">Ask ↑ buy</th>
+                        <th className="text-right font-normal px-3 py-1 text-gray-700">writer&apos;s margin</th>
                         <th className="text-right font-normal px-3 py-1">Δ</th>
                       </tr>
                     </thead>
@@ -473,7 +473,7 @@ export function MarginDesk({ spot }: { spot: number }) {
                           >
                             <td className="font-mono px-3 py-1">${k.toLocaleString()}</td>
                             <td className="text-right font-mono px-3 py-1 text-red-400">{ask !== undefined ? fmtUsdc(ask) : "…"}</td>
-                            <td className="text-right font-mono px-3 py-1 text-emerald-400">{imk !== undefined ? fmtUsdc(imk) : "…"}</td>
+                            <td className="text-right font-mono px-3 py-1 text-gray-600">{imk !== undefined ? fmtUsdc(imk) : "…"}</td>
                             <td className="text-right font-mono px-3 py-1 text-gray-400">{putDelta(k).toFixed(2)}</td>
                           </tr>
                         );
@@ -486,12 +486,14 @@ export function MarginDesk({ spot }: { spot: number }) {
                 <div><label className="text-xs text-gray-400 mb-1 block">Strike (USD)</label><input type="number" value={strike} disabled={buyWorking} onChange={(e) => setStrike(Number(e.target.value))} step="50" className={input} /></div>
                 <div><label className="text-xs text-gray-400 mb-1 block">Units</label><input type="number" value={buyUnits} disabled={buyWorking} onChange={(e) => setBuyUnits(e.target.value)} step="1" min="0" className={input} /></div>
               </div>
-              {/* The whole point of S13, as a number */}
+              {/* The whole point of S13, as a number — but it's the WRITER's, not the buyer's cost. */}
               <div className="rounded-lg border border-green-900 bg-green-950/30 p-3 text-xs space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">The writer's side (not your cost) — why this vault exists</div>
                 <div className="flex justify-between"><span className="text-gray-400">Writer locks (initial margin)</span><span className="font-mono text-green-400">{fmtUsdc(im)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Main vault, cash-secured</span><span className="font-mono text-gray-500 line-through">{fmtUsdc(fullStrikeLock, 0)}</span></div>
                 <div className="flex justify-between border-t border-green-900/60 pt-1"><span className="text-gray-300">Capital efficiency</span><span className="font-mono text-white font-semibold">{ratio ? `${ratio.toFixed(2)}× tighter` : "…"}</span></div>
               </div>
+              <div className="text-[10px] text-gray-500">As the buyer you pay only the premium below — no margin.</div>
               <div className="rounded-lg border border-gray-700 p-3 text-xs space-y-1">
                 <div className="flex justify-between"><span className="text-gray-400">Premium (Ask)</span><span className="font-mono text-white">{quoteData ? fmtUsdc(premium) : quoteError ? "—" : "…"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Protocol fee (50% insurance · 30% backstop · 20% DAO)</span><span className="font-mono text-gray-300">{quoteData ? fmtUsdc(fee) : "…"}</span></div>
