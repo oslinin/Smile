@@ -87,7 +87,7 @@ if (arcMainnet) {
 }
 
 export default function Home() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId: walletChainId } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
@@ -95,6 +95,10 @@ export default function Home() {
   const { data: balance } = useBalance({ address });
   const { switchChain, isPending: switching } = useSwitchChain();
   const currentChain = chains.find((c) => c.id === chainId);
+  const netName = (id?: number) => (id === undefined ? "—" : NETWORKS.find((n) => n.id === id)?.name ?? chains.find((c) => c.id === id)?.name ?? `chain ${id}`);
+  // Wrong-network guard: the wallet is on a different chain than the app targets,
+  // so writes go to the wallet's chain while reads hit the app's — they hang/fail.
+  const walletMismatch = isConnected && walletChainId !== undefined && walletChainId !== chainId;
   // One build, every chain: point CONTRACTS at the connected chain's
   // deployment before any child reads an address (Anvil falls back to env).
   setActiveChainId(chainId);
@@ -371,6 +375,20 @@ export default function Home() {
         )}
         </div>
       </header>
+      {walletMismatch && (
+        <div className="sticky top-0 z-20 bg-amber-950/90 backdrop-blur border-b border-amber-800 text-amber-200 text-xs sm:text-sm px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            ⚠ Your wallet is on <b>{netName(walletChainId)}</b>, but the app is on <b>{netName(chainId)}</b>. Transactions will hang or fail until they match — reads show the app&apos;s chain, writes go to your wallet&apos;s.
+          </span>
+          <button
+            onClick={() => handleSwitch(chainId)}
+            disabled={switching}
+            className="shrink-0 text-xs font-semibold px-3 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-50"
+          >
+            {switching ? "Switching…" : `Switch wallet to ${netName(chainId)}`}
+          </button>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         {/* Spot price bar */}
