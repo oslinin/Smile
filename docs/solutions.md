@@ -260,8 +260,12 @@ before.
 > credit and put credit spreads, quoted off the shared surface via
 > `SmilePremiumLib`, escrowing `(K₂−K₁)/K₂` WETH / `K₂−K₁` USDC through the
 > vault's own Aqua strategy, settled at one price through one formula with
-> wei-exact conservation (`test/SpreadSettlement.t.sol`). Iron condors are
-> strike-validated but not priced or fillable.
+> wei-exact conservation (`test/SpreadSettlement.t.sol`). The **iron condor**
+> is now a real single structure on a cash-settled (USDC-native) vault: one
+> `openStructure` with all four strikes escrows **max(putWidth, callWidth)**
+> USDC — the wider wing, not the sum — since one terminal price can't breach
+> both sides; premium is both wings, one SpreadToken, one settlement
+> (`test/SpreadCondor.t.sol`). It goes live at the Arc SpreadVault redeploy.
 
 ### S13. MarginVault — opt-in true margin (rung 4)
 

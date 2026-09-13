@@ -158,7 +158,7 @@ Solvency is trivially guaranteed: if the option expires in-the-money, the locked
 |---|---|
 | Know its vol is right without trades | σ only moves on fills; an untraded range quotes yesterday's vol ([L6/L7](#limitations), S7 is the fix) |
 | Avoid paying informed flow | Quotes derive from a lagging oracle; adverse selection is *priced* (R1–R5), never eliminated ([L1/L2/L5](#limitations)) |
-| Capital-efficient short legs | A spread's short leg posts full collateral as if naked until S12 netting — condors work but are capital-hungry |
+| Capital-efficient short legs | A spread's short leg posts full collateral as if naked until S12 netting — spreads and (on a cash-settled vault) the single-structure iron condor now escrow only the true max loss |
 | Naked writing | No mark, no liquidations — that is the entire V2 ladder below |
 | Assets without a price feed | The mechanism needs external spot; long-tail listings are feed-constrained (S11) |
 | Exact Black-Scholes prices | The on-chain formula deliberately omits N(d₁)/N(d₂) — gas-cheap, roughest deep-ITM and near expiry |
@@ -1106,7 +1106,7 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 
 ### Honest status of each track
 
-- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc. Iron condor is strike-validated but not priced or fillable; the optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted.
+- **SpreadVault**: A1–A4 shipped and demoed on Anvil and on Arc, for call and put credit spreads. The **iron condor** is now a real single structure on a cash-settled vault — escrow = max(putWidth, callWidth) USDC (the wider wing, not the sum), one fill, one settlement (`test/SpreadCondor.t.sol`); it lands live at the next Arc SpreadVault redeploy. The optional `SpreadPremiumInstruction` SwapVM opcode for the call-credit leg was not attempted.
 - **MarginVault**: B1–B8 shipped — puts only, USDC only, whole-position takeover only; per-range `maxBlockNotional` not ported (the global backstop-coupled ceiling bounds exposure instead); no `close()` by design (a sigma-priced buyback paid from margin is L7's attack). Full lifecycle on Anvil via `script/margin-lifecycle.sh` and the keeper; deployed to Sepolia and Arc, with a real-USDC margined fill on Arc (1.50 locked instead of 3.00). [L13](#limitations) is the honest list of what it does not promise.
 - **RfqVault**: built as a sibling vault rather than a SwapVM opcode — a signed quote changes the price, never the custody model, and nonces need state an instruction doesn't have. On Arc testnet with a real-USDC signed fill (not on Sepolia); no `close()` by design.
 - **Subgraph**: live on Graph Studio as `smile-sepolia` v0.0.2 (`https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2`), indexing the Sepolia deployment above — Authorization #0 was queryable within a minute of `Aqua.ship`, and the `Fill` for a real 0.01-unit $2,500 call one block after the buy. The local graph-node compose is x86-64-only (no arm64 image; emulation crashes). The two stretch items landed in a different shape: holder positions come from a `Position` entity fed by the vault's own events (no per-token data-source template, so wallet-to-wallet OptionToken transfers are not indexed), and the Subgraph MCP is documented (`.mcp.json.example`, The Graph page) with a preset in the app copilot.
