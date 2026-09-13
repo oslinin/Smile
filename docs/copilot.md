@@ -1,7 +1,7 @@
 # AI Copilot
 
 Smile ships an in-app AI chat assistant — the **Copilot**. It is not
-mentioned in the README; this page is its documentation.
+mentioned in the Overview; this page is its documentation.
 
 ## Where it lives
 
@@ -53,7 +53,7 @@ answer comes from one of these (`frontend/lib/copilot/tools.ts`):
 
 | Tool | Does |
 |---|---|
-| `read_docs` | Reads a full section of the README/limitations/solutions docs and cites it. |
+| `read_docs` | Reads a full section of the Overview, Limitations or Solutions pages and cites it. |
 | `get_market_state` | Live ETH spot, smile parameters, ATM vol, expected move, 25-delta risk reversal/butterfly. |
 | `price_strategy` | Prices a multi-leg strategy at the protocol's smile — cost, max P/L, PoP, breakevens, net Greeks; renders a payoff chart. |
 | `suggest_strategies` | Candidate strategies from the catalog for a stated market view, with live-priced strikes. |
@@ -92,7 +92,7 @@ copilot cannot send a transaction.
 
 `get_positions` and `portfolio_risk` read the same tape now: the
 `MAX_AUTHS = 50` cap and the per-strike `N+1` RPC scan that used to blind
-them past 50 ranges ([L12a](limitations.md)) are gone on public networks.
+them past 50 ranges ([L12a](#limitations)) are gone on public networks.
 
 ## Skills
 
@@ -131,7 +131,7 @@ hosted demo.
 
 For developers working on the repo, the same server is a one-file client
 config: `.mcp.json.example` at the repo root (Claude Code / Cursor), and
-`subgraph/SKILL.md` is the agent-facing description of Smile's subgraph —
+the subgraph notes are the agent-facing description of Smile's subgraph —
 entities, canonical queries, endpoints, units — so an AI environment can
 query `smile-sepolia` without reading the schema.
 

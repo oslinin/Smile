@@ -44,7 +44,7 @@ The Graph's own Subgraph MCP server as well as any server the user adds.
 | Subgraph with `Authorization`, `Fill`, `Instrument`, `Position` entities | `subgraph/schema.graphql`, `subgraph/subgraph.yaml` | EthOnline 2026 |
 | Event handlers with bound contract calls that refresh `usedCollateral` from chain state | `subgraph/src/vault.ts` | EthOnline 2026 |
 | Studio deployments for Sepolia and Arc testnet | `subgraph/networks.json`; `frontend/lib/deployments.ts` | EthOnline 2026 |
-| Published to The Graph Network (Arbitrum One) and served through the gateway with an API key held server-side; subgraph ids `Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2` (Sepolia) and `9ZcFMvnhbWygRg7oB29NL8smoVysqCbdQpqNMhWtHbmq` (Arc testnet) | `frontend/app/api/subgraph/route.ts` (`SUBGRAPH_URL_<chainId>`), `subgraph/README.md` | EthOnline 2026 (2026-09-12) |
+| Published to The Graph Network (Arbitrum One) and served through the gateway with an API key held server-side; subgraph ids `Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2` (Sepolia) and `9ZcFMvnhbWygRg7oB29NL8smoVysqCbdQpqNMhWtHbmq` (Arc testnet) | `frontend/app/api/subgraph/route.ts` (`SUBGRAPH_URL_<chainId>`), the subgraph notes | EthOnline 2026 (2026-09-12) |
 | Browser and server GraphQL client with per-chain endpoint resolution | `frontend/lib/subgraph.ts` | EthOnline 2026 |
 | Server-side proxy so a gateway API key never reaches the browser | `frontend/app/api/subgraph/route.ts` | EthOnline 2026 |
 | The tape: one shape for ranges, instruments, fills and positions; chain-id gate | `frontend/lib/tape.ts` | EthOnline 2026 |
@@ -54,7 +54,7 @@ The Graph's own Subgraph MCP server as well as any server the user adds.
 | Eight trader skills and a Skills menu with user-added skills | `frontend/skills/*.md`, `frontend/components/copilot/SkillsMenu.tsx` | EthOnline 2026 |
 | MCP servers: operator-seeded (`COPILOT_MCP_SERVERS`) and per-user (settings gear, `x-copilot-mcp` header), opened per request; The Graph's Subgraph MCP seeded on the live deployment and verified end to end | `frontend/lib/copilot/mcp.ts`, `frontend/components/copilot/CopilotSettings.tsx`, `frontend/app/api/copilot/route.ts` | EthOnline 2026 (verified 2026-09-12) |
 | The copilot itself: one server route, four providers (operator env or bring-your-own-key header), a system prompt assembled from the knowledge pack, the tab briefing and the active skills, nineteen built-in tools | `frontend/app/api/copilot/route.ts`, `frontend/lib/copilot/provider.ts`, `systemPrompt.ts`, `tools.ts`, `knowledge.ts` | Pre-existing (route, providers, docs tools); EthOnline 2026 (tape tools, tabs, skills, MCP, OpenRouter) |
-| Agent-facing subgraph documentation and client configuration | `subgraph/SKILL.md`, `.mcp.json.example` | EthOnline 2026 |
+| Agent-facing subgraph documentation and client configuration | the subgraph notes, `.mcp.json.example` | EthOnline 2026 |
 | Traded premium and implied volatility per instrument on the price chart | `frontend/components/PriceChart.tsx` | EthOnline 2026 |
 | A seeded tape of one hundred trades on the local chain | `script/SeedTape.s.sol`, `script/seed-tape.sh`, `local.sh` | EthOnline 2026 |
 
@@ -76,8 +76,8 @@ walked a forty-strike grid per range with one RPC call per strike. Past
 fifty ranges ever created it silently stopped seeing new ones, including
 the connected wallet's own. The LP dashboard used a `getLogs` scan from
 block zero as a stopgap and showed only one range per LP. Both are recorded
-as limitation L12a in `docs/limitations.md`. The subgraph is the correct
-fix rather than a bounty add-on: it replaces a bounded, brute-force scan
+as Limitations, L12a. The subgraph is the correct
+fix rather than an add-on: it replaces a bounded, brute-force scan
 with an indexed query, and on public networks the scan no longer exists at
 all.
 
@@ -117,8 +117,8 @@ making.
 **Portable know-how.** The copilot's behaviour is packaged as eight skill
 files in the `SKILL.md` convention (a markdown file with a name, a
 description, a starter prompt and a procedure). A trader can read them,
-toggle them, and add their own without a rebuild. `subgraph/SKILL.md`
-describes Smile's subgraph to any AI environment, and `.mcp.json.example`
+toggle them, and add their own without a rebuild. The subgraph notes
+describe Smile's subgraph to any AI environment, and `.mcp.json.example`
 is a one-file client configuration for The Graph's Subgraph MCP server, so
 the same data is reachable from Claude Code or Cursor without reading the
 schema.
@@ -368,7 +368,7 @@ local storage only, and the panel sends them per request in the
 `x-copilot-provider`, `x-copilot-api-key` and `x-copilot-model` headers;
 the route builds that request's model client from them and never stores
 or logs them. The live deployment runs `openrouter` with
-`COPILOT_MODEL=openrouter/free`, a free routed model, so judges need no
+`COPILOT_MODEL=openrouter/free`, a free routed model, so visitors need no
 key of their own; the tool-routing rules in the prompt were written with a
 weak model in mind.
 
@@ -385,7 +385,7 @@ knowledge pack, a table of contents of every documentation section and the
 glossary from the limitations page. The knowledge pack
 (`lib/copilot/knowledge.generated.json`, built by
 `scripts/gen-knowledge.mjs` from the README, the User Guide, the
-limitations, solutions and copilot pages and the five sponsor pages)
+limitations, solutions and copilot pages and the five integration pages)
 holds the full section bodies for the `read_docs` tool, capped at six
 thousand characters per section.
 
@@ -511,7 +511,7 @@ answered with a real subgraph name.
 
 The same server is available to developers outside the application:
 `.mcp.json.example` at the repository root is a one-file client
-configuration for Claude Code or Cursor, and `subgraph/SKILL.md` describes
+configuration for Claude Code or Cursor, and the subgraph notes describe
 Smile's entities, canonical queries, endpoints and units so that an AI
 environment can query `smile-sepolia` or `smile-arc-testnet` without
 reading the schema.
@@ -597,7 +597,7 @@ sellbacks across fifty-four simulated hours.
 ## Plans
 
 The phase-two status table and cut list in
-`docs/plans/2026-09-09-theGraph.md` record what remains.
+the Graph plan record what remains.
 
 - **Publish and key (P8): done 2026-09-12.** Both subgraphs are published
   on Arbitrum One and served through the gateway; the live deployment reads
@@ -668,7 +668,7 @@ The phase-two status table and cut list in
 - **Just-in-time pull.** The 1inch Aqua mechanism by which an LP's
   collateral stays in the LP's wallet until a buyer matches and is pulled
   at that moment.
-- **L12a.** The limitation entry in `docs/limitations.md` describing the
+- **L12a.** The limitation entry on the Limitations page describing the
   fifty-range cap that the subgraph lifted.
 - **MCP (Model Context Protocol).** An open standard for connecting an AI
   model to external tool servers over HTTP. The copilot opens the

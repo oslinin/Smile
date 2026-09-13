@@ -79,7 +79,7 @@ const pages = [
   { id: "copilot", label: "AI Copilot", source: "docs/copilot.md", mermaid: false },
   // Sponsor pages: one per protocol Smile is built on — features used, why,
   // value add, technical details, limitations, plans, glossary.
-  { id: "aqua", label: "1inch Aqua", source: "docs/sponsors/aqua.md", mermaid: false, group: "Sponsors" },
+  { id: "aqua", label: "1inch Aqua", source: "docs/sponsors/aqua.md", mermaid: false, group: "Integrations" },
   { id: "chainlink", label: "Chainlink", source: "docs/sponsors/chainlink.md", mermaid: false },
   { id: "uniswap", label: "Uniswap", source: "docs/sponsors/uniswap.md", mermaid: false },
   { id: "thegraph", label: "The Graph", source: "docs/sponsors/thegraph.md", mermaid: false },

@@ -17,12 +17,12 @@ Arc has no ether, so on Arc ETH is the reference price only. Puts, put spreads, 
 | Feature | Where in the code | Pre-existing or EthOnline 2026 |
 |---|---|---|
 | Arc testnet chain branch in the deploy script (real USDC, mock WETH, mock oracle) | `script/Deploy.s.sol`, chain id `5042002` branch | EthOnline 2026 (`108e25d`, `7d409bc`) |
-| Full stack deployed on Arc: Aqua registry, router, pricing engine and hook, `AquaCollateralVault`, `AquaOptionSettlement`, `SpreadVault` | `docs/arc-testnet-deployment.md`, `broadcast/Deploy.s.sol/5042002/` | EthOnline 2026 |
-| Cash-settled `SpreadVault` on Arc: deployed with no WETH, call credit spreads escrow and settle in USDC (`cashSettledCalls`) | `src/periphery/SpreadVault.sol`, `test/SpreadVaultCash.t.sol`, `docs/arc-testnet-deployment.md` "Cash-settled SpreadVault" | EthOnline 2026 (2026-09-13) |
-| `MarginVault`, `MarginBackstop`, `RfqVault` and their settlement contracts on Arc | `script/DeployArcSiblings.s.sol`, `docs/arc-testnet-deployment.md` | EthOnline 2026 (`588ff9f`) |
+| Full stack deployed on Arc: Aqua registry, router, pricing engine and hook, `AquaCollateralVault`, `AquaOptionSettlement`, `SpreadVault` | the Arc deployment notes, `broadcast/Deploy.s.sol/5042002/` | EthOnline 2026 |
+| Cash-settled `SpreadVault` on Arc: deployed with no WETH, call credit spreads escrow and settle in USDC (`cashSettledCalls`) | `src/periphery/SpreadVault.sol`, `test/SpreadVaultCash.t.sol`, the Arc deployment notes ("Cash-settled SpreadVault") | EthOnline 2026 (2026-09-13) |
+| `MarginVault`, `MarginBackstop`, `RfqVault` and their settlement contracts on Arc | `script/DeployArcSiblings.s.sol`, the Arc deployment notes | EthOnline 2026 (`588ff9f`) |
 | Real-USDC demo transactions as `cast send` calls | `script/arc-smoke.sh`, `script/arc-siblings-smoke.sh` | EthOnline 2026 |
 | Arc network entry in the wallet configuration and the per-chain address map | `frontend/config/wagmi.ts`, `frontend/lib/deployments.ts`, `.env.arc.example` | EthOnline 2026 |
-| Circle USDC on the Sepolia redeploy (`0x1c7D…7238`) | `docs/sepolia-deployment.md`, `script/Deploy.s.sol` | EthOnline 2026 |
+| Circle USDC on the Sepolia redeploy (`0x1c7D…7238`) | the Sepolia deployment notes, `script/Deploy.s.sol` | EthOnline 2026 |
 | Arc subgraph `smile-arc-testnet` on The Graph Studio | `subgraph/networks.json`, `frontend/lib/deployments.ts` | EthOnline 2026 (`a2bf596`) |
 | Circle Gateway: Sepolia deposit, EIP-712 burn intent, attestation, mint on Arc, `fundInsurance` | `keeper/insurance-gateway.mjs` | EthOnline 2026 (`ad42071`) |
 | Circle Developer-Controlled Wallets: entity secret, wallet set, Arc wallet, `approve` + `deposit` into the backstop | `keeper/backstop-wallet.mjs`, `@circle-fin/developer-controlled-wallets` | EthOnline 2026 (`ad42071`) |
@@ -33,7 +33,7 @@ Arc has no ether, so on Arc ETH is the reference price only. Puts, put spreads, 
 
 **A stablecoin-native options venue.** The put side of an options market is a dollar business. A cash-secured put is collateralized with the strike price in dollars, its premium is quoted in dollars, and its settlement pays the holder a dollar amount. Smile already used USDC for premiums, fees and put collateral on every chain. On Arc, the chain's gas asset is also USDC, so the last non-dollar dependency disappears: a put writer or a put buyer holds one asset and needs nothing else to transact. The `MarginVault` extends the same property to the margin tier, where initial margin, the backstop pool and the insurance fund are all USDC as well. The result is a venue whose quote currency is the chain's native dollar, which is the property the phrase "stablecoin-native" is meant to name.
 
-**Real USDC rather than a mock.** Deploying on Arc with a mock USDC would have proven nothing that Anvil does not already prove. The deploy script's Arc branch therefore points at Circle's actual USDC contract, and every recorded fill moved real testnet USDC. The two things that remain mock, WETH and the ETH/USD feed, are mock because Arc testnet does not yet provide real ones; the deploy script and the deployment notes say so explicitly rather than leaving the judge to discover it.
+**Real USDC rather than a mock.** Deploying on Arc with a mock USDC would have proven nothing that Anvil does not already prove. The deploy script's Arc branch therefore points at Circle's actual USDC contract, and every recorded fill moved real testnet USDC. The two things that remain mock, WETH and the ETH/USD feed, are mock because Arc testnet does not yet provide real ones; the deploy script and the deployment notes say so explicitly rather than leaving the reader to discover it.
 
 **Treasury custody without a key in the repository.** The margin tier depends on two pools of capital that must be funded by someone: the backstop pool, which absorbs positions nobody bought at auction, and the insurance fund, which is drawn after the backstop. A protocol treasury that funds those pools from a private key stored in a script is a liability. Circle's Developer-Controlled Wallets let the treasury be a wallet that Circle custodies and signs for; the only credential in the operator's possession is an entity secret, and the repository holds neither it nor any private key. Circle Gateway addresses the complementary problem of getting USDC onto Arc from wherever it already sits, without a bridge contract of Smile's own and without a wrapped token.
 
@@ -60,7 +60,7 @@ The deploy script selects token and oracle addresses by chain id. On Arc it depl
     // ── Arc testnet: Circle's REAL USDC — the chain's native asset,
     //    6-dec ERC-20 view — for premiums, fees, and put collateral.
     //    No canonical WETH on Arc and no Chainlink-style ETH/USD feed
-    //    documented there yet (docs/plans/2026-09-10-arc-bounty.md X1),
+    //    documented there yet (the Arc plan, step X1),
     //    so the call-side collateral and the spot oracle stay mock. ──
     vm.startBroadcast(deployerKey);
     MockERC20 arcWeth = new MockERC20("Wrapped Ether", "WETH", 18);
@@ -72,7 +72,7 @@ The deploy script selects token and oracle addresses by chain id. On Arc it depl
     oracleAddr = address(arcOracle);
 ```
 
-The full stack cost about 0.46 USDC of gas to deploy on 2026-09-10; the margin and RFQ siblings cost about 0.58 USDC more the same evening. Every address is listed in `docs/arc-testnet-deployment.md`.
+The full stack cost about 0.46 USDC of gas to deploy on 2026-09-10; the margin and RFQ siblings cost about 0.58 USDC more the same evening. Every address is listed in the Arc deployment notes.
 
 ### Demo transactions as `cast send`
 
@@ -171,9 +171,9 @@ Recorded run (2026-09-12): the treasury wallet `0x61bd6c481248f2e5bfd6d0aadf5215
 
 The script has four commands: `setup` (generate and register the entity secret; a recovery file is written next to the script), `wallet` (create or show the Arc wallet), `deposit` (approve and deposit `AMOUNT` USDC into the backstop pool) and `withdraw` (request withdrawal of all shares; `withdraw()` opens after the pool's 24-hour delay). Wallet state lives in `keeper/.circle-wallet.json`; that file, the recovery file and the `.env` holding the API key and entity secret are all ignored by git. The treasury wallet created on 2026-09-12 is `0x61bd6c481248f2e5bfd6d0aadf5215f353dc3368`.
 
-### Arc in the bounty's own vocabulary
+### Arc, in Circle's own terms
 
-The Arc bounty asks for programmable money flows, automation, yield and treasury. Each is an existing Smile flow that runs on Arc unchanged:
+Circle describes Arc in terms of programmable money flows, automation, yield and treasury. Each is an existing Smile flow that runs on Arc unchanged:
 
 - **Conditional payments.** An option is a conditional payment instrument: premium now, payout contingent on the settlement price. Aqua's just-in-time pull is itself conditional: collateral leaves the writer's wallet only when a buyer matches.
 - **Multi-step settlement.** Buy, expiry, permissionless `settleWithChainlinkRound`, `redeem`, `reclaimCollateral`, all as Arc transactions paid in USDC.
@@ -186,13 +186,13 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 
 ## Limitations
 
-- **Covered calls need the asset, and Arc has none.** A covered call is backed by ether itself, and Arc has no ether: its native asset is USDC. So the main vault's and `RfqVault`'s calls on Arc collateralize with a freely mintable `MockERC20` standing in for WETH, and those calls are demonstrations of the mechanism, not of a market. The `SpreadVault` no longer has this limitation: since 2026-09-13 it is cash-settled on Arc, a call credit spread escrows K2−K1 USDC per unit and settles in USDC (`cashSettledCalls`). Removing WETH from the last two places means USDC-margined calls in `MarginVault`, which is put-only by design today; that is the post-event step.
+- **Covered calls need the asset, and Arc has none.** A covered call is backed by ether itself, and Arc has no ether: its native asset is USDC. So the main vault's and `RfqVault`'s calls on Arc collateralize with a freely mintable `MockERC20` standing in for WETH, and those calls are demonstrations of the mechanism, not of a market. The `SpreadVault` no longer has this limitation: since 2026-09-13 it is cash-settled on Arc, a call credit spread escrows K2−K1 USDC per unit and settles in USDC (`cashSettledCalls`). Removing WETH from the last two places means USDC-margined calls in `MarginVault`, which is put-only by design today; that is the next step.
 - **The ETH/USD price feed is a mock on Arc.** No Chainlink-compatible feed is documented on Arc testnet (Pyth does not list Arc; Chainlink and RedStone show nothing; Arc's contract page lists no oracles). Quoting and settlement both read a `MockV3Aggregator`. Since 2026-09-12 a keeper (`keeper/arc-oracle-tick.sh`, a systemd timer on the dev box) mirrors Sepolia's Chainlink ETH/USD answer into it every 30 minutes, so Arc's spot tracks the real ETH price and the staleness checks in `MarginVault.buy` (90 minutes) and `RfqVault.formulaQuote` (one hour) pass; if the keeper stops, anyone may post a fresh round. The feed remains a contract anyone can set, so Arc demonstrates the mechanism, not the oracle trust model.
 - **`forge script` cannot simulate Arc's USDC.** Deploys that do not call USDC work through `forge script`; anything that calls USDC must be sent with `cast send`. The frontend is unaffected because MetaMask does not simulate locally.
 - **No liquidation run on a live chain.** The margined put fill is on Arc, but the crash-to-auction-to-settlement path relies on time warps and lives in the Anvil script `script/margin-lifecycle.sh`.
 - **Arc's RPC blocks well-known development keys.** At least one default Anvil/Hardhat key returns `"Blocked address"`; a fresh key is required.
 - **Faucet USDC is both gas and balance.** The faucet grants 20 USDC per address every two hours; spending premium reduces the gas balance and the reverse.
-- **Both App Kit flows have exactly one recorded run each (2026-09-12).** Gateway moved 2.997032 USDC from a Sepolia deposit into `MarginVault.fundInsurance` (mint `0xa5baa3e5…`, fund `0xc5493a8e…`) and the Circle-custodied treasury wallet `0x61bd…3368` deposited 1 USDC into the backstop (`0xbfd2db0a…`); `docs/arc-testnet-deployment.md` lists every hash. Two details learned on that run are now in the keeper: Circle's Gateway API returns amounts as decimal strings, and a transfer requires value plus fee to fit the Gateway balance, so the 5 USDC balance carried a 3 USDC intent. The treasury wallet holds about 0.5 USDC after the deposit; further deposits need a top-up from the faucet or the deployer.
+- **Both App Kit flows have exactly one recorded run each (2026-09-12).** Gateway moved 2.997032 USDC from a Sepolia deposit into `MarginVault.fundInsurance` (mint `0xa5baa3e5…`, fund `0xc5493a8e…`) and the Circle-custodied treasury wallet `0x61bd…3368` deposited 1 USDC into the backstop (`0xbfd2db0a…`); the Arc deployment notes list every hash. Two details learned on that run are now in the keeper: Circle's Gateway API returns amounts as decimal strings, and a transfer requires value plus fee to fit the Gateway balance, so the 5 USDC balance carried a 3 USDC intent. The treasury wallet holds about 0.5 USDC after the deposit; further deposits need a top-up from the faucet or the deployer.
 - **`RfqVault` is on Arc but not on Sepolia.** The Sepolia address map leaves `rfqVault` empty.
 - **The gas floor is Arc's to set (L12).** Every first fill in a series pays roughly 1,040,000 gas to deploy the series token and every repeat fill roughly 198,000; on Arc that gas is denominated in USDC, so the minimum economical trade size is a direct function of Arc's gas price. The ~0.46 USDC full-stack deploy suggests the floor is small on testnet; mainnet pricing is unknown until 2026-09-16.
 - **Arc mainnet is not live.** Arc mainnet launches on 2026-09-16; every figure on this page is testnet.
@@ -200,8 +200,8 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 ## Plans
 
 - **FX options on Arc (USDC/EURC).** Mechanically the same engine pointed at a EUR/USD feed with EURC in the call-collateral slot. Task X1 of the Arc plan found the only oracle with a documented Arc testnet deployment to be Stork (`0xacC0a0cF13571d30B4b8637996F5D6D774d4fd62`), a pull-model oracle that requires an adapter in the shape of the existing `PythSpotAdapter`, an update-posting flow and an API key. It is recorded as the lead for the 2026-09-16 to 2026-09-30 window.
-- **Arc mainnet.** Task X6 of the plan is the mainnet deploy of the same script against Arc's mainnet RPC once Circle publishes it, treated with the care of a real-money deploy. The bounty's additional $2,000 for a mainnet deployment is a post-submission follow-up because mainnet launches after the submission deadline.
-- **Keep the treasury funded and automate the top-ups.** Both keepers have run once (2026-09-12; hashes in `docs/arc-testnet-deployment.md` and on the Margin tab). The next step is scheduling them: a cron or CRE trigger that tops up the backstop from the Circle wallet when `totalAssets` falls below a floor and refills the insurance fund through Gateway when a haircut draws it down, so the treasury is an automated money flow rather than a manual keeper run.
+- **Arc mainnet.** Task X6 of the plan is the mainnet deploy of the same script against Arc's mainnet RPC once Circle publishes it, treated with the care of a real-money deploy. The mainnet deployment is a post-launch follow-up.
+- **Keep the treasury funded and automate the top-ups.** Both keepers have run once (2026-09-12; hashes in the Arc deployment notes and on the Margin tab). The next step is scheduling them: a cron or CRE trigger that tops up the backstop from the Circle wallet when `totalAssets` falls below a floor and refills the insurance fund through Gateway when a haircut draws it down, so the treasury is an automated money flow rather than a manual keeper run.
 - **A real feed when Arc provides one.** Replacing the mock aggregator is a one-branch change in `script/Deploy.s.sol`.
 - **USDC-margined calls.** Extend `MarginVault` from puts to calls so that no product on Arc needs a WETH stand-in: the last step to a fully USDC-native venue.
 - **Gateway onboarding in the application.** Task X4 scopes a frontend flow that lets a user with USDC on another chain act on Smile-on-Arc through Gateway's unified balance rather than a manual bridge step.

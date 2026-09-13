@@ -21,7 +21,7 @@ Chainlink was part of Smile before EthOnline 2026 and is reused, unchanged, by e
 | Keeper that finds the covering round and settles, then unwinds | `keeper/roll.mjs` (`roundCovering`, `settleAndUnwind`) | Pre-existing |
 | Optional Pyth pull-oracle adapter behind the same interface, quoting only | `src/oracles/PythSpotAdapter.sol` | Pre-existing (R5) |
 | Frontend: the displayed ETH/USD spot falls back to a direct `latestRoundData` read of the Sepolia feed when no Uniswap Trading API key is configured; the Margin and Risk Monitor tabs show `MarginVault.markSpot` (the worst-of-hour Chainlink mark) and its staleness | `frontend/hooks/useUniswapSpot.ts` (`CHAINLINK_FEEDS`), `frontend/components/MarginDesk.tsx`, `RiskMonitor.tsx` | Pre-existing (spot); EthOnline 2026 (mark) |
-| Chainlink feed on Sepolia; mock aggregator on Arc and Anvil | `script/Deploy.s.sol`, `docs/sepolia-deployment.md`, `docs/arc-testnet-deployment.md` | Sepolia redeploy and Arc: EthOnline 2026 |
+| Chainlink feed on Sepolia; mock aggregator on Arc and Anvil | `script/Deploy.s.sol`, the Sepolia deployment notes, the Arc deployment notes | Sepolia redeploy and Arc: EthOnline 2026 |
 
 The Sepolia deployment reads the canonical Chainlink ETH/USD feed at `0x694AA1769357215DE4FAC081bf1f309aDC325306`. The CRE workflow configuration points at the same feed.
 
@@ -225,7 +225,7 @@ function settleSeries(bytes32 seriesId, uint256 settlementPriceWad) external onl
 }
 ```
 
-`docs/cre-simulation.md` holds the verified transcript of `cre workflow simulate settlement` against the live Sepolia feed (CLI v1.11.0, exit code 0). The schedule in `cre-workflow/settlement/config.json` is every six hours.
+The CRE simulation notes hold the verified transcript of `cre workflow simulate settlement` against the live Sepolia feed (CLI v1.11.0, exit code 0). The schedule in `cre-workflow/settlement/config.json` is every six hours.
 
 ### The margin mark: worst of the last hour
 
@@ -296,7 +296,7 @@ AquaOptionSettlement spreadSettlement = new AquaOptionSettlement(deployer, deplo
 spread.setSettlement(address(spreadSettlement));
 ```
 
-The Sepolia addresses of the three additional registries are listed in `docs/sepolia-deployment.md`; the Arc addresses in `docs/arc-testnet-deployment.md`.
+The Sepolia addresses of the three additional registries are listed in the Sepolia deployment notes; the Arc addresses in the Arc deployment notes.
 
 ### The contrast: a pull oracle for quoting only
 
@@ -322,7 +322,7 @@ function latestRoundData()
 
 ## Limitations
 
-The numbered items refer to `docs/limitations.md`.
+The numbered items refer to [Limitations](#limitations).
 
 - **L1, stale-quote sniping.** A quote is priced off the last published round. The staleness guard rejects an *old* round, but it cannot reject a *fresh round that is already wrong*. The staleness-scaled spread (R3) prices this continuously rather than removing it.
 - **L2, the invisible window.** The ETH/USD feed updates on a 0.5% deviation or a heartbeat. Inside that threshold the real price can drift with no on-chain signal at all. No contract check can see it; only the spread can charge for it.
@@ -335,12 +335,12 @@ The numbered items refer to `docs/limitations.md`.
 
 ## Plans
 
-The numbered items refer to `docs/limitations.md` Part 3 and `docs/solutions.md`.
+The numbered items refer to [Limitations](#limitations), Part 3, and [Solutions](#solutions).
 
 - **R5, pull-oracle quoting.** `PythSpotAdapter` is built and deploy-opt-in. Enabling it on a public deployment closes most of the L1 latency gap and shrinks L2 from "0.5% deviation" to sub-second drift, at the cost of the taker posting an update. Chainlink Data Streams is named as the alternative pull source.
 - **R3 and R4, spread calibration.** The staleness slope exists; the deviation-threshold floor (spread at least delta times 0.5% of spot) is specified as the explicit L2 insurance premium and remains to be calibrated against markouts (R8).
 - **CRE live path.** Add an `onReport(bytes,bytes)` entrypoint to the settlement registry and deploy with the registered forwarder address, so the workflow's signed report lands on-chain rather than in simulation.
-- **An oracle on Arc.** The only oracle found deployed on Arc testnet is Stork, a pull oracle that would need an adapter of the same shape as `PythSpotAdapter` plus an update-posting flow. It is recorded as the lead for the post-submission window (Arc plan, task X1). A live feed would also unblock the USDC/EURC FX-options variant that was cut.
+- **An oracle on Arc.** The only oracle found deployed on Arc testnet is Stork, a pull oracle that would need an adapter of the same shape as `PythSpotAdapter` plus an update-posting flow. It is recorded as the lead for the follow-on work (the Arc plan, task X1). A live feed would also unblock the USDC/EURC FX-options variant that was cut.
 - **S7, an external volatility anchor.** Not an oracle for price but for implied volatility; it is gated on evidence that the passive surface drifts, because it adds an oracle dependency.
 - **Cut at the event, on purpose.** FX options on Arc (no feed), and any change to the main vault's oracle path; every new vault reuses the existing read unchanged.
 

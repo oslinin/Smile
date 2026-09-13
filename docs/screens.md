@@ -9,7 +9,7 @@ Terms are defined where they first appear. A few recur everywhere:
 - **WAD** means an 18-decimal fixed-point integer, the on-chain representation of prices and unit counts. USDC amounts are 6-decimal integers. Every display in the app divides by the right power of ten; this page states the units as they are shown.
 - **Anvil** is the local development chain started by `./local.sh`; **Sepolia** and **Arc Testnet** are the two public testnets the app is deployed on. Where a number behaves differently per chain, the section says so.
 
-The mathematics behind the quotes is specified in the README's "Mathematical Specification" and is not repeated here; the User Guide (`docs/guide.md`) is the step-by-step walkthrough of the same screens.
+The mathematics behind the quotes is specified in the Overview's Mathematical Specification and is not repeated here; the User Guide is the step-by-step walkthrough of the same screens.
 
 <a id="tab-header"></a>
 ## Header strip (every tab)
@@ -91,7 +91,7 @@ The buyer's tab: the price chart with the strategy drawn on it, the option chain
 | Rows: strikes at −20%, −10%, −5%, 0, +5%, +10%, +20% of spot, rounded to $50 | The strike grid. | `STRIKES_OFFSETS` in `OptionMatrix.tsx`. |
 | **IV** e.g. `82.4%` | The implied volatility the smile assigns to that strike: σ = σ_tenor × max(0.1, 1 + α × ln(K/S)² + β × ln(K/S)), with σ_tenor and β read live from the on-chain hook for the selected expiry (α is the range default 2.0). A trailing `*` means the live read has not landed and the pre-event constants (0.80, 2.0, 0) are showing. | `useLiveSurface()` → `OptionPricingHook.sigmaFor(timeToExpiry)` and `beta()`; `smileSigma()` in `lib/options.ts`. |
 | **Δ** e.g. `0.53` (calls) / `−0.47` (puts) | Black-Scholes delta at the live smile volatility: the option's price sensitivity to a $1 move in spot, and roughly the probability of expiring in the money. Put delta is call delta minus one. | `callDelta()` with the Abramowitz–Stegun normal CDF. |
-| **Bid↓sell** (green) and **Ask↑buy** (red) e.g. `$121.30` | Per-unit premium from the same formula the vault charges: intrinsic + spot × σ_strike × √T × min(S,K)/max(S,K) (README, Mathematical Specification §2), at the live sigma. Ask rounds up to the cent, Bid rounds down; the on-chain spread adds the staleness-scaled and size terms at fill time, and the 1% protocol fee is grossed up on top of the Ask. Ask cells are dimmed and unclickable unless the strike is inside the active range on the matching side. | `priceWAD()` → `protocolPremium()` in `lib/options.ts`. |
+| **Bid↓sell** (green) and **Ask↑buy** (red) e.g. `$121.30` | Per-unit premium from the same formula the vault charges: intrinsic + spot × σ_strike × √T × min(S,K)/max(S,K) (Overview, Mathematical Specification §2), at the live sigma. Ask rounds up to the cent, Bid rounds down; the on-chain spread adds the staleness-scaled and size terms at fill time, and the 1% protocol fee is grossed up on top of the Ask. Ask cells are dimmed and unclickable unless the strike is inside the active range on the matching side. | `priceWAD()` → `protocolPremium()` in `lib/options.ts`. |
 | **Strike** column, highlighted row | The at-the-money row is the strike within 1% of spot. | `isATM`. |
 
 Clicking an Ask opens the buy panel; clicking a Bid opens the sell (write) panel; a strike where you hold OptionTokens offers a close panel.
@@ -308,7 +308,7 @@ Per chain. Sepolia's card lists the range, ship and buy receipts; Arc's lists fi
 <a id="tab-copilot"></a>
 ## Copilot panel
 
-The floating **Copilot** button opens the AI panel on every tab. It is served by `/api/copilot` (a server route, present on the Vercel deployment and on `./local.sh`, absent on the static GitHub Pages build) and reads the same tape, chain and documentation the app does. Its full tool list and configuration are described on the Sponsors · The Graph page.
+The floating **Copilot** button opens the AI panel on every tab. It is served by `/api/copilot` (a server route, present on the Vercel deployment and on `./local.sh`, absent on the static GitHub Pages build) and reads the same tape, chain and documentation the app does. Its full tool list and configuration are described on the Integrations · The Graph page.
 
 | Element | What it shows | Where it comes from |
 |---|---|---|

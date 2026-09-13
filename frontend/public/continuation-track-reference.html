@@ -271,19 +271,18 @@
     <h1>Smile Continuation Track: Implementation Reference</h1>
     <div class="subtitle">
       Tracks two plans on branch <code class="code">EthOnline2026_continuation_track</code>:
-      Parts A/B from <code class="code">docs/plans/2026-09-05-aqua.md</code>
+      Parts A/B from the Aqua plan
       (two opt-in sibling vaults) and Part C from
-      <code class="code">docs/plans/2026-09-09-theGraph.md</code> (a subgraph indexer +
-      Copilot integration, targeting EthOnline2026's The Graph Continuity-track bounty).
-      <strong>Deadline: September 13, 12:00 PM.</strong> Execution order, as decided on
+      The Graph plan (a subgraph indexer +
+      Copilot integration, The Graph feature). Continuation Track, Sept 5–13 2026. Execution order, as decided on
       Sept 10: Part A (SpreadVault) → Part C (subgraph) → Arc (tracked in
-      <code class="code">docs/plans/2026-09-10-arc-bounty.md</code>) → Part B (MarginVault, stretch —
+      the Arc plan) → Part B (MarginVault, stretch —
       cut first if the clock runs out). <strong>Outcome, Sept 10 evening:</strong> A1–A4, B1–B8 and
       C1–C5 all landed, MarginVault included; the RFQ tier first scoped as the Arc plan's stretch
       X7 was built too and is tracked here as <strong>A6</strong> — it is a third Aqua app, so it
       belongs with the 1inch work, not with Arc. Rows flip from "Not started" to "Done" as each
-      task's commit lands; the overview of all three bounties is
-      <code class="code">docs/plans/2026-09-10-ethonline26-bounties.md</code>. The main
+      task's commit lands; the overview of all three features is in
+      the EthOnline 2026 plan. The main
       <a href="reference-table.html">Reference Table</a> still lists only implemented/designed
       protocol items. The MarginVault plan defines a <strong>v1</strong> scope only (puts only, no
       <code class="code">close()</code>); there is no v2 — calls are mentioned only as a later
@@ -380,7 +379,7 @@
           <td>
             <strong>Hybrid RFQ tier (R6) — Derive-inspired signed quotes</strong> — the limitations doc's Phase-3 recommendation (first scoped as the Arc plan's stretch item X7, but nothing in it is Arc-specific — it is a third Aqua app, so it lives with the 1inch work): tier 1 stays the formula surface (permissionless, always live, the fallback); tier 2 lets an LP sign EIP-712 quotes off-chain from any pricing model and a taker fill them, settling through the identical Aqua JIT pull. Tradfi's "NBBO + price improvement".
             <div class="impl"><span class="impl-label">Files</span><span class="code">src/periphery/RfqVault.sol</span> <span class="code">test/RfqVault.t.sol</span> <span class="code">frontend/components/RfqDesk.tsx</span> <span class="code">script/rfq-lifecycle.sh</span>; <span class="code">script/Deploy.s.sol</span> (<span class="code">_deployRfq</span>), <span class="code">local.sh</span>, <span class="code">wagmi.ts</span></div>
-            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Built as a sibling AquaApp, not a SwapVM instruction (nonces need state; the custody model, not the pricing path, is what Aqua contributes). <span class="code">openRange</span> ships calls (WETH) or puts (USDC), fully collateralized; the LP signs <span class="code">Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</span> under domain "Smile RFQ" v1; <span class="code">fill</span> recovers the signer, checks ttl / size / nonce, takes premium + 1 % fee, pulls collateral JIT under <span class="code">nonReentrantStrategy</span>, mints one OptionToken per (range, strike), registers with its own settlement; <span class="code">formulaQuote</span> exposes the tier-1 Ask and <span class="code">QuoteFilled</span> emits both prices. Single-use nonces, <span class="code">cancelQuote</span>, no <span class="code">close()</span>. 8 tests (wrong signer / oversize / off-range / cancelled / expired / tampered all revert; ITM call settles with conservation). The RFQ tab signs with <span class="code">useSignTypedData</span> (no gas) and shows quote vs formula; <span class="code">script/rfq-lifecycle.sh</span> on Anvil: formula Ask 691.93 USDC, signed quote 685.01, taker paid 691.93 incl. fee vs 698.92 on tier 1, 1 WETH pulled JIT at the fill, replay rejected <span class="code">QuoteUsed</span>. Runtime 12,714 bytes; 200 Foundry tests. On Arc testnet (<span class="code">0x269E7008…1879</span>) with a real-USDC signed fill — quote 0.688860 vs formula 0.695819, 0.001 WETH pulled JIT (<span class="code">docs/arc-testnet-deployment.md</span>); not on Sepolia.</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span>Built as a sibling AquaApp, not a SwapVM instruction (nonces need state; the custody model, not the pricing path, is what Aqua contributes). <span class="code">openRange</span> ships calls (WETH) or puts (USDC), fully collateralized; the LP signs <span class="code">Quote(authId, strike, maxAmount, premiumPerUnit, ttl, nonce)</span> under domain "Smile RFQ" v1; <span class="code">fill</span> recovers the signer, checks ttl / size / nonce, takes premium + 1 % fee, pulls collateral JIT under <span class="code">nonReentrantStrategy</span>, mints one OptionToken per (range, strike), registers with its own settlement; <span class="code">formulaQuote</span> exposes the tier-1 Ask and <span class="code">QuoteFilled</span> emits both prices. Single-use nonces, <span class="code">cancelQuote</span>, no <span class="code">close()</span>. 8 tests (wrong signer / oversize / off-range / cancelled / expired / tampered all revert; ITM call settles with conservation). The RFQ tab signs with <span class="code">useSignTypedData</span> (no gas) and shows quote vs formula; <span class="code">script/rfq-lifecycle.sh</span> on Anvil: formula Ask 691.93 USDC, signed quote 685.01, taker paid 691.93 incl. fee vs 698.92 on tier 1, 1 WETH pulled JIT at the fill, replay rejected <span class="code">QuoteUsed</span>. Runtime 12,714 bytes; 200 Foundry tests. On Arc testnet (<span class="code">0x269E7008…1879</span>) with a real-USDC signed fill — quote 0.688860 vs formula 0.695819, 0.001 WETH pulled JIT (see the Arc deployment notes); not on Sepolia.</div>
           </td>
           <td><span class="status done">Done</span></td>
           <td>Stretch · built</td>
@@ -490,7 +489,7 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Local subgraph scaffold — Authorization entity</strong> — the foundation of the indexer: a schema + AssemblyScript mappings turning `RangeAuthorized`/`AuthorizationRevoked` events into a queryable `Authorization` entity, replacing the capped, brute-force `eth_getLogs`/RPC scans currently backing `LPDashboard.tsx` and the copilot's `chain.ts`.
-            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/subgraph.yaml</span> <span class="code">subgraph/schema.graphql</span> <span class="code">subgraph/src/vault.ts</span> <span class="code">subgraph/tests/vault.test.ts</span> <span class="code">subgraph/README.md</span></div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/subgraph.yaml</span> <span class="code">subgraph/schema.graphql</span> <span class="code">subgraph/src/vault.ts</span> <span class="code">subgraph/tests/vault.test.ts</span> the subgraph notes</div>
             <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">Authorization</span> (keyed by authId, LP indexed) and <span class="code">Fill</span> (one per <span class="code">OptionBought</span>) entities; handlers for <span class="code">RangeAuthorized</span>, <span class="code">AuthorizationRevoked</span>, <span class="code">OptionBought</span>, <span class="code">OptionClosed</span>, <span class="code">CollateralReleased</span>, <span class="code">PullFailed</span>. <span class="code">graph codegen</span> + <span class="code">graph build</span> clean. Four matchstick tests written, including "an older authorization stays visible after a newer one appears" — the LPDashboard bug this replaces; matchstick has no arm64 binary, so they run via <span class="code">graph test -d</span> (Docker + qemu) or on x86 CI. Package joined the pnpm workspace.</div>
           </td>
           <td><span class="status done">Done</span></td>
@@ -514,8 +513,8 @@
           <td><span class="cat">Part C</span></td>
           <td>
             <strong>Local graph-node against Anvil, docker-compose</strong> — a 3-container stack (graph-node, IPFS, Postgres) pointed at this VPS's own Anvil RPC, for fast dev iteration before the real Sepolia deploy. Verified by querying it directly and matching a `cast call` on the same authorization.
-            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/docker-compose.yml</span> <span class="code">subgraph/README.md</span> <span class="code">local.sh</span> (Anvil now also binds the docker bridge)</div>
-            <div class="impl"><span class="impl-label">Blocked on this host, 2026-09-10</span>the compose stack (graph-node, IPFS, Postgres; ports remapped off 8000) and the Anvil bridge binding are in place, but <span class="code">graphprotocol/graph-node</span> ships amd64 images only (checked v0.36–v0.38 and latest) and crashes under qemu emulation on this arm64 VPS. Runs as written on an x86-64 host; on arm64 the judged path is Graph Studio (C5), which is the one that matters for the bounty anyway.</div>
+            <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/docker-compose.yml</span> the subgraph notes <span class="code">local.sh</span> (Anvil now also binds the docker bridge)</div>
+            <div class="impl"><span class="impl-label">Blocked on this host, 2026-09-10</span>the compose stack (graph-node, IPFS, Postgres; ports remapped off 8000) and the Anvil bridge binding are in place, but <span class="code">graphprotocol/graph-node</span> ships amd64 images only (checked v0.36–v0.38 and latest) and crashes under qemu emulation on this arm64 VPS. Runs as written on an x86-64 host; on arm64 the path that counts is Graph Studio (C5), which is the one that matters for the feature anyway.</div>
           </td>
           <td><span class="status gated">Blocked: arm64 host</span></td>
           <td>Day 2</td>
@@ -537,9 +536,9 @@
           <td><span class="code">C5</span></td>
           <td><span class="cat">Part C</span></td>
           <td>
-            <strong>Deploy contracts + subgraph to Sepolia (the judged deployment)</strong> — no Sepolia deployment exists yet for this repo at all (only a local Anvil broadcast history), so this task is a real first deploy, not a re-point. The one task in the whole plan marked "cannot be cut" — an Anvil-only subgraph isn't judgeable for the bounty.
+            <strong>Deploy contracts + subgraph to Sepolia (the live deployment)</strong> — no Sepolia deployment exists yet for this repo at all (only a local Anvil broadcast history), so this task is a real first deploy, not a re-point. The one task in the whole plan marked "cannot be cut" — an Anvil-only subgraph doesn't demonstrate the feature.
             <div class="impl"><span class="impl-label">Files</span><span class="code">subgraph/networks.json</span>; runs <span class="code">forge script script/Deploy.s.sol --rpc-url sepolia --broadcast</span></div>
-            <div class="impl"><span class="impl-label">Done 2026-09-10</span><strong>Contracts:</strong> the full current stack (main vault, SpreadVault, MarginVault + backstop, router, hook, lens, three settlements, fresh official Aqua) deployed to Sepolia with real Circle USDC, canonical WETH and the Chainlink ETH/USD feed — 31 txs, 28.0M gas at 1.4 gwei ≈ 0.034 ETH, addresses and hashes in <span class="code">docs/sepolia-deployment.md</span>; vault <span class="code">0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D</span>. Then a real <span class="code">authorizeRange</span> (calls $2,300–$2,800 around the live $2,462 spot) + <span class="code">Aqua.ship</span>. <strong>Subgraph:</strong> <span class="code">smile-sepolia</span> on <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Graph Studio</a> — v0.0.1 proved the pipeline against the old vault (no data), <strong>v0.0.2</strong> indexes the new vault from block 11,677,088 and returned Authorization #0 within a minute of the ship: <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span>, no indexing errors. <span class="code">subgraph/networks.json</span> carries the per-network address + startBlock. Then a real <span class="code">buy</span> of 0.01 units of the $2,500 call (<span class="code">0x505285ff…</span>, 0.01 WETH pulled JIT from the LP wallet through Aqua, premium 5.636405 USDC): the subgraph returned the <span class="code">Fill</span> and the refreshed authorization (<span class="code">usedCollateral</span> 0.01 WETH, <span class="code">fillCount</span> 1) one block later.</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><strong>Contracts:</strong> the full current stack (main vault, SpreadVault, MarginVault + backstop, router, hook, lens, three settlements, fresh official Aqua) deployed to Sepolia with real Circle USDC, canonical WETH and the Chainlink ETH/USD feed — 31 txs, 28.0M gas at 1.4 gwei ≈ 0.034 ETH, addresses and hashes in the Sepolia deployment notes; vault <span class="code">0x82AcBBFE5E03510d5407d8C50435B08e6d2d0a4D</span>. Then a real <span class="code">authorizeRange</span> (calls $2,300–$2,800 around the live $2,462 spot) + <span class="code">Aqua.ship</span>. <strong>Subgraph:</strong> <span class="code">smile-sepolia</span> on <a href="https://thegraph.com/studio/subgraph/smile-sepolia">Graph Studio</a> — v0.0.1 proved the pipeline against the old vault (no data), <strong>v0.0.2</strong> indexes the new vault from block 11,677,088 and returned Authorization #0 within a minute of the ship: <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span>, no indexing errors. <span class="code">subgraph/networks.json</span> carries the per-network address + startBlock. Then a real <span class="code">buy</span> of 0.01 units of the $2,500 call (<span class="code">0x505285ff…</span>, 0.01 WETH pulled JIT from the LP wallet through Aqua, premium 5.636405 USDC): the subgraph returned the <span class="code">Fill</span> and the refreshed authorization (<span class="code">usedCollateral</span> 0.01 WETH, <span class="code">fillCount</span> 1) one block later.</div>
           </td>
           <td><span class="status done">Done</span></td>
           <td>Day 4</td>
@@ -560,8 +559,8 @@
           <td><span class="code">C7</span></td>
           <td><span class="cat">Part C</span></td>
           <td>
-            <strong>Subgraph MCP for local dev (stretch, AI-tooling half of the bounty)</strong> — documents pointing Claude Code/Cursor/ChatGPT at The Graph's own hosted Subgraph MCP server so a contributor can query `smile-sepolia` in natural language during development. Opt-in tooling doc, not app code — the bounty's other eligible path alongside C1-C5's "AI agent using live chain data."
-            <div class="impl"><span class="impl-label">Planned files</span><span class="code">subgraph/README.md</span> (MCP section); possibly repo-root <span class="code">.mcp.json</span></div>
+            <strong>Subgraph MCP for local dev (stretch, AI-tooling half of the feature)</strong> — documents pointing Claude Code/Cursor/ChatGPT at The Graph's own hosted Subgraph MCP server so a contributor can query `smile-sepolia` in natural language during development. Opt-in tooling doc, not app code — the feature's other path alongside C1-C5's "AI agent using live chain data."
+            <div class="impl"><span class="impl-label">Planned files</span>the subgraph notes (MCP section); possibly repo-root <span class="code">.mcp.json</span></div>
           </td>
           <td><span class="status not-started">Not started</span></td>
           <td>Day 5</td>
@@ -614,7 +613,7 @@
           <td><span class="code">M5</span></td>
           <td><span class="cat">Milestone</span></td>
           <td><strong>Holders whole after a 40% gap; keeper demo; docs updated</strong> — the plan's actual definition of done: solvency proven under stress, the whole lifecycle runnable by a keeper, not just by a human calling functions by hand.
-            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_gap40_holdersWhole</span> green (backstop multiple 7); <span class="code">keeper/margin.mjs</span> ran one pass against the Anvil stack and settled + finalized the open series on its own; README ladder rung 3, <span class="code">docs/solutions.md</span> S13, <span class="code">docs/limitations.md</span> L13, the reference table's S12/S13/L13 rows, the copilot's doc ranges, and the help site all updated. 192 Foundry tests passing.</div>
+            <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">test_gap40_holdersWhole</span> green (backstop multiple 7); <span class="code">keeper/margin.mjs</span> ran one pass against the Anvil stack and settled + finalized the open series on its own; README ladder rung 3, Solutions S13, Limitations L13, the reference table's S12/S13/L13 rows, the copilot's doc ranges, and the help site all updated. 192 Foundry tests passing.</div>
           </td>
           <td><span class="status done">Done</span></td>
           <td>Day 13</td>
@@ -643,7 +642,7 @@
         <tr class="row-M">
           <td><span class="code">M8</span></td>
           <td><span class="cat">Milestone</span></td>
-          <td><strong>Same data, live on Sepolia via Graph Studio</strong> — the actual judged artifact for the bounty submission.
+          <td><strong>Same data, live on Sepolia via Graph Studio</strong> — the live artifact for the feature.
             <div class="impl"><span class="impl-label">Done 2026-09-10</span><span class="code">smile-sepolia</span> v0.0.2 — <span class="code">https://api.studio.thegraph.com/query/44448/smile-sepolia/v0.0.2</span> — indexing the fresh Sepolia deployment: Authorization #0 within a minute of <span class="code">Aqua.ship</span>, the Fill one block after the buy, <span class="code">hasIndexingErrors: false</span> (C5).</div>
           </td>
           <td><span class="status done">Done</span></td>
@@ -679,12 +678,12 @@
         <strong>Cut order if time compresses — Parts A/B</strong>: A5 first, then <code class="code">keeper/margin.mjs</code> (demo via the script instead), partial-unit takeover, <code class="code">lpMarginBps</code>. Never cut: single-price settlement in Part A, the backstop-coupled ceiling, the two-step waterfall, the sigma-independence test (B7).
       </div>
       <div class="legend-item" style="font-size: 11px;">
-        <strong>Cut order if time compresses — Part C</strong>: C6 and C7 first (both stretch). C5 is the one task that cannot be cut — an Anvil-only subgraph isn't judgeable for the bounty; if C5 itself is at risk, ship C1-C4 and say so explicitly in the submission.
+        <strong>Cut order if time compresses — Part C</strong>: C6 and C7 first (both stretch). C5 is the one task that cannot be cut — an Anvil-only subgraph doesn't demonstrate the feature; if C5 itself is at risk, ship C1-C4 and say so explicitly.
       </div>
       <div class="legend-item" style="font-size: 11px;">
         Full task detail (exact signatures, test names, commit messages) lives in
-        <code class="code">docs/plans/2026-09-05-aqua.md</code> (Parts A/B) and
-        <code class="code">docs/plans/2026-09-09-theGraph.md</code> (Part C).
+        the Aqua plan (Parts A/B) and
+        The Graph plan (Part C).
       </div>
     </div>
   </div>

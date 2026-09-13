@@ -383,7 +383,7 @@
           <td><span class="code">L13</span></td>
           <td><span class="cat">Limitation</span></td>
           <td><strong>Bad debt in the opt-in margin tier</strong> — <code class="code">MarginVault</code> (S13) is the one place "a written option always pays" can break: if writer margin, free balance, the takeover auction, the backstop pool and the insurance fund are all empty at finalization, holders are paid pro rata (<code class="code">HolderHaircut</code>). Bounded by the 7× backstop ceiling and the gap-40 test, not eliminated. Also: settlement is one Chainlink heartbeat wide (hence the two-step finalize), the Aqua credit line is revocable consent not collateral, sigma still moves the premium (never the margin), takeover is whole-position only, and there is no <code class="code">close()</code> by design.
-            <div class="impl"><span class="impl-label">Where</span><span class="code">MarginVault.finalizeSeries</span> (haircut path + IM ratchet), <span class="code">MarginVault.flag / _creditLine</span>, <span class="code">MarginBackstop.withdraw</span> guards; <span class="code">docs/limitations.md#L13</span></div>
+            <div class="impl"><span class="impl-label">Where</span><span class="code">MarginVault.finalizeSeries</span> (haircut path + IM ratchet), <span class="code">MarginVault.flag / _creditLine</span>, <span class="code">MarginBackstop.withdraw</span> guards; Limitations L13</div>
           </td>
           <td><span class="status implemented">Documented</span></td>
           <td>Open · opt-in</td>
@@ -393,7 +393,7 @@
           <td><span class="code">L14</span></td>
           <td><span class="cat">Limitation</span></td>
           <td><strong>The Uniswap v4 hook path has never run live</strong> — <code class="code">OptionPricingHook</code> has two entrances. The vault path (<code class="code">sigmaFor</code> to price, <code class="code">bumpSigma</code> after every fill and sellback) carries the whole vol surface and is live on Anvil, Sepolia and Arc. The v4 path (<code class="code">beforeSwap</code> 5% fair-value veto, <code class="code">afterSwap</code> surface-wide bump) is gated to a pool manager that <code class="code">Deploy.s.sol</code> sets to <code class="code">address(1)</code> everywhere; no OptionToken v4 pool exists, so there is no on-chain secondary market and that feedback is a design, not a live mechanism. Exercised only in <code class="code">test/OptionPricingHook.t.sol</code> with a pranked pool manager.
-            <div class="impl"><span class="impl-label">Where</span><span class="code">src/hooks/OptionPricingHook.sol</span> (<code class="code">poolManager</code> guard), <span class="code">script/Deploy.s.sol</span> (placeholder pool manager); <span class="code">docs/limitations.md#L14</span>, <span class="code">docs/sponsors/uniswap.md</span></div>
+            <div class="impl"><span class="impl-label">Where</span><span class="code">src/hooks/OptionPricingHook.sol</span> (<code class="code">poolManager</code> guard), <span class="code">script/Deploy.s.sol</span> (placeholder pool manager); Limitations L14, the Uniswap page</div>
           </td>
           <td><span class="status implemented">Documented</span></td>
           <td>Open · deployment, not code (a v4 pool per OptionToken on a chain with Uniswap v4)</td>
@@ -403,7 +403,7 @@
           <td><span class="code">L15</span></td>
           <td><span class="cat">Limitation</span></td>
           <td><strong>Self-fills are allowed — and economically null</strong> — no vault requires <code class="code">buyer != lp</code>; a broker's wash-trade ban needs both sides of one account, which a public chain cannot see (a second wallet defeats any guard). A self-fill pays the 1% fee, moves collateral into escrow and back, creates no counterparty risk (full collateralization), but prints volume on the tape and nudges sigma (L7). The Sepolia and Arc demo fills are the deployer buying from its own range and are labelled as such.
-            <div class="impl"><span class="impl-label">Where</span><span class="code">docs/limitations.md#L15</span>; receipts in <span class="code">docs/sepolia-deployment.md</span>, <span class="code">docs/arc-testnet-deployment.md</span>, <span class="code">frontend/lib/deployments.ts</span></div>
+            <div class="impl"><span class="impl-label">Where</span>Limitations L15; receipts in the Sepolia deployment notes, the Arc deployment notes, <span class="code">frontend/lib/deployments.ts</span></div>
           </td>
           <td><span class="status implemented">Documented</span></td>
           <td>Open · by design (pricing, not identity — L5)</td>

@@ -363,7 +363,7 @@ The quote type is `Quote(uint256 authId,uint256 strike,uint256 maxAmount,uint256
 
 ## Limitations
 
-The relevant entries in [docs/limitations.md](../limitations.md) are:
+The relevant entries in [Limitations](#limitations) are:
 
 - **L8, full collateralization is capital-inefficient on purpose.** The main vault locks 1 WETH per call unit and the full strike per put unit. Aqua softens this because the collateral is unrehypothecated and keeps earning until the fill, but it does not remove it. `SpreadVault` and `MarginVault` are the two rungs of the capital-efficiency ladder built to address it.
 - **L11, Aqua liquidity is soft.** Because the balance behind a quote sits in the LP's own wallet, it can be spent or de-approved before the fill, and the JIT pull then reverts. Displayed depth is indicative, not firm. `FirmEscrow` (S4, MVP scope) makes a range firm by becoming the LP's wallet from Aqua's point of view; honest depth display and firmness bonds are the other mitigations (S1 through S3).
@@ -377,9 +377,9 @@ The relevant entries in [docs/limitations.md](../limitations.md) are:
 
 ## Plans
 
-The entries in [docs/solutions.md](../solutions.md) and the plan in [docs/plans/2026-09-05-aqua.md](../plans/2026-09-05-aqua.md):
+The entries in [Solutions](#solutions) and the plan:
 
-- **S12, defined-risk netting.** Implemented at the event as `SpreadVault` (tasks A1 through A4). Task A5, debit spreads collateralized by the long `OptionToken` under the dominance result, was optional in the plan and was cut first. Iron condor pricing (max-not-sum escrow of the two sides) is designed and strike-validated but not yet fillable. The optional SwapVM opcode for the call-credit leg was scoped and not attempted; a correct SwapVM-free `SpreadVault` still qualifies as an Aqua app.
+- **S12, defined-risk netting.** Implemented at the event as `SpreadVault` (tasks A1 through A4). Task A5, debit spreads collateralized by the long `OptionToken` under the dominance result, was optional in the plan and was cut first. Iron condor pricing (max-not-sum escrow of the two sides) is designed and strike-validated but not yet fillable. The optional SwapVM opcode for the call-credit leg was scoped and not attempted; a correct SwapVM-free `SpreadVault` is still an Aqua app.
 - **S13, MarginVault.** Implemented as tasks B1 through B8. Remaining items in the plan's cut order: partial-unit takeover, per-range block caps (`maxBlockNotional`, R1), and calls once a WETH shortfall can be paid.
 - **R6, hybrid RFQ.** Implemented as `RfqVault` (task A6, beyond the original plan). The interpolation of sigma across tenor buckets, which the README's design note defers to an RFQ-style quoting layer, is a natural next step now that a signed-quote path exists.
 - **S4, the firm tier.** `FirmEscrow` ships the MVP (plain collateral, firm Ask depth). The full version, yield-bearing escrow in wstETH and sDAI, is gated on fill-reliability data (S3) and firm-tier uptake.

@@ -1,6 +1,6 @@
 # Solutions Plan: Making Smile Viable
 
-Companion to [limitations.md](./limitations.md). That document diagnoses; this
+Companion to [Limitations](#limitations). That document diagnoses; this
 one prescribes. It takes the five hard problems — including the ones Aqua
 itself introduces — and lays out concrete solutions, what each costs, and the
 order to build them in, with measurable gates between phases.
@@ -114,7 +114,7 @@ WETH/USDC escrow as the conservative option.
 
 ## P2 — Adverse selection: the hardening set
 
-Specified in [limitations.md Part 3](./limitations.md) as R1–R5; summarized
+Specified in [Limitations Part 3](#limitations) as R1–R5; summarized
 here because Phases below reference them:
 
 - **R1** Per-block notional cap per authorization — bounds loss per staleness
@@ -248,7 +248,7 @@ payoffs make it tractable) and belongs after product-market signal, not
 before.
 
 > **Designed** — full specification in
-> [plans/2026-07-12-s12-defined-risk-netting.md](./plans/2026-07-12-s12-defined-risk-netting.md):
+> the plan:
 > exact collateral requirements per structure (call credit spread
 > `(K₂−K₁)/K₂` WETH ≈ 16× tighter; condors need max-not-sum of the two
 > sides since one terminal price can't breach both), the dominance result
@@ -285,8 +285,7 @@ ratcheting up 500 bps. Exposure is capped Maker-style: naked notional can
 never exceed 7× the backstop pool, and the pool's withdrawals are delayed,
 floored, and frozen while an expired series is unfinalized.
 
-> **Implemented (EthOnline 2026)** — B1–B8 of
-> [plans/2026-09-05-aqua.md](./plans/2026-09-05-aqua.md):
+> **Implemented (EthOnline 2026)** — B1–B8 of the plan:
 > `MarginVault.sol` (23.5 KB, under EIP-170 without a split),
 > `MarginBackstop.sol`, 54 tests across `test/Margin*.t.sol` including the
 > gap-40 solvency test and a book-balance invariant, `script/margin-lifecycle.sh`
@@ -299,8 +298,7 @@ floored, and frozen while an expired series is unfinalized.
 ## The plan
 
 > **Executable task-level plan for Phases 0–1** (exact files, signatures,
-> tests, commands, written for mechanical execution):
-> [plans/2026-07-11-phase01-hardening.md](./plans/2026-07-11-phase01-hardening.md)
+> tests, commands, written for mechanical execution): see the plan.
 >
 > **Status:** the contract side of Phases 1–2 is IMPLEMENTED — R1 (per-block
 > caps), R2 (size-convex pricing), R3+R4 (staleness-scaled spread with a
@@ -345,7 +343,7 @@ arrives, pivot distribution-first (S10) before adding any further mechanism.
 
 - **Drop Aqua.** Its softness is priced (S1–S3) and competed against (S4)
   instead. The zero-commitment funnel is worth keeping.
-- **Move pricing off-chain.** The RFQ tier (limitations.md R6) stays gated
+- **Move pricing off-chain.** The RFQ tier (Limitations R6) stays gated
   behind markout evidence; Phases 1–2 are expected to make it unnecessary.
 - **Add margin/liquidations.** S12 achieves capital efficiency only where it
   requires no liquidation engine.

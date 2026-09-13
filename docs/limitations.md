@@ -123,7 +123,7 @@ range.
 > (soft liquidity) by the firmness bond, reliability counters, and
 > phantom-depth-aware `bestQuote` routing. The sections below describe the
 > UNMITIGATED design so the reasoning stays legible; see
-> [solutions.md](./solutions.md) for what is now in place.
+> [Solutions](#solutions) for what is now in place.
 >
 > **EthOnline 2026 (September 2026):** L8 is partially lifted by two opt-in
 > sibling vaults — `SpreadVault` (S12) escrows a credit spread's true maximum
@@ -131,7 +131,7 @@ range.
 > price recorded in L13. L12a is lifted by the subgraph. R6 is built as
 > `RfqVault`. Note that R1's per-authorization block cap lives in the main
 > vault only; the three sibling vaults have no per-block cap, so L4 applies
-> to them in full. Per-sponsor pages (Help → Sponsors) collect the entries
+> to them in full. Per-integration pages (Help → Integrations) collect the entries
 > that touch each protocol. L14 records that the Uniswap v4 hook entrance
 > (`beforeSwap`/`afterSwap`) has never run outside tests; L15 that
 > self-fills are permitted and why the demo receipts are ones.
@@ -196,7 +196,7 @@ the ordinary Greeks — **parameter risk**: ∂P/∂α ∝ vega·ln²(K/S) and
 ∂P/∂β ∝ vega·ln(K/S) (the smile-space analogs of volga and vanna). In
 trader-native terms these are the familiar desk exposures — sensitivity to
 the **25Δ butterfly** (α) and the **25Δ risk reversal** (β) — not bespoke
-protocol Greeks (see the README's "Reading the surface like a trader"). If
+protocol Greeks (see the Overview's "Reading the surface like a trader"). If
 governance moves α/β, or the demand-feedback loop walks a σ bucket away from
 fair, every open quote in every affected range marks against the LP with no
 action on their part. There is currently no dashboard surfacing this exposure.
@@ -243,7 +243,7 @@ oracle-settled derivative on-chain.
 On Arc testnet there is no Chainlink ETH/USD feed at all, so the deployment
 there settles against a `MockV3Aggregator` that anyone can set; a keeper
 mirrors Sepolia's Chainlink answer into it every 30 minutes so the price is
-real, but the trust is not (`docs/arc-testnet-deployment.md`, "Oracle tick").
+real, but the trust is not (the Arc deployment notes, "Oracle tick").
 Settlement on Arc is a demonstration of the mechanism, not of the trust model.
 
 ### L10. The off-chain alternative has its own price
@@ -283,7 +283,7 @@ free. Contrast: an order on Deribit's book is firm; an escrowed-vault quote
 is firm; an Aqua quote is indicative. Mitigations — honest depth display,
 slashable firmness bonds, fill-reliability scores, and a parallel firm tier
 with yield-bearing escrowed collateral — are specified in
-[solutions.md](./solutions.md) (S1–S4).
+[Solutions](#solutions) (S1–S4).
 
 ### L12a. No indexer — lifted by the subgraph (EthOnline 2026)
 
@@ -366,11 +366,11 @@ on every network, no script creates a v4 pool, and Arc has no Uniswap
 deployment at all. Consequences: there is no on-chain secondary market for
 OptionTokens (holders exit only through `close()` at the Bid or by holding
 to expiry), and the "afterSwap shifts the whole surface" feedback described
-in the README's flow diagrams is a design, not a live mechanism. Nothing
+in the Overview's flow diagrams is a design, not a live mechanism. Nothing
 about pricing or the demand loop depends on it: the vault path carries the
 whole vol surface on Anvil, Sepolia and Arc alike. The fix is a deployment,
 not code — a v4 pool per OptionToken on a chain with Uniswap v4, with the
-hook's `poolManager` set to the real one (see the Uniswap sponsor page).
+hook's `poolManager` set to the real one (see the Uniswap page).
 
 ### L15. Self-fills are allowed — and economically null
 
@@ -394,12 +394,12 @@ traded tenor's sigma). That second effect is L7, and it is bounded by the
 spread plus the fee paid per round trip.
 
 Disclosure: the recorded demo fills on Sepolia and Arc
-(`docs/sepolia-deployment.md`, `docs/arc-testnet-deployment.md`) are the
+(the Sepolia and Arc deployment notes) are the
 deployer buying from its own range, so the subgraph had a real trade to
 index. They are labelled as self-fills. A `buyer != lp` check was
 considered for the three sibling vaults as a guard against accidental
 self-fills and left out on purpose: it would be cosmetic, and the main
-vault stays untouched by the event's ground rule.
+vault is unchanged.
 
 ### L12. The per-trade gas floor — and where it actually comes from
 
@@ -419,7 +419,7 @@ expensive" — is wrong here, and measurably so. The pricing arithmetic
 (`lnWad` Padé series, one integer `sqrtWad`, the staleness spread, two
 size-impact iterations) is a rounding error inside the 198k repeat-fill
 cost, which is in the range of an ordinary Uniswap v3 swap; the design
-already avoids `exp`/`N(d₁)` entirely (README §Mathematical Specification).
+already avoids `exp`/`N(d₁)` entirely (Overview §Mathematical Specification).
 What actually dominates is **series bootstrapping**: ~840k of the first
 fill is the one-time deployment of that series' plain-ERC-20 OptionToken —
 contract-creation bytes, not math. Moving the calculation off-chain would
@@ -441,7 +441,7 @@ deployment choice, not a property of the code.
 > **Note:** these recommendations are expanded into a full sequenced build
 > plan — with the soft-liquidity solutions, the LP-quoted-vol competitive
 > pricing design, demand strategy, and phase gates — in
-> [solutions.md](./solutions.md).
+> [Solutions](#solutions).
 
 Ordered by benefit-to-complexity. Phases 1–2 are contained contract changes;
 each is testable in isolation. The guiding principle, from L5: **stop trying
@@ -507,7 +507,7 @@ each fill) show flow is still systematically toxic.
 > ttl / size / nonce, then settles like a tier-1 fill (premium + fee in,
 > collateral pulled JIT through Aqua). `formulaQuote()` is the tier-1 Ask
 > for the same range. Nonces are single-use and cancellable. The markout
-> gate above was skipped for the hackathon; the tier is opt-in per range,
+> gate above was skipped; the tier is opt-in per range,
 > so tier 1 is untouched for anyone who does not sign.
 
 ### Phase 4 — LP risk tooling

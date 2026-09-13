@@ -8,7 +8,7 @@ The frontend is a Next.js application in `frontend/` that puts every Smile vault
 
 The same code ships in two shapes. The **static export** at `https://oslinin.github.io/Smile/` is built by GitHub Actions with a base path and has no server, so it carries no copilot. The **server build** at `https://smile-frontend-omega.vercel.app` runs on Vercel and adds the copilot route (`/api/copilot`) and the subgraph proxy (`/api/subgraph`), through which the application reads The Graph with a gateway key that never reaches the browser. Locally, `./local.sh` starts Anvil, deploys every contract, seeds a 100-trade tape, and runs the server build against it.
 
-Before EthOnline 2026 the app had the option matrix, range authorization, a payoff builder, an LP dashboard, the vol surface, and the copilot. The event added the Overview landing tab, the Spreads, Margin, RFQ and Risk Monitor tabs, a TradingView-engine price chart with the strategy and the traded tape drawn on it, an OptionStrat-grade builder, recorded testnet receipts, the multi-chain address map, a User Guide, the sponsor help pages, and a copilot that trades off The Graph with skills, MCP servers and preparation cards.
+Before EthOnline 2026 the app had the option matrix, range authorization, a payoff builder, an LP dashboard, the vol surface, and the copilot. The event added the Overview landing tab, the Spreads, Margin, RFQ and Risk Monitor tabs, a TradingView-engine price chart with the strategy and the traded tape drawn on it, an OptionStrat-grade builder, recorded testnet receipts, the multi-chain address map, a User Guide, the integration help pages, and a copilot that trades off The Graph with skills, MCP servers and preparation cards.
 
 ## Features used
 
@@ -31,13 +31,13 @@ Before EthOnline 2026 the app had the option matrix, range authorization, a payo
 | Copilot panel: tab-aware context, per-tab starter prompts, Skills menu, MCP servers with The Graph preset, preparation cards | `frontend/components/copilot/CopilotPanel.tsx`, `SkillsMenu.tsx`, `CopilotSettings.tsx`, `PrepareCard.tsx`, `frontend/lib/copilot/tabs.ts` | EthOnline 2026 (`5f1b9b5`, `39e9a41`, `00cbbe3`, `16ad3f5`) |
 | OpenRouter as a fourth copilot provider | `frontend/lib/copilot/provider.ts` | EthOnline 2026 (`ede13fd`) |
 | Live spot: Uniswap Trading API when a key is set, Chainlink feed read otherwise, static fallback last | `frontend/hooks/useUniswapSpot.ts` | Pre-existing |
-| Help site generator with a Sponsors group; knowledge pack for the copilot | `frontend/scripts/gen-help.mjs`, `frontend/scripts/gen-knowledge.mjs` | Pre-existing generators; Sponsors group and pages 2026-09-12 (`1cb0cae`) |
-| User Guide in the help sidebar and in the copilot's knowledge | `docs/guide.md` | EthOnline 2026 (`0c35e99`) |
+| Help site generator with an Integrations group; knowledge pack for the copilot | `frontend/scripts/gen-help.mjs`, `frontend/scripts/gen-knowledge.mjs` | Pre-existing generators; Integrations group and pages 2026-09-12 (`1cb0cae`) |
+| User Guide in the help sidebar and in the copilot's knowledge | [User Guide](#guide) | EthOnline 2026 (`0c35e99`) |
 | GitHub Pages static export and the Vercel server build | `.github/workflows/pages.yml`, `frontend/next.config.ts` | Pages pre-existing; continuation-branch deploys and Vercel 2026-09-12 |
 
 ## Why it is necessary
 
-**Judges see three minutes.** The numbers that make Smile's case are concrete: a 3000/3200 call credit spread escrows 0.0625 WETH instead of 1 WETH, a margined put locks 1,500 USDC instead of 3,000, and holders stay whole after a 40% gap. A README can state those numbers; only a screen can show them being true on the connected chain. The Overview tab exists to put the ladder on screen as live bars, with the vault counters and the recorded receipts beside it, before the viewer clicks anything.
+**A first look lasts three minutes.** The numbers that make Smile's case are concrete: a 3000/3200 call credit spread escrows 0.0625 WETH instead of 1 WETH, a margined put locks 1,500 USDC instead of 3,000, and holders stay whole after a 40% gap. A README can state those numbers; only a screen can show them being true on the connected chain. The Overview tab exists to put the ladder on screen as live bars, with the vault counters and the recorded receipts beside it, before the viewer clicks anything.
 
 **A venue needs a tape and a chart.** An options venue whose trades are only visible as transaction hashes has no market. The subgraph gives Smile a tape (every range, instrument, fill and position), and the price chart draws that tape as premium and implied volatility over time next to the underlying's candles. Without the chart, the σ feedback loop and the price history are invisible; with it, a viewer can watch a fill move the surface.
 
@@ -51,7 +51,7 @@ Before EthOnline 2026 the app had the option matrix, range authorization, a payo
 
 **For a liquidity provider**, the Earn tabs and the Spreads, Margin and RFQ desks show the capital each tier locks for the same trade, and the LP Dashboard and Risk Monitor show what happens to that capital afterwards. A writer can compare a naked put, a credit spread, and a margined put on one screen before choosing a rung.
 
-**For a judge or an integrator**, the Overview tab's receipts and the Receipts tab link every recorded testnet transaction to its explorer, per chain. The Vercel build carries the copilot, so the AI trading agent described on The Graph page can be tried without any setup.
+**For a reviewer or an integrator**, the Overview tab's receipts and the Receipts tab link every recorded testnet transaction to its explorer, per chain. The Vercel build carries the copilot, so the AI trading agent described on The Graph page can be tried without any setup.
 
 ## Technical details
 
@@ -59,7 +59,7 @@ Before EthOnline 2026 the app had the option matrix, range authorization, a payo
 
 **What it is.** Lightweight Charts is TradingView's open-source charting engine, published as the `lightweight-charts` npm package under the Apache-2.0 licence. It is the renderer behind TradingView's charts, not the TradingView website or its embeddable widget: it draws candles, lines and price lines on a canvas from data the application supplies, with no account, no data feed and no network calls of its own. Smile pins version 5.2.1 (`frontend/package.json`).
 
-**Why this library.** The submission notes record the search: there is no open-source OptionStrat, and the nearest React project draws expiry payoffs only, so the builder stayed in-house. For charting, a component was needed rather than a product; OpenCharts, an MIT-licensed terminal built on the same engine, is a full standalone application, not a component to embed. Using TradingView's engine directly gives a trader the chart they already know, in a component the page controls.
+**Why this library.** There is no open-source OptionStrat, and the nearest React project draws expiry payoffs only, so the builder stayed in-house. For charting, a component was needed rather than a product; OpenCharts, an MIT-licensed terminal built on the same engine, is a full standalone application, not a component to embed. Using TradingView's engine directly gives a trader the chart they already know, in a component the page controls.
 
 **What is drawn.** Hourly ETH/USD candles from Coinbase Exchange's public candles endpoint, with Kraken's OHLC endpoint as the fallback; the protocol's spot as a dotted line; every leg's strike as a solid line, green for long and red for short; each breakeven as a dashed yellow line; and, in the lower third, one selected instrument's traded premium per unit and the implied volatility that premium means, computed in the browser by inverting Black-Scholes against the candle close at that hour. Market data is context for the trade; the protocol prices off its oracle, not off these candles.
 
@@ -268,7 +268,7 @@ The two preparation cards (`prepare_lp_range`, `prepare_rfq_quote`) hand the age
 
 ### The help site and the knowledge pack
 
-`frontend/scripts/gen-help.mjs` renders the README, the User Guide, Limitations, Solutions, the copilot page and the six sponsor pages (the Sponsors group in the sidebar) into `public/help.html`, with KaTeX for the README's formulae and Mermaid for its diagrams; the Reference Table and Continuation Track pages are embedded as standalone documents. `frontend/scripts/gen-knowledge.mjs` compiles the same documents into a token-cheap table of contents for the copilot's system prompt and full sections served on demand through its `read_docs` tool. Both run on `predev` and `prebuild`, so the site and the pack are never stale relative to the docs.
+`frontend/scripts/gen-help.mjs` renders the README, the User Guide, Limitations, Solutions, the copilot page and the six integration pages (the Integrations group in the sidebar) into `public/help.html`, with KaTeX for the README's formulae and Mermaid for its diagrams; the Reference Table and Continuation Track pages are embedded as standalone documents. `frontend/scripts/gen-knowledge.mjs` compiles the same documents into a token-cheap table of contents for the copilot's system prompt and full sections served on demand through its `read_docs` tool. Both run on `predev` and `prebuild`, so the site and the pack are never stale relative to the docs.
 
 ### Two builds
 

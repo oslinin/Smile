@@ -2,7 +2,7 @@
 
 This is the hands-on guide: what each tab does, how to build a trade, how
 to earn as a liquidity provider, and what you are risking on each rung.
-The [README](../README.md) explains *why* the protocol is built this way;
+The [Overview](#overview) explains *why* the protocol is built this way;
 this page explains *how to use it*. The AI copilot (bottom-right) has read
 this guide and can walk you through any step or explain a position you
 already hold.
@@ -137,10 +137,10 @@ vault — holders exit through the formula tier.
   the risk is the option's own P&L and the oracle at settlement.
 - **Margin**: liquidation risk for writers, and a bounded bad-debt risk
   for holders after the backstop and insurance are exhausted
-  ([L13](limitations.md)). Naked notional is capped at 7× the backstop.
+  ([L13](#limitations)). Naked notional is capped at 7× the backstop.
 - **Everywhere**: premiums come from a model with a demand-driven sigma;
   displayed depth is only as firm as the writer's wallet — the firm-escrow
-  tier and the S1 firmness checks exist for that ([limitations](limitations.md)).
+  tier and the S1 firmness checks exist for that ([Limitations](#limitations)).
 
 ## Asking the copilot
 

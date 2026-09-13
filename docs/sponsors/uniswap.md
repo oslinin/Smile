@@ -422,7 +422,7 @@ contract's header comment records for a mined deployment.
 
 ## Limitations
 
-The numbered items refer to `docs/limitations.md`.
+The numbered items refer to [Limitations](#limitations).
 
 - **L3, repricing lands after the trade.** The bump is applied after the
   fill, so a trader always executes at the pre-bump price. A market maker who
@@ -461,7 +461,7 @@ The numbered items refer to `docs/limitations.md`.
   chain. Rejection is therefore the wrong frame and pricing is the right
   one: the recommendations R1 through R4 make toxic flow pay for its toxicity
   through the spread rather than trying to identify it. Part 1 of
-  `docs/limitations.md` explains adverse selection from zero for readers new
+  [Limitations](#limitations) explains adverse selection from zero for readers new
   to the term.
 - **Bucket-edge discontinuities.** Sigma is a step function of time to
   expiry. Two expiries one day apart on either side of the 30-day edge can
@@ -478,7 +478,7 @@ The numbered items refer to `docs/limitations.md`.
 
 ## Plans
 
-The numbered items refer to `docs/solutions.md`.
+The numbered items refer to [Solutions](#solutions).
 
 - **S5, per-range LP-quoted vol.** The instruction and the library already
   apply an LP-chosen `sigmaMulBps` multiplier on top of the hook's tenor
