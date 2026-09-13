@@ -52,6 +52,7 @@ const SPREAD_ABI = [
       { name: "feeBps", type: "uint32" }, { name: "feeRecipient", type: "address" },
     ],
   },
+  { name: "revokeStructure", type: "function", stateMutability: "nonpayable", inputs: [{ name: "authId", type: "uint256" }], outputs: [] },
   ...SHIP_PARAMS_ABI,
 ] as const;
 
@@ -163,6 +164,8 @@ export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall
   const { writeContract: open, data: openTx, isPending: openPending, error: openError } = useWriteContract();
   const { isLoading: openConfirming, isSuccess: openSuccess } = useWaitForTransactionReceipt({ hash: openTx });
   const { writeContract: ship, data: shipTx, isPending: shipPending, error: shipError } = useWriteContract();
+  const { writeContract: revoke, data: revokeTx, isPending: revokePending, error: revokeError } = useWriteContract();
+  const { isLoading: revokeConfirming } = useWaitForTransactionReceipt({ hash: revokeTx });
   const { isLoading: shipConfirming, isSuccess: shipSuccess } = useWaitForTransactionReceipt({ hash: shipTx });
 
   useEffect(() => { if (approveSuccess && step === "approving") setStep("approved"); }, [approveSuccess]);
@@ -311,6 +314,9 @@ export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall
   const buyWorking = buyStep === "approving" ? (approveUsdcPending || approveUsdcConfirming) : buyStep === "buying" ? (buyPending || buyConfirming) : false;
   const structIsCall = structure ? Number(structure[1]) === 0 : isCall;
   const structActive = structure ? structure[4] : false;
+  const structLp = structure ? (structure[0] as string) : ZERO;
+  const isMyStructure = !!address && structLp.toLowerCase() === address.toLowerCase();
+  const revokeWorking = revokePending || revokeConfirming;
   const structExpiry = structure ? Number(structure[2]) : 0;
   const sLo = viewStrikes ? Number(viewStrikes[structIsCall ? 2 : 0]) / 1e18 : 0;
   const sHi = viewStrikes ? Number(viewStrikes[structIsCall ? 3 : 1]) / 1e18 : 0;
@@ -470,6 +476,13 @@ export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall
                 <span className="text-gray-400">Status</span>
                 <span className={structActive ? "text-green-400" : "text-red-400"}>{structActive ? "active" : "inactive"}</span>
               </div>
+              {isMyStructure && structActive && (
+                <div className="flex items-center justify-between pt-1 border-t border-gray-700/60">
+                  <span className="text-[11px] text-gray-500">You wrote this — revoke to stop new fills (filled units keep their escrow until settlement).</span>
+                  <button onClick={() => viewAuthId !== null && revoke({ address: CONTRACTS.spreadVault as `0x${string}`, abi: SPREAD_ABI, functionName: "revokeStructure", args: [viewAuthId] })} disabled={revokeWorking} className="text-xs px-2.5 py-1 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50">{revokePending ? "Confirm…" : revokeConfirming ? "Revoking…" : "Revoke"}</button>
+                </div>
+              )}
+              {revokeError && <div className="text-red-400 text-[11px]">{revokeError.message.split("\n")[0]}</div>}
             </div>
 
             <div>

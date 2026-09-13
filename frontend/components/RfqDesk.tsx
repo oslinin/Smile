@@ -72,6 +72,7 @@ const RFQ_ABI = [
   },
   { name: "nonceUsed", type: "function", stateMutability: "view", inputs: [{ name: "", type: "address" }, { name: "", type: "uint256" }], outputs: [{ name: "", type: "bool" }] },
   { name: "cancelQuote", type: "function", stateMutability: "nonpayable", inputs: [{ name: "nonce", type: "uint256" }], outputs: [] },
+  { name: "revokeRange", type: "function", stateMutability: "nonpayable", inputs: [{ name: "authId", type: "uint256" }], outputs: [] },
   ...SHIP_PARAMS_ABI,
 ] as const;
 
@@ -143,6 +144,8 @@ export function RfqDesk({ spot }: { spot: number }) {
   const { writeContract: open, data: openTx, isPending: openPending, error: openError } = useWriteContract();
   const { isLoading: openConfirming, isSuccess: openSuccess } = useWaitForTransactionReceipt({ hash: openTx });
   const { writeContract: ship, data: shipTx, isPending: shipPending, error: shipError } = useWriteContract();
+  const { writeContract: revoke, data: revokeTx, isPending: revokePending, error: revokeError } = useWriteContract();
+  const { isLoading: revokeConfirming } = useWaitForTransactionReceipt({ hash: revokeTx });
   const { isLoading: shipConfirming, isSuccess: shipSuccess } = useWaitForTransactionReceipt({ hash: shipTx });
   useEffect(() => { if (approveSuccess && step === "approving") setStep("approved"); }, [approveSuccess]);
   useEffect(() => { if (openSuccess && step === "opening") setStep("opened"); }, [openSuccess]);
@@ -179,6 +182,8 @@ export function RfqDesk({ spot }: { spot: number }) {
   const viewAuthId: bigint | null = pinnedAuthId ?? (step === "done" && authIdToShip !== null ? authIdToShip : nextAuthId !== undefined && nextAuthId > ZERO_BI ? nextAuthId - ONE_BI : null);
   const { data: range } = useReadContract({ address: rfq, abi: RFQ_ABI, functionName: "ranges", args: [viewAuthId ?? ZERO_BI], query: { enabled: enabled && viewAuthId !== null, refetchInterval: 10_000 } });
   const rLp = range ? range[0] : ZERO;
+  const isMyRange = rLp.toLowerCase() === address?.toLowerCase();
+  const revokeWorking = revokePending || revokeConfirming;
   const rMin = range ? Number(range[1]) / 1e18 : 0;
   const rMax = range ? Number(range[2]) / 1e18 : 0;
   const rIsCall = range ? range[7] : true;
@@ -322,6 +327,13 @@ export function RfqDesk({ spot }: { spot: number }) {
             <div className="flex justify-between"><span className="text-gray-400">Latest range</span><span className="font-mono text-white">#{viewAuthId.toString()} · {rIsCall ? "calls" : "puts"} ${rMin.toLocaleString()}–${rMax.toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">LP</span><span className="font-mono text-gray-300">{rLp.slice(0, 6)}…{rLp.slice(-4)}{rLp.toLowerCase() === address?.toLowerCase() ? " (you)" : ""}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={rActive ? "text-green-400" : "text-red-400"}>{rActive ? "active" : "revoked"}</span></div>
+            {isMyRange && rActive && (
+              <div className="flex items-center justify-between pt-1 border-t border-gray-700/60">
+                <span className="text-[10px] text-gray-500">Revoke to stop new fills; signed quotes can be killed with cancelQuote.</span>
+                <button onClick={() => viewAuthId !== null && revoke({ address: rfq, abi: RFQ_ABI, functionName: "revokeRange", args: [viewAuthId] })} disabled={revokeWorking} className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50">{revokePending ? "Confirm…" : revokeConfirming ? "Revoking…" : "Revoke range"}</button>
+              </div>
+            )}
+            {revokeError && <div className="text-red-400 text-[10px]">{revokeError.message.split("\n")[0]}</div>}
           </div>
         )}
       </div>

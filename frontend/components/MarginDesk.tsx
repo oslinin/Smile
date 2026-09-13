@@ -82,6 +82,9 @@ const MARGIN_ABI = [
   { name: "imBufferBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint16" }] },
   { name: "mmBufferBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint16" }] },
   { name: "insuranceFund", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+  { name: "closeRange", type: "function", stateMutability: "nonpayable", inputs: [{ name: "authId", type: "uint256" }], outputs: [] },
+  { name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "accounts", type: "function", stateMutability: "view", inputs: [{ name: "", type: "address" }], outputs: [{ name: "free", type: "uint256" }, { name: "badDebt", type: "uint256" }] },
   ...SHIP_PARAMS_ABI,
 ] as const;
 
@@ -271,6 +274,13 @@ export function MarginDesk({ spot }: { spot: number }) {
   const { writeContract: approveUsdc, data: approveUsdcTx, isPending: approveUsdcPending, error: approveUsdcError } = useWriteContract();
   const { isLoading: approveUsdcConfirming, isSuccess: approveUsdcSuccess } = useWaitForTransactionReceipt({ hash: approveUsdcTx });
   const { writeContract: buy, data: buyTx, isPending: buyPending, error: buyError } = useWriteContract();
+  const { writeContract: lpWrite, data: lpTx, isPending: lpPending, error: lpError } = useWriteContract();
+  const { isLoading: lpConfirming, isSuccess: lpSuccess } = useWaitForTransactionReceipt({ hash: lpTx });
+  const lpWorking = lpPending || lpConfirming;
+  const { data: acct, refetch: refetchAcct } = useReadContract({ address: mv, abi: MARGIN_ABI, functionName: "accounts", args: [address ?? ZERO], query: { enabled: !!address && enabled, refetchInterval: 10_000 } });
+  const freeMargin = acct ? (acct[0] as bigint) : ZERO_BI;
+  const isMyRange = !!address && rLp !== ZERO && (rLp as string).toLowerCase() === address.toLowerCase();
+  useEffect(() => { if (lpSuccess) refetchAcct(); }, [lpSuccess, refetchAcct]);
   const { isLoading: buyConfirming, isSuccess: buySuccess } = useWaitForTransactionReceipt({ hash: buyTx });
 
   const premium = quoteData?.[0] ?? ZERO_BI;
@@ -420,6 +430,20 @@ export function MarginDesk({ spot }: { spot: number }) {
                 <div className="flex justify-between"><span className="text-gray-400">Range</span><span className="font-mono text-white">#{viewAuthId.toString()} · ${rMin.toLocaleString()} – ${rMax.toLocaleString()} · {rAutoTopUp ? "credit line on" : "no credit line"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Expires</span><span className="font-mono text-white">{rExpiry > ZERO_BI ? new Date(Number(rExpiry) * 1000).toLocaleDateString() : "…"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={rActive ? "text-green-400" : "text-red-400"}>{rActive ? "active" : "closed"}</span></div>
+                {(isMyRange || freeMargin > ZERO_BI) && (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/60">
+                    <span className="text-[10px] text-gray-500">Free margin: {fmtUsdc(freeMargin)}</span>
+                    <div className="flex gap-2">
+                      {freeMargin > ZERO_BI && (
+                        <button onClick={() => lpWrite({ address: mv, abi: MARGIN_ABI, functionName: "withdraw", args: [freeMargin] })} disabled={lpWorking} className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50">Withdraw free</button>
+                      )}
+                      {isMyRange && rActive && (
+                        <button onClick={() => viewAuthId !== null && lpWrite({ address: mv, abi: MARGIN_ABI, functionName: "closeRange", args: [viewAuthId] })} disabled={lpWorking} className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50">{lpPending ? "Confirm…" : lpConfirming ? "…" : "Close range"}</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {lpError && <div className="text-red-400 text-[10px]">{lpError.message.split("\n")[0]}</div>}
               </div>
               {chainStrikes.length > 0 && (
                 <div className="rounded-lg bg-gray-950 overflow-hidden">

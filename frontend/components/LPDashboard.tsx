@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount, useReadContract, useBalance, usePublicClient } from "wagmi";
+import { useAccount, useReadContract, useBalance, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useState, useEffect, useCallback } from "react";
 import { CONTRACTS } from "@/config/wagmi";
 import { fetchAuthorizationsByLp, isLocalChain, subgraphUrlFor } from "@/lib/subgraph";
@@ -39,6 +39,7 @@ const VAULT_ABI = [
       { name: "maxCollateral", type: "uint256", indexed: false },
     ],
   },
+  { name: "revokeAuthorization", type: "function", stateMutability: "nonpayable", inputs: [{ name: "authId", type: "uint256" }], outputs: [] },
 ] as const;
 
 export function LPDashboard() {
@@ -137,6 +138,12 @@ export function LPDashboard() {
   }, [refreshMyAuth]);
 
   const activeAuth = myAuth;
+  // Revoke: withdraw this range so no more fills can pull from the wallet.
+  // JIT means nothing was locked — revoking just closes unfilled capacity.
+  const { writeContract: revoke, data: revokeTx, isPending: revokePending, error: revokeError } = useWriteContract();
+  const { isLoading: revokeConfirming, isSuccess: revokeSuccess } = useWaitForTransactionReceipt({ hash: revokeTx });
+  useEffect(() => { if (revokeSuccess) refreshMyAuth(); }, [revokeSuccess, refreshMyAuth]);
+  const revokeWorking = revokePending || revokeConfirming;
   const { data: ethBalance } = useBalance({ address });
 
   const { data: auth } = useReadContract({
@@ -266,6 +273,24 @@ export function LPDashboard() {
               )}
             </div>
           )}
+
+          {/* Withdraw / revoke: close unfilled capacity. Already-filled options
+              keep their pulled collateral until they expire (reclaim then). */}
+          <div className="flex items-center justify-between pt-1 border-t border-gray-700/60">
+            <span className="text-[11px] text-gray-500">
+              {usedCollateral && usedCollateral > 0
+                ? "Revoking stops new fills; already-sold options keep their collateral until expiry."
+                : "Nothing filled yet — revoke to free this range instantly."}
+            </span>
+            <button
+              onClick={() => activeAuth && revoke({ address: CONTRACTS.aquaVault as `0x${string}`, abi: VAULT_ABI, functionName: "revokeAuthorization", args: [activeAuth.authId] })}
+              disabled={revokeWorking}
+              className="text-xs px-3 py-1 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+            >
+              {revokePending ? "Confirm…" : revokeConfirming ? "Revoking…" : "Revoke range"}
+            </button>
+          </div>
+          {revokeError && <p className="text-red-400 text-[11px]">{revokeError.message.split("\n")[0]}</p>}
         </div>
       ) : (
         <p className="text-gray-600 text-xs">
