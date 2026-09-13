@@ -55,6 +55,7 @@ import json,sys
 app,strategy,tokens,amounts=json.load(sys.stdin)
 print(app); print(strategy); print("["+",".join(tokens)+"]"); print("["+",".join(str(int(a)) for a in amounts)+"]")'; }
 locked() { call $MV 'positions(bytes32,address)(uint256,uint256,uint256,uint64,uint64,address)' $SID $1 | sed -n 3p | num; }
+freebal() { call $MV 'accounts(address)(uint256,uint256)' $1 | sed -n 1p | num; }
 
 # A clean mark: the worst-of-hour window must not still contain a crash
 # from a previous run, or the fill would lock IM off that instead of $3,000.
@@ -100,6 +101,7 @@ warp 3660; post $CRASH_USD
 echo "startAuction:       $(send $KEEPER_KEY $MV 'startAuction(bytes32,address)' $SID $LP)"
 
 echo; echo "── 5. the WATERFALL: the holder must stay covered, so someone takes the writer's place ──"
+LP_LOCKED_BEFORE=$(locked $LP); LP_FREE_BEFORE=$(freebal $LP)   # to compute the default cost at the end
 echo "   order of who covers the gap: writer's own margin → an auction bidder → the backstop pool → the insurance fund"
 if [ "$MODE" = takeover ]; then
   echo "   this run: a BIDDER takes over. They take on the writer's obligation, post full margin, and get a"
@@ -121,6 +123,7 @@ else
   echo "→ the backstop now backs the position with $(usdc $(locked $BACKSTOP)) (it added $(usdc $((P0 - P1))) from the pool); the old writer is liquidated"
 fi
 echo "   the HOLDER never had to do anything — they still hold their $(python3 -c "print(int('$(call $TOKEN 'balanceOf(address)(uint256)' $HOLDER | num)')/1e18)") put; only who stands behind it changed."
+LP_FREE_AFTER=$(freebal $LP)   # any margin handed back to the liquidated writer
 
 echo; echo "── 6. expiry at \$$SETTLE_USD: the holder is paid the put's value in cash ──"
 echo "   payout = 3000 − $SETTLE_USD = $(usdc $(python3 -c "print(max(0, 3000 - $SETTLE_USD) * 1000000)")). (Not \$3,000 — that's the strike; the put is worth the gap to the \$$SETTLE_USD market, cash-settled, no ETH moves.)"
@@ -138,3 +141,18 @@ echo
 echo "holder received  $(usdc $((H1 - H0)))   (intrinsic owed: $(usdc $OWED))"
 echo "backstop pool    $(usdc $(call $BACKSTOP 'totalAssets()(uint256)' | num))   insurance $(usdc $(call $MV 'insuranceFund()(uint256)' | num))   naked notional $(usdc $(call $MV 'nakedNotional()(uint256)' | num))"
 if [ $((H1 - H0)) -eq "$OWED" ]; then echo "holders whole:   ✓ (the crash never touched them — margin + backstop covered the full intrinsic)"; else echo "holders took a haircut (see HolderHaircut event)"; fi
+
+# ── what defaulting cost the liquidated writer ──────────────────────────────
+RETURNED=$(( LP_FREE_AFTER - LP_FREE_BEFORE ))          # margin handed back to it, if any
+NET_FORFEITED=$(( LP_LOCKED_BEFORE - RETURNED ))        # margin it actually lost
+echo
+echo "── what defaulting cost the writer ──"
+echo "margin it had locked        $(usdc $LP_LOCKED_BEFORE)"
+echo "returned to it on liquidation $(usdc $RETURNED)"
+echo "it actually owed (intrinsic)  $(usdc $OWED)"
+echo "net margin forfeited        $(usdc $NET_FORFEITED)"
+if [ "$NET_FORFEITED" -ge "$OWED" ]; then
+  echo "→ DEFAULT COST = $(usdc $((NET_FORFEITED - OWED))): a solvent writer would have paid the $(usdc $OWED) and reclaimed $(usdc $((LP_LOCKED_BEFORE - OWED))); by defaulting it forfeited that too (keeper tip + penalty + the excess kept re-margining the position). The protocol did not eat the loss — the writer overpaid."
+else
+  echo "→ DEFAULT COST = $(usdc $NET_FORFEITED) (its whole margin), and the pool covered the $(usdc $((OWED - NET_FORFEITED))) shortfall beyond it — the tail case (L13), mutualized and capped."
+fi
