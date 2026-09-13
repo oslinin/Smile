@@ -77,7 +77,7 @@ chart. Then click the bars in the builder's collateral panel and say:
 > **"Short call 3,200 with a long above it: 1 ETH on the main vault,
 > 0.06 ETH on SpreadVault. That's the whole thesis in one row."**
 
-### 1:00 — Spreads: a real fill (35 s)
+### 1:00 — Spreads: a real fill (30 s)
 
 Click **Spreads**. Account #0: *Call Credit*, K1 3000 / K2 3200, 1 unit,
 **Approve Aqua & Open Spread → Open Structure → Ship to Aqua** (three
@@ -92,7 +92,7 @@ change / the "You hold 1 unit" line.
 > **"The taker paid the net premium; exactly 0.0625 WETH left the writer's
 > wallet at that block. Nothing was deposited in advance."**
 
-### 1:35 — Margin: crash, margin call, backstop (60 s) — the wow moment
+### 1:30 — Margin: crash, margin call, backstop (60 s) — the wow moment
 
 Click **Risk Monitor** and leave it on screen. In the terminal:
 
@@ -120,7 +120,7 @@ the edit if long).
 Optional second take: `MODE=takeover ./script/margin-lifecycle.sh` — a
 second writer takes the position over instead.
 
-### 2:35 — RFQ: a signed quote (25 s)
+### 2:30 — RFQ: a signed quote (25 s)
 
 Click **RFQ**. Account #0: ship a call range (capacity 1), then in card 2
 set *100 bps inside the formula*, **Sign Quote** (MetaMask signature, no
@@ -131,7 +131,7 @@ gas). Switch to account #1, the quote is already in card 3, **Fill**.
 > the expiry, and pulls the collateral through the identical Aqua
 > allowance. A signed quote changes the price, never the custody model."**
 
-### 3:00 — It's real: Sepolia, The Graph, Arc (45 s) — the load-bearing Graph minute
+### 2:55 — It's real: Sepolia, The Graph, Arc (50 s) — the load-bearing Graph and Arc minute
 
 Switch MetaMask to **Sepolia**. The app follows: **Overview** now shows the
 Sepolia receipts and the line **"● indexed by The Graph — no range cap,
@@ -190,8 +190,11 @@ insurance fund); click one → arcscan.
 > **"And on Circle's Arc, with native USDC as premium, collateral, margin,
 > backstop and gas — ETH is only the price being traded: a call spread
 > escrowing two dollars of USDC, a margined put locking 1.50 USDC instead
-> of 3.00, and a signed RFQ fill. The whole ladder settles in Circle's
-> dollar. The safety pools
+> of 3.00, and a signed RFQ fill. One USDC balance does everything a user
+> needs — nobody ever holds ETH to trade ETH options. The money flows you
+> just saw on Anvil are deployed here: collateral that moves only when a
+> buyer fills, and the flag → grace → auction → backstop → settlement
+> waterfall. The safety pools
 > are funded by Circle's App Kits — a developer-controlled wallet Circle
 > signs for, and Gateway bringing USDC in from Sepolia — no treasury key
 > in the repo."**
@@ -258,6 +261,16 @@ code, limitations, plans).
 | Meaningful work with the data: reasoning, decisions, automation, natural language | 3:00 and 1:35 | `find_opportunities` (Smile IV vs Deribit vs last fill → a trade card), `liquidity_map` → a prefilled Write-a-Range card, `portfolio_greeks` → `hedge_suggestion`; "Explain with the copilot" on the Risk Monitor |
 | Open source, README / SKILL.md a judge can run | 3:45 | Help ↗ (README = Overview; the subgraph's own skill file and the eight trader skills are mentioned in the Skills menu at 3:00); the end card's repo URL |
 | Two-to-four-minute video | whole run | timings above sum to 3:55 — cut, don't overrun |
+
+## Arc's requirements → where they are on screen
+
+| Requirement | Where in the run | What proves it |
+|---|---|---|
+| Meaningful use of Arc and USDC | 2:55 | Overview on Arc: receipts for every vault; the "real money" line ("Circle's native USDC — premium, collateral, spreads, margin, backstop, and gas; ETH is the reference price only"); the cash-settled call spread (2.00 USDC escrow) and the margined put (1.50 USDC) on arcscan |
+| Advanced programmable money flows: conditional payments, on-chain automation, multi-step settlement | 1:30 (shown on Anvil) + 2:55 (deployed on Arc) | Conditional payment = the JIT Aqua pull: collateral moves only at a fill; multi-step settlement = flag → grace → post-flag round → auction → backstop absorb → permissionless settlement → redeem; automation = the keeper that drives it (`keeper/margin.mjs`) and the oracle mirror keeper on Arc; say the sentence "the money flows you just saw on Anvil are deployed here" |
+| Payment, liquidity or treasury workflows using App Kits | 2:55 | Margin tab → "Funded through Circle App Kits": developer-controlled wallet (Circle signs) deposits into the backstop; Gateway moves USDC from Sepolia and funds the insurance fund — three receipts, click one → arcscan; say "no treasury key in the repo" |
+| Why stablecoin-native infrastructure changes what is possible | 2:55 | The sentence "one USDC balance does everything — premium, collateral, margin, gas; nobody holds ETH to trade ETH options"; cash-settled spreads exist *because* Arc has no ether |
+| Core products used | — | Arc ✓, USDC ✓, App Kits ✓ (Gateway, Developer-Controlled Wallets). Not used, and say so if asked: CCTP (Gateway covers the cross-chain leg), StableFX (FX cut — no EUR/USD feed on testnet), Circle Contracts |
 | Continuity pool: pre-existing work documented | 0:00 | the opening line names what existed on September 5; the README's Continuation Track section and every help page's "Pre-existing or EthOnline 2026" column list it |
 
 ## Editing notes
