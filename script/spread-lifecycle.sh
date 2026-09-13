@@ -62,15 +62,15 @@ send $LP_KEY $WETH "approve(address,uint256)" $AQUA $MAX >/dev/null   # max, not
 mapfile -t S < <(call $SPREAD 'getShipParams(uint256)(address,bytes,address[],uint256[])' $AUTH --json | ship_args)
 echo "aqua.ship:        $(send $LP_KEY $AQUA 'ship(address,bytes,address[],uint256[])' "${S[0]}" "${S[1]}" "${S[2]}" "${S[3]}")"
 
-echo; echo "── 2. holder buys $UNITS units ──"
+echo; echo "── 2. holder buys $UNITS units — the escrow is pulled JIT from the writer through Aqua at this fill ──"
 QUOTE=$(call $SPREAD 'quote(uint256,uint256)(uint256,uint256,uint256)' $AUTH $UNITS | num | tr '\n' ' ')
 echo "quote (premium fee escrow): $QUOTE"
 send $HOLDER_KEY $USDC "approve(address,uint256)" $SPREAD $MAX >/dev/null
 LP_WETH_0=$(call $WETH 'balanceOf(address)(uint256)' $LP | num)
-echo "buy:              $(send $HOLDER_KEY $SPREAD 'buy(uint256,uint256,uint256)' $AUTH $UNITS $MAX)"
+echo "buy (fill · JIT pull through Aqua): $(send $HOLDER_KEY $SPREAD 'buy(uint256,uint256,uint256)' $AUTH $UNITS $MAX)"
 LP_WETH_1=$(call $WETH 'balanceOf(address)(uint256)' $LP | num)
 TOKEN=$(call $SPREAD 'spreadTokens(uint256)(address)' $AUTH)
-echo "pulled from writer: $((LP_WETH_0 - LP_WETH_1)) wei  (a naked short leg would lock $UNITS)"
+echo "escrow pulled JIT from writer via Aqua: $((LP_WETH_0 - LP_WETH_1)) wei  (nothing left the wallet until this fill; a naked short leg would lock $UNITS)"
 
 echo; echo "── 3. time passes, the oracle posts the first round after expiry, anyone settles ──"
 cast rpc --rpc-url "$RPC" evm_increaseTime 3700 >/dev/null 2>&1
