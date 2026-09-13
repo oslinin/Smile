@@ -419,7 +419,9 @@ expensive" — is wrong here, and measurably so. The pricing arithmetic
 (`lnWad` Padé series, one integer `sqrtWad`, the staleness spread, two
 size-impact iterations) is a rounding error inside the 198k repeat-fill
 cost, which is in the range of an ordinary Uniswap v3 swap; the design
-already avoids `exp`/`N(d₁)` entirely (Overview §Mathematical Specification).
+already avoids `exp`/`N(d₁)` entirely (Overview §Mathematical Specification;
+the price of that shortcut is that σ is not a Black-Scholes IV — a measured
+real Black-Scholes costs ~5k gas more per evaluation, see Overview §2).
 What actually dominates is **series bootstrapping**: ~840k of the first
 fill is the one-time deployment of that series' plain-ERC-20 OptionToken —
 contract-creation bytes, not math. Moving the calculation off-chain would

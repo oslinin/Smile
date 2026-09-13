@@ -260,6 +260,7 @@ Two things this framing buys: **(1) takers** get a sanity check in familiar unit
 
 $$P = \underbrace{\max(\pm(S - K),\, 0)}_{\text{intrinsic (call/put)}} + \underbrace{S \cdot \sigma_{strike} \cdot \sqrt{T} \cdot \tfrac{\min(S,K)}{\max(S,K)}}_{\text{moneyness-damped time-value}}$$
 
+- **σ is a parametric level, not a Black-Scholes implied vol.** The time-value term has no 1/√(2π) factor and its wing damping is linear, so at σ = 80% this formula charges roughly 2.5× Black-Scholes at the money and more in the wings (S = 2,524, 30 days: $597 vs $242 at K = 2,500; $457 vs $50 at K = 3,200). The model is self-consistent — the hook's feedback and the α/β skew act on this σ — but a Black-Scholes IV back-solved from a fill (as the Trade tab's price chart does) is a different, larger number. Replacing the term with S·N(d₁) − K·N(d₂) costs about 5k more gas per evaluation (measured: 9.4k → 14.7k) and is the planned pricing change for the next router deployment.
 - **Ask** (forward swap direction, opening): rounds against the taker (up).
 - **Bid** (reverse direction, sellback): rounds down. One strategy quotes both sides; the rounding asymmetry is the spread engine.
 - A protocol fee (default 1%) is grossed up **on top of** the Ask via the official SwapVM fee opcode — the LP always nets the full premium. Sellbacks are fee-free.
