@@ -138,7 +138,7 @@
 <p>TL;DR: Standard options market potentially as popular as Robinhood, decentralized as Polymarket.</p>
 <p>A non-custodial, parametric options marketplace that solves three interlocking problems in DeFi options: thin liquidity at each strike, yield-killing collateral lock-up, and the absence of emergent market makers. By combining <strong>1inch Aqua</strong>, <strong>Uniswap v4 Hooks</strong>, and <strong>Chainlink CRE</strong>, LPs can quote an entire strike range from one capital pool — while their collateral keeps earning DeFi yield until a buyer actually matches.</p>
 <hr>
-<h2>Table of Contents</h2>
+<h2 id="table-of-contents">Table of Contents</h2>
 <ol>
 <li><a href="#-the-thesis">The Thesis</a></li>
 <li><a href="#%EF%B8%8F-architecture">Architecture</a></li>
@@ -166,7 +166,7 @@ Table — at <code>/help.html</code> in the deployed frontend, generated from th
 files by <code>frontend/scripts/gen-help.mjs</code>.</p>
 </blockquote>
 <hr>
-<h2>🚀 The Thesis</h2>
+<h2 id="-the-thesis">🚀 The Thesis</h2>
 <p>While prediction markets — binary options on event outcomes — have been widely successful in DeFi (Polymarket, Augur), standard options have not. Prediction markets do not offer many strategies retail traders have been increasingly investing in: selling covered calls to generate yield on held ETH, selling cash-secured puts to acquire ETH at a discount, buying butterflies to express a range-bound view on volatility, etc. The building blocks for this popular market requires a functioning options market with real liquidity across strikes and expiries for standard options (buys and sells of puts and calls). That market has never materialized on-chain: Ribbon and Friktion pioneered DeFi Options Vaults (DOVs) but suffer from trapped liquidity: collateral is locked per strike chosen by the vault manager, leaving the rest of the chain empty. Premia introduced RFQ-based pricing that relies on institutional market makers for quotes, creating a dependency on off-chain liquidity.</p>
 <p>Smile attempts to overcome these limitations to on-chain standard opions trading by using Aqua&#39;s non-custodial LP to remediate:</p>
 <ol>
@@ -228,7 +228,7 @@ quotes — the collateral never left it.</li>
 traders already trade and uses Aqua, SwapVM, Uniswap hooks, and Chainlink to rebuild
 how it&#39;s made.</p>
 <hr>
-<h2>🏗️ Architecture</h2>
+<h2 id="-architecture">🏗️ Architecture</h2>
 <table>
 <thead>
 <tr>
@@ -497,7 +497,7 @@ makers who hedge in milliseconds) may be better served by the signed-quote RFQ
 tier (<a href="#limitations">Limitations, R6</a>), where pros manage their own
 leverage off-chain and the trustless vault never underwrites it.</p>
 <hr>
-<h2>📐 Mathematical Specification</h2>
+<h2 id="-mathematical-specification">📐 Mathematical Specification</h2>
 <h3>1. Multiparameter Volatility Surface</h3>
 <p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>σ</mi><mrow><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>k</mi><mi>e</mi></mrow></msub><mo stretchy="false">(</mo><mi>T</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>σ</mi><mrow><mi>t</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>r</mi></mrow></msub><mo stretchy="false">(</mo><mi>T</mi><mo stretchy="false">)</mo><mo>⋅</mo><mi>max</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mn>0.1</mn><mo separator="true">,</mo><mtext>  </mtext><mn>1</mn><mo>+</mo><mi>α</mi><mo>⋅</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>K</mi><mi mathvariant="normal">/</mi><mi>S</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>+</mo><mi>β</mi><mo>⋅</mo><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>K</mi><mi mathvariant="normal">/</mi><mi>S</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo></mrow><annotation encoding="application/x-tex">\sigma_{strike}(T) = \sigma_{tenor}(T) \cdot \max\!\big(0.1,\; 1 + \alpha \cdot \ln(K/S)^2 + \beta \cdot \ln(K/S)\big)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight" style="margin-right:0.0315em;">ik</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord">0.1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1141em;vertical-align:-0.25em;"></span><span class="mop">ln</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">ln</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></span></p>
 <ul>
@@ -682,7 +682,7 @@ quoting oracle in place of the raw Chainlink feed. Leave both unset to use
 Chainlink Data Feeds for quoting (the default, and what the Sepolia
 addresses above run).</p>
 <hr>
-<h2>🔄 Flow Diagrams</h2>
+<h2 id="-flow-diagrams">🔄 Flow Diagrams</h2>
 <blockquote>
 <p>Color key: 🟢 1inch Aqua · 🩷 Uniswap · 🔵 Chainlink</p>
 </blockquote>
@@ -840,7 +840,7 @@ addresses above run).</p>
     Vault-&gt;&gt;Maker: everything not owed to outstanding holders
 </code></pre>
 <hr>
-<h2>📍 Deployed Addresses (Sepolia)</h2>
+<h2 id="-deployed-addresses-sepolia">📍 Deployed Addresses (Sepolia)</h2>
 <p>Redeployed 2026-09-10 (EthOnline 2026) — the full current stack, on real
 Circle USDC, canonical WETH and the real Chainlink ETH/USD feed. Every
 address, deploy hash and demo transaction: the Sepolia deployment notes;
@@ -910,7 +910,7 @@ address, deploy hash and demo transaction: the Sepolia deployment notes;
 <p><em>Frontend deployed at <strong><a href="https://oslinin.github.io/Smile">https://oslinin.github.io/Smile</a></strong> (WalletConnect enabled). The live site still targets the pre-event v1 contracts (<code>AquaCollateralVault</code> <code>0x5115…f887</code>, incompatible ABI); point a build at <code>.env.sepolia.example</code> to use this deployment.</em></p>
 </blockquote>
 <hr>
-<h2>🛠️ How to Run the Project</h2>
+<h2 id="-how-to-run-the-project">🛠️ How to Run the Project</h2>
 <h3>1. View Live Site (GitHub Pages)</h3>
 <p><strong>URL:</strong> <code>https://oslinin.github.io/Smile</code></p>
 <h3>2. Local Frontend Development</h3>
@@ -1088,7 +1088,7 @@ side panel. It must be served over HTTP (not opened as a local <code>file://</co
 so the browser can <code>fetch()</code> the JSON; the script handles that. Stop it with
 <code>Ctrl+C</code>.</p>
 <hr>
-<h2>End-to-End Demo Walkthrough</h2>
+<h2 id="end-to-end-demo-walkthrough">End-to-End Demo Walkthrough</h2>
 <table>
 <thead>
 <tr>
@@ -1142,7 +1142,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 </tr>
 </tbody></table>
 <hr>
-<h2>📖 Glossary</h2>
+<h2 id="-glossary">📖 Glossary</h2>
 <h3>Ethereum / Blockchain Terms</h3>
 <ul>
 <li><strong>EOA (Externally Owned Account):</strong> A standard Ethereum wallet controlled by a private key (e.g., MetaMask). LPs and traders use EOAs; the protocol never takes custody of their funds.</li>
@@ -1186,7 +1186,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 <li><strong><code>latestRoundData()</code>:</strong> The Chainlink aggregator read returning the latest ETH/USD answer (8-decimal). CRE reads it at the last finalized block so every DON node agrees on the settlement price.</li>
 </ul>
 <hr>
-<h2>🏗️ Project Structure</h2>
+<h2 id="-project-structure">🏗️ Project Structure</h2>
 <pre><code class="language-text">├── lib/                      # Vendored official contracts (compiled unmodified)
 │   ├── aqua/                 # 1inch/aqua — registry, AquaApp base, IAqua
 │   ├── swap-vm/              # 1inch/swap-vm release/1.2 — VM core, opcodes, routers
@@ -1220,7 +1220,7 @@ so the browser can <code>fetch()</code> the JSON; the script handles that. Stop 
 └── foundry.toml              # solc 0.8.30, via_ir
 </code></pre>
 <hr>
-<h2>🧭 EthOnline 2026 — Continuation Track</h2>
+<h2 id="-ethonline-2026-continuation-track">🧭 EthOnline 2026 — Continuation Track</h2>
 <p>Everything above this section is the pre-existing protocol. This section is
 what was built during EthOnline 2026 (September 5–13, 2026) on branch
 <code>EthOnline2026_continuation_track</code>, cut from <code>main</code> at <code>5b4cc63</code>. Plans and
@@ -1519,7 +1519,7 @@ PRIVATE_KEY=0x… ./script/arc-smoke.sh                       # real-USDC fills 
 <li><strong>Arc</strong>: every vault deployed with real USDC and traded (main, Spread, Margin + backstop, RFQ). FX options (USDC/EURC) were cut after the oracle check found no EUR/USD feed on Arc testnet at all (Stork&#39;s pull contract has none and its ETH/USD is stale); Circle Gateway and a Circle developer-controlled wallet fund the insurance fund and backstop pool on Arc (<code>keeper/insurance-gateway.mjs</code>, <code>keeper/backstop-wallet.mjs</code>, real runs recorded in the Arc deployment notes). Arc mainnet launches Sept 16; the mainnet deployment is a follow-up.</li>
 </ul>
 <hr>
-<h2>Technical Stack</h2>
+<h2 id="technical-stack">Technical Stack</h2>
 <ul>
 <li><strong>Smart Contracts</strong>: Solidity 0.8.30 (Foundry, via_ir), on the <strong>official 1inch Aqua + SwapVM</strong> contracts (vendored, unmodified)</li>
 <li><strong>Frontend</strong>: Next.js 16, Tailwind CSS, Wagmi/Viem, recharts; strategy engine built on the MIT <code>black-scholes</code> + <code>greeks</code> packages; price chart on <strong>TradingView Lightweight Charts</strong> (TradingView&#39;s open-source engine, Apache-2.0) fed by Coinbase&#39;s public ETH-USD candles (Kraken fallback) — market context only, the protocol prices off its oracle</li>
@@ -1537,7 +1537,7 @@ The <a href="#overview">Overview</a> explains <em>why</em> the protocol is built
 this page explains <em>how to use it</em>. The AI copilot (bottom-right) has read
 this guide and can walk you through any step or explain a position you
 already hold.</p>
-<h2>The one idea to understand first</h2>
+<h2 id="the-one-idea-to-understand-first">The one idea to understand first</h2>
 <p>On Smile a <strong>writer</strong> (liquidity provider, LP) never deposits collateral
 up front. They <em>authorize</em> a range of strikes and expiries and ship that
 allowance to 1inch Aqua; the collateral stays in their wallet. When a
@@ -1550,7 +1550,7 @@ price permissionlessly; the holder redeems intrinsic value from the
 escrowed collateral, and the writer reclaims the rest.</p>
 <p>Everything below is a variation on where that collateral comes from and
 how much of it is needed.</p>
-<h2>Networks</h2>
+<h2 id="networks">Networks</h2>
 <table>
 <thead>
 <tr>
@@ -1578,7 +1578,7 @@ how much of it is needed.</p>
 <p>The <strong>Overview</strong> tab shows which chain you are on and what is real there.
 The <strong>Receipts</strong> tab lists every deployed contract and recorded demo
 transaction with explorer links.</p>
-<h2>Buying an option (Trade tab)</h2>
+<h2 id="buying-an-option-trade-tab">Buying an option (Trade tab)</h2>
 <p>The tab opens on an ETH/USD candlestick chart (TradingView&#39;s open-source
 Lightweight Charts engine, fed by Coinbase&#39;s public hourly candles with
 Kraken as a fallback). The protocol&#39;s own spot is the dotted blue line;
@@ -1605,7 +1605,7 @@ strategies (20 presets by outlook, or custom legs) and shows the P&amp;L
 curve today / halfway / at expiry, a price × date P&amp;L heat map,
 breakevens, probability of profit, net greeks, and — Smile-specific —
 what a writer would have to lock for each sell leg on each vault.</p>
-<h2>Earning as a liquidity provider</h2>
+<h2 id="earning-as-a-liquidity-provider">Earning as a liquidity provider</h2>
 <h3>One-Click (Earn · One-Click)</h3>
 <p>The simplest way in: choose <em>covered calls</em> (hold WETH) or <em>cash-secured
 puts</em> (hold USDC), a delta band and a tenor; the app authorizes a range at
@@ -1659,7 +1659,7 @@ like; the tab shows the formula Ask next to your quote. A taker fills the
 quote and the collateral is pulled exactly as on the other rungs. Quotes
 are single-use (nonce) and cancellable; there is no sell-back on this
 vault — holders exit through the formula tier.</p>
-<h2>Risks, plainly</h2>
+<h2 id="risks-plainly">Risks, plainly</h2>
 <ul>
 <li><strong>Main vault, spreads</strong>: fully collateralized at the true maximum loss;
 the risk is the option&#39;s own P&amp;L and the oracle at settlement.</li>
@@ -1670,7 +1670,7 @@ for holders after the backstop and insurance are exhausted
 displayed depth is only as firm as the writer&#39;s wallet — the firm-escrow
 tier and the S1 firmness checks exist for that (<a href="#limitations">Limitations</a>).</li>
 </ul>
-<h2>Asking the copilot</h2>
+<h2 id="asking-the-copilot">Asking the copilot</h2>
 <p>Try: <em>&quot;walk me through selling a 30-day cash-secured put&quot;</em>, <em>&quot;what does my
 range look like right now?&quot;</em>, <em>&quot;build me an iron condor around spot&quot;</em>
 (it loads the builder), <em>&quot;what happens to my margined put if ETH drops
@@ -1727,7 +1727,7 @@ ETH candles.</p>
 </ul>
 <p>The mathematics behind the quotes is specified in the Overview&#39;s Mathematical Specification and is not repeated here; the User Guide is the step-by-step walkthrough of the same screens.</p>
 <p><a id="tab-header"></a></p>
-<h2>Header strip (every tab)</h2>
+<h2 id="header-strip-every-tab">Header strip (every tab)</h2>
 <p>The header is the same on every tab: the wallet controls on the top row and the spot price bar beneath it.</p>
 <table>
 <thead>
@@ -1790,7 +1790,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Notes. The spot shown here is a display and quoting convenience for the browser. Contracts price against their own oracle: the Chainlink feed on Sepolia, a settable mock aggregator on Anvil and Arc (fixed at $3,000 on Arc unless someone posts a new round). Rounded to whole dollars.</p>
 <p><a id="tab-story"></a></p>
-<h2>Overview</h2>
+<h2 id="overview">Overview</h2>
 <p>The landing tab. It states the thesis, names the chain you are on, shows the capital-efficiency ladder as live numbers from the connected chain, the protocol&#39;s live counters across every vault, and the recorded testnet receipts.</p>
 <table>
 <thead>
@@ -1888,7 +1888,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Units and rounding. Ladder amounts are whole dollars; counters are whole USDC. Bar widths are <code>value ÷ k</code> as a percentage with a 2% floor so a rung is never invisible.</p>
 <p><a id="tab-chain"></a></p>
-<h2>Trade</h2>
+<h2 id="trade">Trade</h2>
 <p>The buyer&#39;s tab: the price chart with the strategy drawn on it, the option chain (the matrix of quotes by strike), and the strategy payoff builder.</p>
 <h3>Price chart</h3>
 <table>
@@ -2081,7 +2081,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. The chart&#39;s candles are public exchange data on every chain. The tape is the subgraph on Sepolia and Arc and the event log on Anvil; on a public chain without a subgraph the tape stays empty rather than falling back to an RPC scan. Quotes in the matrix depend only on the header spot and the smile constants, so they look the same on every chain; the on-chain price at fill time depends on that chain&#39;s oracle.</p>
 <p><a id="tab-income"></a></p>
-<h2>Earn · One-Click</h2>
+<h2 id="earn-one-click">Earn · One-Click</h2>
 <p>The income writer&#39;s front door: pick a side and a risk band, and the app turns a delta target into a strike range, estimates the yield, and runs approve → authorise → ship as one flow.</p>
 <table>
 <thead>
@@ -2164,7 +2164,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Notes. Every estimate here uses the browser&#39;s smile constants and the header spot; the premium a buyer actually pays is set on-chain at fill time. The range only earns when someone buys against it; nothing leaves the wallet until then.</p>
 <p><a id="tab-lp-auth"></a></p>
-<h2>Earn · Write a Range</h2>
+<h2 id="earn-write-a-range">Earn · Write a Range</h2>
 <p>The manual version of the previous tab: choose strikes, collateral and expiry directly. The copilot&#39;s range prepare card (&quot;Open in Write a Range → review &amp; sign&quot;) prefills this form.</p>
 <table>
 <thead>
@@ -2212,7 +2212,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. Identical on every chain; on Arc the USDC is Circle&#39;s native USDC (18-decimal native asset, 6-decimal ERC-20 view), which the app already accounts for.</p>
 <p><a id="tab-spreads"></a></p>
-<h2>Spreads</h2>
+<h2 id="spreads">Spreads</h2>
 <p><code>SpreadVault</code>: write a credit spread that escrows only its true maximum loss, and buy one.</p>
 <table>
 <thead>
@@ -2300,7 +2300,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. Sepolia&#39;s <code>SpreadVault</code> collateralizes call credits in WETH. Arc&#39;s is cash-settled (no WETH on the chain): the Arc receipt shows exactly 2.00 USDC pulled for 0.01 units of a 2600/2800 call credit spread, K₂−K₁ per unit, where a naked call would need 0.01 ETH.</p>
 <p><a id="tab-margin"></a></p>
-<h2>Margin</h2>
+<h2 id="margin">Margin</h2>
 <p><code>MarginVault</code>: write puts against initial margin instead of the full strike, buy one, and watch the health of the resulting position and of the vault as a whole. Two definitions first. <strong>Initial margin (IM)</strong> is what a writer must lock at the fill: <code>min(K, intrinsic + IM buffer × mark)</code> with the buffer at 50%. <strong>Maintenance margin (MM)</strong> is the floor below which the position can be flagged: the same formula with the 30% buffer. The <strong>mark</strong> is the lowest Chainlink answer in the last hour, never the vol surface.</p>
 <table>
 <thead>
@@ -2418,7 +2418,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. On Arc the recorded fill locked 1.50 USDC for a 0.001-unit $3,000 put against the $3,000 mock mark (intrinsic 0 + 50% × 3,000 × 0.001). On Sepolia the mark comes from the real Chainlink feed. <code>MarginVault.buy</code> reverts when the mark is more than 90 minutes stale, which on Arc happens when nobody has posted a new mock round for a while.</p>
 <p><a id="tab-risk"></a></p>
-<h2>Risk Monitor</h2>
+<h2 id="risk-monitor">Risk Monitor</h2>
 <p>Every margined position on this chain with its health against the live mark, the vault&#39;s risk dials, and the liquidation timeline rebuilt from <code>MarginVault</code> events.</p>
 <table>
 <thead>
@@ -2471,7 +2471,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. On Anvil, <code>./script/margin-lifecycle.sh</code> fills this screen in real time (fill → crash → flag → auction → absorb → settle → finalize → redeem). On Sepolia and Arc only the recorded fill exists, because public chains cannot be time-warped through the grace and auction windows. Arc&#39;s RPC caps log ranges; a failure is shown in the caption rather than hidden.</p>
 <p><a id="tab-rfq"></a></p>
-<h2>RFQ</h2>
+<h2 id="rfq">RFQ</h2>
 <p><code>RfqVault</code>: an LP ships a range, then signs price quotes off-chain in the wallet; a taker fills one. The formula tier stays the public floor; a signed quote can only improve on it.</p>
 <table>
 <thead>
@@ -2549,7 +2549,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. <code>RfqVault</code> is deployed on Arc (recorded fill: 0.688860 USDC versus a 0.695819 formula Ask) and on Anvil; the Sepolia address map leaves it empty, so the tab reports the vault as unset there.</p>
 <p><a id="tab-lp-position"></a></p>
-<h2>My Positions</h2>
+<h2 id="my-positions">My Positions</h2>
 <p>The LP dashboard: the connected wallet&#39;s own most recent active range on the main vault and the collateral state behind it.</p>
 <table>
 <thead>
@@ -2587,7 +2587,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. On a public chain without a subgraph this tab shows no range; there is no RPC fallback there by design (limitations L12a).</p>
 <p><a id="tab-surface"></a></p>
-<h2>Vol Surface</h2>
+<h2 id="vol-surface">Vol Surface</h2>
 <p>A three-dimensional rendering of the implied-volatility surface, produced by the Python service in <code>volsurface/</code> and updated as trades execute.</p>
 <table>
 <thead>
@@ -2635,7 +2635,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Notes. The service mirrors the feedback loop of the on-chain <code>OptionPricingHook</code> (each confirmed buy or sell on the Trade tab is posted to <code>/trade</code> with the leg&#39;s tenor); it does not read the hook&#39;s state. It runs only where the Python service runs, normally <code>./local.sh</code>; the static GitHub Pages build and the Vercel deployment show the offline card.</p>
 <p><a id="tab-proof"></a></p>
-<h2>Receipts</h2>
+<h2 id="receipts">Receipts</h2>
 <p>The recorded on-chain proof for the connected chain: demo transactions, contract addresses and the subgraph endpoint.</p>
 <table>
 <thead>
@@ -2678,7 +2678,7 @@ ETH candles.</p>
 </tbody></table>
 <p>Per chain. Sepolia&#39;s card lists the range, ship and buy receipts; Arc&#39;s lists fills on all four vaults plus the three Circle App Kits treasury transactions.</p>
 <p><a id="tab-copilot"></a></p>
-<h2>Copilot panel</h2>
+<h2 id="copilot-panel">Copilot panel</h2>
 <p>The floating <strong>Copilot</strong> button opens the AI panel on every tab. It is served by <code>/api/copilot</code> (a server route, present on the Vercel deployment and on <code>./local.sh</code>, absent on the static GitHub Pages build) and reads the same tape, chain and documentation the app does. Its full tool list and configuration are described on the Integrations · The Graph page.</p>
 <table>
 <thead>
@@ -2754,7 +2754,7 @@ with the rationale for the ordering.</li>
 deliberately, usually exchanging some market-making efficiency for
 trustlessness. The point of this document is that you should know the price.</p>
 <hr>
-<h2>Part 1 — The concepts, in plain language</h2>
+<h2 id="part-1-the-concepts-in-plain-language">Part 1 — The concepts, in plain language</h2>
 <h3>What an LP on Smile actually is</h3>
 <p>When you authorize a strike range, you are not &quot;depositing into a pool.&quot; You
 are becoming a <strong>market maker</strong>: someone who posts standing prices and waits
@@ -2865,7 +2865,7 @@ volatility as an asset class</strong>: profitable in calm markets, hit hardest i
 turbulent ones. If that risk profile isn&#39;t what you want, don&#39;t ship a wide
 range.</p>
 <hr>
-<h2>Part 2 — The limitations</h2>
+<h2 id="part-2-the-limitations">Part 2 — The limitations</h2>
 <blockquote>
 <p><strong>Status update:</strong> since this document was written, the Phase 1–2
 mitigations have been implemented: L3 (post-trade-only repricing) is
@@ -3166,7 +3166,7 @@ the series for the strikes they quote, so no taker ever pays the deploy;
 and cheaper blockspace, which shrinks the whole floor linearly — a
 deployment choice, not a property of the code.</p>
 <hr>
-<h2>Part 3 — Recommendations</h2>
+<h2 id="part-3-recommendations">Part 3 — Recommendations</h2>
 <blockquote>
 <p><strong>Note:</strong> these recommendations are expanded into a full sequenced build
 plan — with the soft-liquidity solutions, the LP-quoted-vol competitive
@@ -3243,7 +3243,7 @@ the surface&#39;s own re-quote 1/5/30 minutes later. Persistent negative markout
 are the empirical signature of adverse selection and the trigger condition
 for R6. Without this measurement, the Phase-3 decision is a guess.</p>
 <hr>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <table>
 <thead>
 <tr>
@@ -3358,7 +3358,7 @@ tier</strong> whose lockup cost is engineered to ~zero with yield-bearing collat
 and lets takers and routers price the difference. Markets already work this
 way: firm central-limit-order-book quotes coexist with indicative RFQ streams.</p>
 <hr>
-<h2>The five problems</h2>
+<h2 id="the-five-problems">The five problems</h2>
 <table>
 <thead>
 <tr>
@@ -3400,7 +3400,7 @@ way: firm central-limit-order-book quotes coexist with indicative RFQ streams.</
 </tr>
 </tbody></table>
 <hr>
-<h2>P1 — Soft liquidity: price firmness instead of assuming it</h2>
+<h2 id="p1-soft-liquidity-price-firmness-instead-of-assuming-it">P1 — Soft liquidity: price firmness instead of assuming it</h2>
 <h3>S1. Honest depth display (frontend only — ship first)</h3>
 <p>Quoted depth for an authorization must be
 <code>min(maxCollateral − usedCollateral, wallet balance, Aqua allowance)</code>,
@@ -3472,7 +3472,7 @@ liquidity (simulation + reputation, i.e. S1/S3) does not serve users who
 need firmness as a precondition, not a probability.</p>
 </blockquote>
 <hr>
-<h2>P2 — Adverse selection: the hardening set</h2>
+<h2 id="p2-adverse-selection-the-hardening-set">P2 — Adverse selection: the hardening set</h2>
 <p>Specified in <a href="#limitations">Limitations Part 3</a> as R1–R5; summarized
 here because Phases below reference them:</p>
 <ul>
@@ -3488,7 +3488,7 @@ which quoting inside Chainlink&#39;s blind window is positive-EV.</li>
 seconds-tight freshness bound; Chainlink rounds stay for settlement.</li>
 </ul>
 <hr>
-<h2>P3 — Vol discovery: let LPs quote vol, route to the best</h2>
+<h2 id="p3-vol-discovery-let-lps-quote-vol-route-to-the-best">P3 — Vol discovery: let LPs quote vol, route to the best</h2>
 <p>This is the deepest change and the one that most directly answers &quot;can the
 pricing ever be competitive.&quot;</p>
 <h3>S5. Per-range LP-quoted vol</h3>
@@ -3528,7 +3528,7 @@ minutes. Every phase gate below reads this data. Build it first; it is the
 protocol&#39;s profit-and-loss telescope and every argument about &quot;is pricing
 fair&quot; is a guess without it.</p>
 <hr>
-<h2>P4 — Demand: sell the wedge, not the option</h2>
+<h2 id="p4-demand-sell-the-wedge-not-the-option">P4 — Demand: sell the wedge, not the option</h2>
 <h3>S9. One-click covered-call / cash-secured-put product</h3>
 <p>The LP-first product: pick an asset and a yield target → the app ships a
 sensible OTM range (e.g. 10-delta to 25-delta calls, 30 days) → auto-rolls
@@ -3568,7 +3568,7 @@ feeds are easier to manipulate, so long-tail listings need conservative
 parameters (wider spread floors, lower caps, longer staleness bounds — all
 per-authorization args that already exist or arrive in Phase 1).</p>
 <hr>
-<h2>P5 — Capital efficiency</h2>
+<h2 id="p5-capital-efficiency">P5 — Capital efficiency</h2>
 <h3>S4 (again). Yield-bearing collateral</h3>
 <p>Solves the largest chunk: collateral earns its native yield while escrowed,
 so &quot;full collateral&quot; stops meaning &quot;dead capital.&quot;</p>
@@ -3627,7 +3627,7 @@ redeem, on Anvil) and <code>keeper/margin.mjs</code>. See L13 for what it delibe
 does not promise.</p>
 </blockquote>
 <hr>
-<h2>The plan</h2>
+<h2 id="the-plan">The plan</h2>
 <blockquote>
 <p><strong>Executable task-level plan for Phases 0–1</strong> (exact files, signatures,
 tests, commands, written for mechanical execution): see the plan.</p>
@@ -3720,7 +3720,7 @@ requires no liquidation engine.</li>
       <article class="doc"><h1>AI Copilot</h1>
 <p>Smile ships an in-app AI chat assistant — the <strong>Copilot</strong>. It is not
 mentioned in the Overview; this page is its documentation.</p>
-<h2>Where it lives</h2>
+<h2 id="where-it-lives">Where it lives</h2>
 <p>A floating chat button, bottom-right corner of every tab in the app
 (<code>frontend/components/copilot/CopilotPanel.tsx</code>). Click it to open a
 slide-over chat panel with a few starter prompts:</p>
@@ -3734,7 +3734,7 @@ slide-over chat panel with a few starter prompts:</p>
 on-chain answers always match what&#39;s visibly on screen — the server prices
 with the same code the payoff builder uses, and reads the same connected
 wallet address wagmi has.</p>
-<h2>Turning it on</h2>
+<h2 id="turning-it-on">Turning it on</h2>
 <p>The Copilot is hidden unless <code>NEXT_PUBLIC_COPILOT=1</code> is set (it&#39;s absent on
 the static GitHub Pages export, which has no API server to talk to). Even
 with the flag on, the backend (<code>app/api/copilot/route.ts</code>) needs an LLM
@@ -3755,7 +3755,7 @@ to pin a specific one instead (e.g. <code>anthropic/claude-3.5-sonnet</code>).</
 panel&#39;s settings gear lets a visitor paste their own Anthropic/OpenAI/Google/
 OpenRouter key, stored only in that browser&#39;s <code>localStorage</code> and sent
 per-request via headers — never persisted server-side.</p>
-<h2>What it can actually do</h2>
+<h2 id="what-it-can-actually-do">What it can actually do</h2>
 <p>The Copilot is tool-calling, not free-floating chat — every substantive
 answer comes from one of these (<code>frontend/lib/copilot/tools.ts</code>):</p>
 <table>
@@ -3872,7 +3872,7 @@ copilot cannot send a transaction.</p>
 <p><code>get_positions</code> and <code>portfolio_risk</code> read the same tape now: the
 <code>MAX_AUTHS = 50</code> cap and the per-strike <code>N+1</code> RPC scan that used to blind
 them past 50 ranges (<a href="#limitations">L12a</a>) are gone on public networks.</p>
-<h2>Skills</h2>
+<h2 id="skills">Skills</h2>
 <p>The copilot&#39;s behaviour is packaged as <strong>skills</strong> — <code>frontend/skills/*.md</code>
 in the <code>SKILL.md</code> convention (frontmatter <code>name</code>, <code>description</code>,
 <code>starter</code>; the body is what the model follows). The <strong>Skills</strong> button in
@@ -3922,7 +3922,7 @@ prompt as &quot;Active skills&quot;.</p>
 <td>same strike, two expiries with per-leg <code>expiryDays</code>; term structure; theta/vega reading</td>
 </tr>
 </tbody></table>
-<h2>MCP servers</h2>
+<h2 id="mcp-servers">MCP servers</h2>
 <p>The settings gear has an <strong>MCP servers</strong> list (name, URL, bearer token —
 kept in this browser, sent per request in a header the same way the BYOK
 key is). The copilot opens each server for the request and merges its
@@ -3937,7 +3937,7 @@ config: <code>.mcp.json.example</code> at the repo root (Claude Code / Cursor), 
 the subgraph notes are the agent-facing description of Smile&#39;s subgraph —
 entities, canonical queries, endpoints, units — so an AI environment can
 query <code>smile-sepolia</code> without reading the schema.</p>
-<h2>Where the data comes from</h2>
+<h2 id="where-the-data-comes-from">Where the data comes from</h2>
 <table>
 <thead>
 <tr>
@@ -3976,11 +3976,11 @@ query <code>smile-sepolia</code> without reading the schema.</p>
     </section>
     <section id="page-aqua" class="page" data-mermaid="false">
       <article class="doc"><h1>1inch Aqua and SwapVM in Smile</h1>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>Smile is a non-custodial marketplace for fixed-expiry, cash-settled European options on ETH. Every option sold on Smile is backed by collateral that a liquidity provider (LP) has committed through <strong>1inch Aqua</strong>, a shared-liquidity layer in which a maker&#39;s tokens stay in the maker&#39;s own wallet until the moment a trade actually needs them. Smile&#39;s pricing for covered calls runs inside <strong>1inch SwapVM</strong>, a small on-chain virtual machine that executes a maker&#39;s strategy as a program of opcodes; Smile adds one custom opcode that prices an option.</p>
 <p>This page collects everything Smile builds on Aqua and SwapVM: the original vault from before EthOnline 2026, and the three sibling vaults built at the event. Each sibling vault reuses the identical custody model and changes exactly one thing: how much collateral a spread locks (<code>SpreadVault</code>), how much margin a put writer posts (<code>MarginVault</code>), or who sets the price (<code>RfqVault</code>). The main vault&#39;s bytecode was never modified during the event.</p>
 <p>Terms are defined at first use, and a glossary closes the page.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -4051,12 +4051,12 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 </tr>
 </tbody></table>
 <p>The Foundry suite grew from 82 tests before the event to 200 at the time of writing, all passing.</p>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p><strong>The problem Aqua solves.</strong> On-chain options venues before Smile fell into two families. DeFi Option Vaults (DOVs) such as Ribbon and Friktion lock collateral into a vault at a strike chosen by the vault manager; every other strike on the chain sits empty, and the locked capital earns nothing while it waits. Request-for-quote venues such as Premia rely on institutional market makers to stream prices off-chain, which reintroduces a dependency on a handful of counterparties. Neither produces a full, standing options chain with real depth at every strike.</p>
 <p>Aqua changes the cost structure of quoting. An LP on Smile does not deposit anything. The LP <em>authorizes a range</em> (a span of strikes at one expiry) and <em>ships</em> an Aqua strategy that describes it. The LP&#39;s WETH or USDC remains in the LP&#39;s wallet, lendable and yield-bearing, until a taker buys a specific strike. At that moment the vault performs a just-in-time (JIT) pull of exactly the collateral that one fill needs. Quoting an entire strike chain therefore costs an LP nothing in idle capital, which is the precondition for the deep, wide market that standard options require.</p>
 <p><strong>The problem SwapVM solves.</strong> A covered call is a swap of premium (USDC) for collateral (WETH), so it fits SwapVM&#39;s shape exactly: the taker sends USDC, the maker&#39;s WETH is pulled through Aqua and escrowed by the vault, and an <code>OptionToken</code> is minted to the taker. Rather than build a separate quoting contract, Smile expresses the option price as a SwapVM instruction so that the price is computed atomically inside the same swap that executes it. There is no off-chain quote to go stale or to be front-run.</p>
 <p><strong>The problem the sibling vaults solve.</strong> Full collateralization was a deliberate choice (see L8 below), but it is expensive for the users Smile is built for. A 3000/3200 call credit spread has a worst case of 200 USD per unit, yet the main vault margins the short leg as if it were naked and locks a full 1 WETH. A cash-secured put writer must post the entire strike even when the put is far out of the money. Professional makers with their own pricing models had no way to quote inside the protocol&#39;s formula. The three event vaults address exactly these three gaps without touching the promise the main vault makes.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>For LPs (option writers).</strong></p>
 <ul>
 <li>Collateral stays in the LP&#39;s wallet and keeps earning until a fill. No other options venue, on-chain or off-chain, lets a maker quote a chain with capital that is simultaneously deployed elsewhere.</li>
@@ -4071,7 +4071,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <li>A written option on the main vault and on <code>SpreadVault</code> can always pay: the escrow is the structure&#39;s maximum payout to the wei. The margin tier is opt-in and labelled as such.</li>
 </ul>
 <p><strong>Against the alternatives.</strong> Deribit offers firm depth but custody and margin risk on a centralized venue. Panoptic removes the pricing oracle by streaming fees from Uniswap v3 positions, but has no expiries, no upfront credit, and forced liquidations. Ribbon-style DOVs lock capital at one strike. Smile keeps the instrument traders already know, fixed-expiry vanillas with known premiums, and rebuilds the market-making stack around Aqua so that quoting the whole chain is nearly free.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>The custody model: ship, then pull under the reentrancy guard</h3>
 <p>An LP calls <code>authorizeRange</code> on a vault, which records the range and computes a <em>strategy hash</em>. For calls this hash is the hash of a SwapVM order; for puts it is the hash of an abi-encoded terms blob, with the vault itself as the Aqua application. The LP then calls <code>Aqua.ship(app, strategy, tokens, amounts)</code> with the parameters the vault exposes through <code>getShipParams</code>. Nothing moves at ship time.</p>
 <p>When a taker buys a put, the vault re-enters itself through an external function so that Aqua&#39;s <code>nonReentrantStrategy</code> guard brackets the pull. The premium goes straight from the buyer to the LP, the fee to the fee recipient, and then exactly <code>collateralNeeded</code> is pulled from the LP wallet into the vault.</p>
@@ -4313,7 +4313,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
         this.execPull(r.lp, r.strategyHash, msg.sender, r.feeRecipient, r.premiumToken, r.collateralToken, lpPremium, fee, collateral);
 </code></pre>
 <p>The quote type is <code>Quote(uint256 authId,uint256 strike,uint256 maxAmount,uint256 premiumPerUnit,uint256 ttl,uint256 nonce)</code>. Nonces are cancellable by the LP at any time. There is deliberately no <code>close()</code> in this vault, so holders are never captive to a market maker&#39;s uptime; sellbacks stay on tier 1. The Anvil lifecycle shows a formula Ask of 691.93 USDC beaten by a signed quote of 685.01, 1 WETH pulled just-in-time at the fill, and the second fill of the same nonce reverting with <code>QuoteUsed</code>. On Arc testnet a real-USDC signed fill executed at 0.688860 against a 0.695819 formula Ask.</p>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <p>The relevant entries in <a href="#limitations">Limitations</a> are:</p>
 <ul>
 <li><strong>L8, full collateralization is capital-inefficient on purpose.</strong> The main vault locks 1 WETH per call unit and the full strike per put unit. Aqua softens this because the collateral is unrehypothecated and keeps earning until the fill, but it does not remove it. <code>SpreadVault</code> and <code>MarginVault</code> are the two rungs of the capital-efficiency ladder built to address it.</li>
@@ -4326,7 +4326,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <li><strong>L13, bad debt in the opt-in margin tier.</strong> The haircut path exists. The seven-times ceiling and the gap-40 test bound it, they do not eliminate it: a gap larger than 40% from the maintenance point within one heartbeat can exceed the pool. The credit line is consent, not collateral. Takeover and absorb move whole positions only.</li>
 <li><strong>Scope cuts recorded in the code.</strong> <code>SpreadVault</code> validates iron-condor strikes but does not price or fill them. <code>MarginVault</code> covers puts only; a call shortfall is in WETH and has no USDC waterfall yet. A full liquidation run has been demonstrated on Anvil only, since public testnets cannot be time-warped; the fill itself is live on Sepolia and Arc.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <p>The entries in <a href="#solutions">Solutions</a> and the plan:</p>
 <ul>
 <li><strong>S12, defined-risk netting.</strong> Implemented at the event as <code>SpreadVault</code> (tasks A1 through A4). Task A5, debit spreads collateralized by the long <code>OptionToken</code> under the dominance result, was optional in the plan and was cut first. Iron condor pricing (max-not-sum escrow of the two sides) is designed and strike-validated but not yet fillable. The optional SwapVM opcode for the call-credit leg was scoped and not attempted; a correct SwapVM-free <code>SpreadVault</code> is still an Aqua app.</li>
@@ -4335,7 +4335,7 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 <li><strong>S4, the firm tier.</strong> <code>FirmEscrow</code> ships the MVP (plain collateral, firm Ask depth). The full version, yield-bearing escrow in wstETH and sDAI, is gated on fill-reliability data (S3) and firm-tier uptake.</li>
 <li><strong>S10, distribution through the 1inch ecosystem</strong>, remains a plan item and is not addressed by any code on this branch.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>Aqua.</strong> 1inch&#39;s shared-liquidity protocol. A maker registers a strategy with an application and keeps the tokens in the maker&#39;s own wallet; the application may pull tokens against that strategy when a trade executes.</li>
 <li><strong>AquaApp.</strong> The base contract an application inherits to interact with Aqua. Every Smile vault is an AquaApp; for puts and for the three sibling vaults, the vault itself is the application.</li>
@@ -4368,10 +4368,10 @@ query <code>smile-sepolia</code> without reading the schema.</p>
     </section>
     <section id="page-chainlink" class="page" data-mermaid="false">
       <article class="doc"><h1>Chainlink in Smile</h1>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>Smile is a non-custodial marketplace for cash-settled European options on ETH. Every such option needs two prices from the outside world: a <em>spot price</em> while the option is being quoted, and a single <em>settlement price</em> at expiry that decides every payout. Chainlink supplies both. The Chainlink ETH/USD <em>data feed</em> (an on-chain price aggregator updated by a decentralized oracle network) is read for live quoting and for the margin mark, and its on-chain round history is what makes expiry settlement <em>permissionless</em>: anyone can settle a series by naming the first Chainlink round after expiry, and the contract verifies that claim itself. The Chainlink Runtime Environment (CRE) provides a second, scheduled settlement path in which a decentralized oracle network (DON) reads the same feed and writes the settlement price through a signed report.</p>
 <p>Chainlink was part of Smile before EthOnline 2026 and is reused, unchanged, by every vault built at the event. Each new vault (<code>SpreadVault</code>, <code>MarginVault</code>, <code>RfqVault</code>) is deployed with its own instance of the settlement registry pointed at the same feed. The one piece of Chainlink-facing logic that is new at the event is <code>MarginVault</code>&#39;s worst-of-hour mark, which walks the feed&#39;s round history to compute a margin price that trading activity cannot move.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -4442,18 +4442,18 @@ query <code>smile-sepolia</code> without reading the schema.</p>
 </tr>
 </tbody></table>
 <p>The Sepolia deployment reads the canonical Chainlink ETH/USD feed at <code>0x694AA1769357215DE4FAC081bf1f309aDC325306</code>. The CRE workflow configuration points at the same feed.</p>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p>A parametric option is a contract that pays a formula of one number: the price of the underlying at expiry. A holder of a 3,000 call expiring today is owed <code>max(S − 3000, 0)</code> per unit, where <code>S</code> is the settlement price. If <code>S</code> can be chosen by anyone with an interest in the outcome, the option is worthless as an instrument, because the writer and the holder disagree about <code>S</code> in exactly the cases where money is at stake. The settlement price therefore has to come from somewhere neither party controls, and the <em>choice</em> of which price counts has to be verifiable by the contract rather than asserted by a caller.</p>
 <p>Chainlink&#39;s data feeds solve the first half. The ETH/USD feed is an <em>aggregator</em>: a contract whose answer is the median of independent node reports, updated whenever the price moves more than a deviation threshold or a heartbeat interval elapses. Its history is kept on-chain as numbered <em>rounds</em>, each with the answer and the timestamp at which it was updated.</p>
 <p>The on-chain round history solves the second half. Because every round is retrievable by number, a contract can check a caller&#39;s claim that &quot;round N is the first round at or after expiry&quot; without trusting the caller: it reads round N and confirms its timestamp is at or after expiry, then reads round N − 1 and confirms its timestamp is before expiry. Two reads prove the claim. Nobody can <em>cherry-pick</em> a later, more favorable round, because the predecessor check fails for any round after the first.</p>
 <p>Liveness is the remaining concern. If settlement required a specific party to act, a series could stay open indefinitely. With permissionless settlement, the liveness of expiry reduces to the liveness of the feed itself: as long as Chainlink keeps publishing, anyone (the holder, the writer, a keeper, or the CRE) can close the series. The CRE path exists so that a series settles on schedule even when nobody races to call the permissionless function.</p>
 <p>Quoting has the same dependency in a weaker form. The premium formula needs the current spot. A stale spot is a free option for whoever notices first, so every read is guarded by a maximum age, and the spread widens with the age of the round.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>Trustless expiry for both sides.</strong> A holder does not need the writer, the protocol team, or any keeper to be honest or online to be paid. The holder can settle the series against the feed&#39;s own history and redeem. A writer can likewise settle and reclaim the unowed remainder of their collateral. This is the property that lets Smile promise that a written option always pays: collateral is fully escrowed at the fill, and the price that unlocks it is verified by the contract.</p>
 <p><strong>A margin mark that trading cannot move.</strong> <code>MarginVault</code>, the opt-in margined-put tier built at the event, prices the writer&#39;s margin off the <em>lowest</em> Chainlink answer in the last hour, never off the vault&#39;s own volatility surface. The implied volatility that Smile&#39;s pricing hook maintains is bumped by every trade, so a margin rule based on it could be pushed around by anyone willing to trade. A rule based only on the oracle&#39;s round history cannot be. The test suite includes a check that four hundred sigma bumps leave the margin requirement bit-identical.</p>
 <p><strong>A single, auditable settlement number per series.</strong> Every series is registered once with the settlement registry and its settlement price is written exactly once, by either path, with an event naming the settler. Holders, writers, the subgraph, and the AI copilot all read the same number.</p>
 <p><strong>A scheduled closer without a trusted operator.</strong> The CRE workflow is not a privileged server. It is a workflow executed by a decentralized oracle network that reads the feed at the last finalized block, so every node observes the same value, and delivers a signed report. The only address that can write through that path is the forwarder fixed at deployment.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>Quoting: the staleness-guarded feed read</h3>
 <p>Every quote begins with a read of <code>latestRoundData()</code>. The read is rejected if the answer is not positive or if the round is older than <code>maxStaleness</code> seconds. The age is returned as well, so that the spread can widen with it. The three copies of this read are deliberately identical; the library comment records that the new vaults&#39; wei-exact tests depend on the arithmetic order.</p>
 <p><code>src/swapvm/OptionPremiumInstruction.sol</code></p>
@@ -4670,7 +4670,7 @@ function latestRoundData()
     return (0, int256(p.price), 0, p.publishTime, 0);
 }
 </code></pre>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <p>The numbered items refer to <a href="#limitations">Limitations</a>.</p>
 <ul>
 <li><strong>L1, stale-quote sniping.</strong> A quote is priced off the last published round. The staleness guard rejects an <em>old</em> round, but it cannot reject a <em>fresh round that is already wrong</em>. The staleness-scaled spread (R3) prices this continuously rather than removing it.</li>
@@ -4682,7 +4682,7 @@ function latestRoundData()
 <li><strong>Bounded round walk.</strong> The mark inspects at most sixty-four rounds. On a feed that updates more than sixty-four times an hour, the window is effectively shorter than an hour.</li>
 <li><strong>L13, the margin tier&#39;s bad debt.</strong> The mark is manipulation-resistant, but a gap larger than the maintenance buffer between rounds can still leave a shortfall; the waterfall behind the holder (backstop, insurance, haircut) is the answer, not the oracle.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <p>The numbered items refer to <a href="#limitations">Limitations</a>, Part 3, and <a href="#solutions">Solutions</a>.</p>
 <ul>
 <li><strong>R5, pull-oracle quoting.</strong> <code>PythSpotAdapter</code> is built and deploy-opt-in. Enabling it on a public deployment closes most of the L1 latency gap and shrinks L2 from &quot;0.5% deviation&quot; to sub-second drift, at the cost of the taker posting an update. Chainlink Data Streams is named as the alternative pull source.</li>
@@ -4692,7 +4692,7 @@ function latestRoundData()
 <li><strong>S7, an external volatility anchor.</strong> Not an oracle for price but for implied volatility; it is gated on evidence that the passive surface drifts, because it adds an oracle dependency.</li>
 <li><strong>Cut at the event, on purpose.</strong> FX options on Arc (no feed), and any change to the main vault&#39;s oracle path; every new vault reuses the existing read unchanged.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>Aggregator.</strong> The Chainlink contract that holds a feed&#39;s answer. Its value is the median of independent node reports, exposed through <code>latestRoundData()</code> and <code>getRoundData(roundId)</code>.</li>
 <li><strong>Data feed.</strong> A Chainlink price feed such as ETH/USD: an aggregator, updated by a decentralized oracle network, that publishes a price on-chain.</li>
@@ -4723,7 +4723,7 @@ function latestRoundData()
     </section>
     <section id="page-uniswap" class="page" data-mermaid="false">
       <article class="doc"><h1>Uniswap in Smile</h1>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>Smile uses Uniswap in two roles. On-chain, a <strong>Uniswap v4 hook</strong> named
 <code>OptionPricingHook</code> holds the protocol&#39;s implied-volatility surface: the
 volatility number that every option premium is computed from lives in the
@@ -4743,7 +4743,7 @@ sigma through the shared <code>SmilePremiumLib</code>, and the AI copilot&#39;s
 screening prices agree with what the chain would charge.</p>
 <p>Terms used below are defined at first use and collected in the glossary at
 the end.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -4823,7 +4823,7 @@ the end.</p>
 <td>pre-existing</td>
 </tr>
 </tbody></table>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p>An options market needs two things a spot exchange does not: a price for
 <em>volatility</em>, and a venue in which to hedge.</p>
 <p><strong>A price for volatility.</strong> An option premium is mostly a bet on how much the
@@ -4855,7 +4855,7 @@ days. The README&#39;s design note records the alternative (an RFQ-style signed
 quote, verified on-chain much as a CRE report is) and the reason it was
 deferred: blending feedback across neighbouring buckets would let a trade at a
 bucket edge nudge a bucket nothing traded in.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>Price impact for volatility.</strong> On a spot exchange, a large buy walks the
 book and the next buyer pays more. Smile&#39;s feedback loop gives options the
 same property: each buy raises the traded tenor&#39;s sigma by gamma, each
@@ -4879,7 +4879,7 @@ can therefore read Smile&#39;s surface risk in the units they already manage.</p
 for the exact premium amount (an <code>EXACT_OUTPUT</code> quote), a buyer who holds
 only ETH sees a single flow: swap, approve, buy. The premium is a USDC amount
 throughout the protocol; the swap is the on-ramp.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>The surface: tenor buckets and <code>sigmaFor</code></h3>
 <p>Sigma is stored per <em>tenor bucket</em>, that is, per band of time to expiry. Four
 bands cover the term structure, and <code>sigmaFor</code> returns the band a given expiry
@@ -5130,7 +5130,7 @@ back-compat view, <code>setBeta</code> access control, and downside skew under a
 negative beta. A real v4 hook address must encode the before-swap and
 after-swap flags in its low byte (<code>address &amp; 0xFF == 0xC0</code>), which the
 contract&#39;s header comment records for a mined deployment.</p>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <p>The numbered items refer to <a href="#limitations">Limitations</a>.</p>
 <ul>
 <li><strong>L3, repricing lands after the trade.</strong> The bump is applied after the
@@ -5185,7 +5185,7 @@ WETH/USDC regardless of the connected chain, and the premium swap targets
 mainnet as well; on testnets the Chainlink fallback supplies the displayed
 spot.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <p>The numbered items refer to <a href="#solutions">Solutions</a>.</p>
 <ul>
 <li><strong>S5, per-range LP-quoted vol.</strong> The instruction and the library already
@@ -5209,7 +5209,7 @@ quote from any model, and the formula surface remains the public floor.</li>
 <li><strong>Live v4 pool.</strong> Deploying the OptionToken pool with a mined hook address
 would put <code>beforeSwap</code> and <code>afterSwap</code> on a public network.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>Uniswap v4 hook.</strong> A contract that the Uniswap v4 pool manager calls at
 fixed points in a pool&#39;s lifecycle. A hook&#39;s address encodes which
@@ -5299,7 +5299,7 @@ what it does not do yet, and what comes next. All of the work described here
 was built during EthOnline 2026 on the <code>EthOnline2026_continuation_track</code>
 branch. Terms are defined at first use and collected in the glossary at the
 end.</p>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>The Graph is a decentralised indexing protocol: it watches a blockchain,
 runs user-written code on every relevant event, and stores the result in a
 database that can be queried with GraphQL, a query language in which the
@@ -5326,7 +5326,7 @@ hedge, and prepares the range an LP might write or the quote a market
 maker might sign. The user signs; the agent never holds a key. The
 copilot&#39;s know-how ships as portable skill files, and it can connect to
 The Graph&#39;s own Subgraph MCP server as well as any server the user adds.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -5416,7 +5416,7 @@ The Graph&#39;s own Subgraph MCP server as well as any server the user adds.</p>
 <td>EthOnline 2026</td>
 </tr>
 </tbody></table>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p><strong>An on-chain options venue has no public tape.</strong> On a centralised
 exchange the order book, the last trade and the open interest of every
 instrument are published continuously. On a blockchain those facts exist
@@ -5443,7 +5443,7 @@ instrument&quot; as single, cheap questions. Those are precisely the queries a
 subgraph answers. Without one, every copilot answer about positions or
 liquidity would rest on the same capped scan, and every answer would be
 suspect past the cap.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>A trading coach on live data.</strong> The copilot&#39;s second tool set reads the
 tape and behaves like a desk analyst. <code>find_opportunities</code> prices every
 live strike on every active range at the vault&#39;s own current volatility,
@@ -5477,7 +5477,7 @@ schema.</p>
 per unit and the implied volatility of each fill for a chosen instrument,
 so a trader sees whether the vault&#39;s volatility feedback loop has moved
 the price of a strike, not only the price of the underlying.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>Entities</h3>
 <p>The schema defines four entities. <code>Instrument</code> is one strike of one range,
 identified by its <code>OptionToken</code> address; open interest is bought minus
@@ -5910,7 +5910,7 @@ percent between batches so that premiums and implied volatility move
 across the tape. <code>./local.sh</code> runs it by default (<code>SEED_TRADES=100</code>; set
 <code>0</code> to skip). The resulting tape contains eighty-three buys and seventeen
 sellbacks across fifty-four simulated hours.</p>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <ul>
 <li><strong>Transfers of option tokens are not indexed.</strong> <code>Position</code> is credited on
 <code>OptionBought</code> and debited on <code>OptionClosed</code> and <code>Redeemed</code>. An ERC-20
@@ -5946,7 +5946,7 @@ expiries; the nearest match is a reference, not a like-for-like quote.
 The skills instruct the copilot to call something cheap only when both
 the reference comparison and the last-fill comparison agree.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <p>The phase-two status table and cut list in
 the Graph plan record what remains.</p>
 <ul>
@@ -5967,7 +5967,7 @@ puts and signed-quote fills.</li>
 Deribit market-data server and a transaction-simulation server are the
 natural next two, each with a skill naming when to call it.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>API key (Gateway).</strong> The credential created in Studio that authorises
 queries to the gateway and against which they are metered. In Smile it is
@@ -6057,12 +6057,12 @@ strikes, option amounts and WETH collateral in the schema.</li>
     <section id="page-arc" class="page" data-mermaid="false">
       <article class="doc"><h1>Circle: Arc, USDC and the Circle App Kits</h1>
 <p>This page describes how Smile uses Circle&#39;s products: the Arc blockchain, the USDC stablecoin on Arc and on Sepolia, and the two Circle App Kits (Gateway and Developer-Controlled Wallets) that fund the margin tier&#39;s treasury. It is written for a reader who knows what an option is but has not read the rest of the documentation. Every term of art is defined where it first appears, and a glossary closes the page.</p>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>Smile is a non-custodial venue for European-style options on ETH. On Circle&#39;s Arc testnet, the entire Smile stack is deployed with <strong>Circle&#39;s real Arc USDC</strong> as the only dollar in the system. On that chain, USDC is the native gas asset, and the contract at <code>0x3600000000000000000000000000000000000000</code> is its ERC-20 view. One balance therefore pays premiums, protocol fees, put collateral, initial margin, backstop-pool deposits, insurance-fund deposits, and transaction gas.</p>
 <p>Four vaults are live on Arc and each has executed at least one real fill: the single-leg <code>AquaCollateralVault</code>, the defined-risk <code>SpreadVault</code>, the margined-put <code>MarginVault</code> with its <code>MarginBackstop</code> pool, and the signed-quote <code>RfqVault</code>. The application serves Arc from the same build as Anvil and Sepolia, and a dedicated subgraph on The Graph indexes the Arc deployment.</p>
 <p>Two keeper scripts added on 2026-09-11 use Circle&#39;s App Kits to fund the margin tier&#39;s safety funds without any private key for the treasury living in this repository: <code>keeper/insurance-gateway.mjs</code> moves USDC from Sepolia to Arc through Circle Gateway and deposits it into the insurance fund, and <code>keeper/backstop-wallet.mjs</code> operates a Circle developer-controlled wallet on Arc that deposits into the backstop pool.</p>
 <p>Arc has no ether, so on Arc ETH is the reference price only. Puts, put spreads, margined puts, premiums, fees and gas were USDC from the first deploy; on 2026-09-13 the <code>SpreadVault</code> was redeployed cash-settled, so call credit spreads escrow K2−K1 USDC per unit and settle in USDC as well. What remains mock is stated plainly throughout: the ETH/USD price feed (a keeper mirrors Sepolia&#39;s Chainlink answer into it every 30 minutes) and, for the covered calls of the main vault and <code>RfqVault</code> only, a WETH stand-in, because a covered call needs the asset itself and Arc has none.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -6132,16 +6132,16 @@ strikes, option amounts and WETH collateral in the schema.</li>
 <td>Pre-existing; EthOnline 2026</td>
 </tr>
 </tbody></table>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p><strong>A stablecoin-native options venue.</strong> The put side of an options market is a dollar business. A cash-secured put is collateralized with the strike price in dollars, its premium is quoted in dollars, and its settlement pays the holder a dollar amount. Smile already used USDC for premiums, fees and put collateral on every chain. On Arc, the chain&#39;s gas asset is also USDC, so the last non-dollar dependency disappears: a put writer or a put buyer holds one asset and needs nothing else to transact. The <code>MarginVault</code> extends the same property to the margin tier, where initial margin, the backstop pool and the insurance fund are all USDC as well. The result is a venue whose quote currency is the chain&#39;s native dollar, which is the property the phrase &quot;stablecoin-native&quot; is meant to name.</p>
 <p><strong>Real USDC rather than a mock.</strong> Deploying on Arc with a mock USDC would have proven nothing that Anvil does not already prove. The deploy script&#39;s Arc branch therefore points at Circle&#39;s actual USDC contract, and every recorded fill moved real testnet USDC. The two things that remain mock, WETH and the ETH/USD feed, are mock because Arc testnet does not yet provide real ones; the deploy script and the deployment notes say so explicitly rather than leaving the reader to discover it.</p>
 <p><strong>Treasury custody without a key in the repository.</strong> The margin tier depends on two pools of capital that must be funded by someone: the backstop pool, which absorbs positions nobody bought at auction, and the insurance fund, which is drawn after the backstop. A protocol treasury that funds those pools from a private key stored in a script is a liability. Circle&#39;s Developer-Controlled Wallets let the treasury be a wallet that Circle custodies and signs for; the only credential in the operator&#39;s possession is an entity secret, and the repository holds neither it nor any private key. Circle Gateway addresses the complementary problem of getting USDC onto Arc from wherever it already sits, without a bridge contract of Smile&#39;s own and without a wrapped token.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>For traders.</strong> A buyer of a put on Smile-on-Arc funds one balance, pays the premium and the gas from it, and receives settlement into it. There is no second gas token to acquire and no wrapped asset to unwrap. This is the user experience of a centralized, USD-settled venue such as Deribit&#39;s USDC-margined products, delivered by a non-custodial contract on a public chain.</p>
 <p><strong>For liquidity providers.</strong> A put writer&#39;s collateral stays in their own wallet until a buyer matches, is pulled just in time through 1inch Aqua, and is denominated in the same asset that pays the writer&#39;s premium and gas. A writer on the margin tier posts initial margin instead of the full strike (1.50 USDC instead of 3.00 USDC in the recorded Arc fill), and the capital that protects holders when a writer fails is held in USDC pools funded through Circle&#39;s own tooling.</p>
 <p><strong>For the protocol treasury.</strong> The backstop pool is a yield-bearing treasury position: depositors receive shares and earn the absorbed positions&#39; upside, and naked notional across the vault is capped at seven times the pool. Funding it from a Circle-custodied wallet and topping up the insurance fund through Gateway turn &quot;the treasury&quot; from a spreadsheet entry into an auditable set of on-chain transactions originating from a wallet Smile does not hold the key to.</p>
 <p><strong>Compared with USD-settled centralized venues.</strong> Deribit settles its USDC products against an index it computes and holds the customer&#39;s collateral. Smile-on-Arc settles against an on-chain price round, holds no customer funds before a match, and lets the customer verify every transfer on the explorer. The comparison is not that Smile is more liquid, which it is not, but that it delivers the same single-currency experience without custody.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>The deploy script&#39;s Arc branch</h3>
 <p>The deploy script selects token and oracle addresses by chain id. On Arc it deploys a mock WETH and a mock ETH/USD aggregator, then points the USDC slot at Circle&#39;s real contract.</p>
 <p><code>script/Deploy.s.sol</code></p>
@@ -6268,7 +6268,7 @@ if (cmd === &quot;deposit&quot;) {
 </ul>
 <h3>The Arc subgraph</h3>
 <p>The Graph Studio subgraph <code>smile-arc-testnet</code> indexes <code>AquaCollateralVault</code> at <code>0xE37ED711F7D1dc5aC045206b4A6367C55229C789</code> from block 61,227,750 (<code>subgraph/networks.json</code>). On Arc, as on Sepolia, the application and the AI copilot read positions only from The Graph; there is no RPC scan on public networks. The Graph page in this sidebar covers the subgraph in detail.</p>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <ul>
 <li><strong>Covered calls need the asset, and Arc has none.</strong> A covered call is backed by ether itself, and Arc has no ether: its native asset is USDC. So the main vault&#39;s and <code>RfqVault</code>&#39;s calls on Arc collateralize with a freely mintable <code>MockERC20</code> standing in for WETH, and those calls are demonstrations of the mechanism, not of a market. The <code>SpreadVault</code> no longer has this limitation: since 2026-09-13 it is cash-settled on Arc, a call credit spread escrows K2−K1 USDC per unit and settles in USDC (<code>cashSettledCalls</code>). Removing WETH from the last two places means USDC-margined calls in <code>MarginVault</code>, which is put-only by design today; that is the next step.</li>
 <li><strong>The ETH/USD price feed is a mock on Arc.</strong> No Chainlink-compatible feed is documented on Arc testnet (Pyth does not list Arc; Chainlink and RedStone show nothing; Arc&#39;s contract page lists no oracles). Quoting and settlement both read a <code>MockV3Aggregator</code>. Since 2026-09-12 a keeper (<code>keeper/arc-oracle-tick.sh</code>, a systemd timer on the dev box) mirrors Sepolia&#39;s Chainlink ETH/USD answer into it every 30 minutes, so Arc&#39;s spot tracks the real ETH price and the staleness checks in <code>MarginVault.buy</code> (90 minutes) and <code>RfqVault.formulaQuote</code> (one hour) pass; if the keeper stops, anyone may post a fresh round. The feed remains a contract anyone can set, so Arc demonstrates the mechanism, not the oracle trust model.</li>
@@ -6281,7 +6281,7 @@ if (cmd === &quot;deposit&quot;) {
 <li><strong>The gas floor is Arc&#39;s to set (L12).</strong> Every first fill in a series pays roughly 1,040,000 gas to deploy the series token and every repeat fill roughly 198,000; on Arc that gas is denominated in USDC, so the minimum economical trade size is a direct function of Arc&#39;s gas price. The ~0.46 USDC full-stack deploy suggests the floor is small on testnet; mainnet pricing is unknown until 2026-09-16.</li>
 <li><strong>Arc mainnet is not live.</strong> Arc mainnet launches on 2026-09-16; every figure on this page is testnet.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <ul>
 <li><strong>FX options on Arc (USDC/EURC).</strong> Mechanically the same engine pointed at a EUR/USD feed with EURC in the call-collateral slot. Task X1 of the Arc plan found the only oracle with a documented Arc testnet deployment to be Stork (<code>0xacC0a0cF13571d30B4b8637996F5D6D774d4fd62</code>), a pull-model oracle that requires an adapter in the shape of the existing <code>PythSpotAdapter</code>, an update-posting flow and an API key. It is recorded as the lead for the 2026-09-16 to 2026-09-30 window.</li>
 <li><strong>Arc mainnet.</strong> Task X6 of the plan is the mainnet deploy of the same script against Arc&#39;s mainnet RPC once Circle publishes it, treated with the care of a real-money deploy. The mainnet deployment is a post-launch follow-up.</li>
@@ -6290,7 +6290,7 @@ if (cmd === &quot;deposit&quot;) {
 <li><strong>USDC-margined calls.</strong> Extend <code>MarginVault</code> from puts to calls so that no product on Arc needs a WETH stand-in: the last step to a fully USDC-native venue.</li>
 <li><strong>Gateway onboarding in the application.</strong> Task X4 scopes a frontend flow that lets a user with USDC on another chain act on Smile-on-Arc through Gateway&#39;s unified balance rather than a manual bridge step.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>Arc.</strong> Circle&#39;s EVM-compatible blockchain, on which USDC is the native gas asset. The testnet has chain id 5042002, RPC <code>https://rpc.testnet.arc.network</code> and explorer <code>https://testnet.arcscan.app</code>. Mainnet launches on 2026-09-16.</li>
 <li><strong>Native USDC (on Arc).</strong> The chain&#39;s gas asset. The system contract at <code>0x3600000000000000000000000000000000000000</code> exposes it as a 6-decimal ERC-20 token; the native view used by wallets shows 18 decimals.</li>
@@ -6323,11 +6323,11 @@ if (cmd === &quot;deposit&quot;) {
     <section id="page-frontend" class="page" data-mermaid="false">
       <article class="doc"><h1>The Smile Frontend</h1>
 <p>This page describes the Smile web application: what it is, where it runs, what was added to it at EthOnline 2026, and how the TradingView-engine price chart works. It is written for a reader who has used a trading application before but has not read the rest of the documentation. Every term of art is defined where it first appears, and a glossary closes the page.</p>
-<h2>Summary</h2>
+<h2 id="summary">Summary</h2>
 <p>The frontend is a Next.js application in <code>frontend/</code> that puts every Smile vault on one screen: buying options from the on-chain price surface, writing ranges as a liquidity provider (LP), the three sibling vaults built at the event (Spreads, Margin, RFQ), a risk monitor for the margin tier, a strategy builder, a vol-surface view, and an AI copilot. One build serves three networks: the local Anvil chain, Ethereum Sepolia, and Circle&#39;s Arc testnet. The application reads its contract addresses from the connected chain (<code>frontend/lib/deployments.ts</code> and <code>frontend/config/wagmi.ts</code>), so switching networks in the wallet switches the whole app.</p>
 <p>The same code ships in two shapes. The <strong>static export</strong> at <code>https://oslinin.github.io/Smile/</code> is built by GitHub Actions with a base path and has no server, so it carries no copilot. The <strong>server build</strong> at <code>https://smile-frontend-omega.vercel.app</code> runs on Vercel and adds the copilot route (<code>/api/copilot</code>) and the subgraph proxy (<code>/api/subgraph</code>), through which the application reads The Graph with a gateway key that never reaches the browser. Locally, <code>./local.sh</code> starts Anvil, deploys every contract, seeds a 100-trade tape, and runs the server build against it.</p>
 <p>Before EthOnline 2026 the app had the option matrix, range authorization, a payoff builder, an LP dashboard, the vol surface, and the copilot. The event added the Overview landing tab, the Spreads, Margin, RFQ and Risk Monitor tabs, a TradingView-engine price chart with the strategy and the traded tape drawn on it, an OptionStrat-grade builder, recorded testnet receipts, the multi-chain address map, a User Guide, the integration help pages, and a copilot that trades off The Graph with skills, MCP servers and preparation cards.</p>
-<h2>Features used</h2>
+<h2 id="features-used">Features used</h2>
 <table>
 <thead>
 <tr>
@@ -6437,16 +6437,16 @@ if (cmd === &quot;deposit&quot;) {
 <td>Pages pre-existing; continuation-branch deploys and Vercel 2026-09-12</td>
 </tr>
 </tbody></table>
-<h2>Why it is necessary</h2>
+<h2 id="why-it-is-necessary">Why it is necessary</h2>
 <p><strong>A first look lasts three minutes.</strong> The numbers that make Smile&#39;s case are concrete: a 3000/3200 call credit spread escrows 0.0625 WETH instead of 1 WETH, a margined put locks 1,500 USDC instead of 3,000, and holders stay whole after a 40% gap. A README can state those numbers; only a screen can show them being true on the connected chain. The Overview tab exists to put the ladder on screen as live bars, with the vault counters and the recorded receipts beside it, before the viewer clicks anything.</p>
 <p><strong>A venue needs a tape and a chart.</strong> An options venue whose trades are only visible as transaction hashes has no market. The subgraph gives Smile a tape (every range, instrument, fill and position), and the price chart draws that tape as premium and implied volatility over time next to the underlying&#39;s candles. Without the chart, the σ feedback loop and the price history are invisible; with it, a viewer can watch a fill move the surface.</p>
 <p><strong>A margin tier needs a monitor.</strong> <code>MarginVault</code> is the one place a written option can fail to pay in full. A liquidation waterfall (margin call, grace period, takeover auction, backstop pool, insurance fund, haircut) that runs only in a shell script is not something a writer can trust. The Risk Monitor shows each position&#39;s health against the live mark and replays the waterfall as it happens.</p>
 <p><strong>Three new vaults need three new desks.</strong> Each sibling vault has a different write path (a two-leg structure, a margined range, a signed quote) and a different number to show (netted escrow, initial margin, price improvement). A single &quot;Trade&quot; form cannot express them; the Spreads, Margin and RFQ tabs each exist to show their one number next to the action that produces it.</p>
-<h2>Market value add</h2>
+<h2 id="market-value-add">Market value add</h2>
 <p><strong>For a trader</strong>, the application is the OptionStrat and Deribit workflow on a non-custodial venue. The builder shows a strategy&#39;s payoff at expiry, its value today and halfway to expiry, a price × date profit-and-loss heat map, the breakevens, and the greeks, with the premium quoted from Smile&#39;s own surface rather than a guess. The chart draws the strikes and breakevens over real candles so a trade is placed against the market&#39;s actual history. The tape shows what the last fill paid and what implied volatility it implied.</p>
 <p><strong>For a liquidity provider</strong>, the Earn tabs and the Spreads, Margin and RFQ desks show the capital each tier locks for the same trade, and the LP Dashboard and Risk Monitor show what happens to that capital afterwards. A writer can compare a naked put, a credit spread, and a margined put on one screen before choosing a rung.</p>
 <p><strong>For a reviewer or an integrator</strong>, the Overview tab&#39;s receipts and the Receipts tab link every recorded testnet transaction to its explorer, per chain. The Vercel build carries the copilot, so the AI trading agent described on The Graph page can be tried without any setup.</p>
-<h2>Technical details</h2>
+<h2 id="technical-details">Technical details</h2>
 <h3>The chart: TradingView Lightweight Charts</h3>
 <p><strong>What it is.</strong> Lightweight Charts is TradingView&#39;s open-source charting engine, published as the <code>lightweight-charts</code> npm package under the Apache-2.0 licence. It is the renderer behind TradingView&#39;s charts, not the TradingView website or its embeddable widget: it draws candles, lines and price lines on a canvas from data the application supplies, with no account, no data feed and no network calls of its own. Smile pins version 5.2.1 (<code>frontend/package.json</code>).</p>
 <p><strong>Why this library.</strong> There is no open-source OptionStrat, and the nearest React project draws expiry payoffs only, so the builder stayed in-house. For charting, a component was needed rather than a product; OpenCharts, an MIT-licensed terminal built on the same engine, is a full standalone application, not a component to embed. Using TradingView&#39;s engine directly gives a trader the chart they already know, in a component the page controls.</p>
@@ -6597,7 +6597,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
 <p><code>frontend/scripts/gen-help.mjs</code> renders the README, the User Guide, Limitations, Solutions, the copilot page and the six integration pages (the Integrations group in the sidebar) into <code>public/help.html</code>, with KaTeX for the README&#39;s formulae and Mermaid for its diagrams; the Reference Table and Continuation Track pages are embedded as standalone documents. <code>frontend/scripts/gen-knowledge.mjs</code> compiles the same documents into a token-cheap table of contents for the copilot&#39;s system prompt and full sections served on demand through its <code>read_docs</code> tool. Both run on <code>predev</code> and <code>prebuild</code>, so the site and the pack are never stale relative to the docs.</p>
 <h3>Two builds</h3>
 <p><code>frontend/next.config.ts</code> switches on one variable: when <code>NEXT_PUBLIC_BASE_PATH</code> is set (the GitHub Pages workflow sets it to <code>/Smile</code>), the build is a static export served from a subpath, and route handlers are excluded; when it is unset, the build is a normal server build that carries <code>/api/copilot</code> and <code>/api/subgraph</code>. The Pages workflow runs on pushes to <code>main</code> and the continuation branch and on documentation changes; the Vercel project builds the continuation branch as production with the copilot provider, model, keys and MCP seed held as server-side environment variables.</p>
-<h2>Limitations</h2>
+<h2 id="limitations">Limitations</h2>
 <ul>
 <li><strong>The static export has no copilot.</strong> GitHub Pages serves files only, so the copilot button is hidden there (<code>NEXT_PUBLIC_COPILOT</code> unset) and the subgraph is read directly from the Studio endpoint. The Vercel build is the one with the agent.</li>
 <li><strong>The premium swap is key-gated and mainnet-routed.</strong> The Uniswap Trading API is used for the displayed spot and, only when <code>NEXT_PUBLIC_UNISWAP_API_KEY</code> is set, to quote an ETH→USDC swap for the premium; that quote targets mainnet, so on Sepolia and Arc the buyer pays premium from USDC held already.</li>
@@ -6608,7 +6608,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
 <li><strong>A weak default model.</strong> The live deployment runs the copilot on <code>openrouter/free</code>; the tool-routing rules in the system prompt carry more weight than they would with a stronger model, and the settings gear lets a user bring their own key.</li>
 <li><strong>Layout is desktop-first.</strong> The tab bar wraps on narrow screens and tables scroll horizontally, but the builder, chart and desks are designed for a wide viewport.</li>
 </ul>
-<h2>Plans</h2>
+<h2 id="plans">Plans</h2>
 <ul>
 <li><strong>A live secondary market on the chart.</strong> When an OptionToken v4 pool exists (Limitations L14), its trades belong on the same chart as the primary tape.</li>
 <li><strong>Per-chain spot sources.</strong> The Trading API quote is mainnet-only; a chain-aware spot source (a feed adapter per chain, or Pyth for quoting per R5) would let the displayed spot and the protocol&#39;s spot agree on every network.</li>
@@ -6616,7 +6616,7 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
 <li><strong>Mobile layouts for the desks.</strong> The Overview and Trade tabs read well on a phone; the builder&#39;s heat map and the desks would benefit from stacked layouts.</li>
 <li><strong>Recorded liquidation on a public chain.</strong> The Risk Monitor&#39;s waterfall has been shown on Anvil only, because public testnets cannot be time-warped; a scheduled, long-dated demo on Sepolia or Arc would put a real timeline on screen.</li>
 </ul>
-<h2>Glossary</h2>
+<h2 id="glossary">Glossary</h2>
 <ul>
 <li><strong>Next.js.</strong> The React framework the app is built with; it can produce a static site or a server that also runs API routes.</li>
 <li><strong>Static export.</strong> A Next.js build that emits plain HTML, CSS and JavaScript with no server, deployable to GitHub Pages; API routes cannot exist in it.</li>

@@ -89,14 +89,32 @@ const pages = [
 
 // Every doc (not just the README) goes through extractMath first, so KaTeX
 // spans survive marked.parse on all wiki pages.
-const renderDoc = (relPath) => {
+// Every h2 gets a GitHub-style id (slug of its text, de-duplicated per page)
+// so the sidebar TOC can address it and README-style #slug links resolve.
+const slugify = (html) =>
+  html.replace(/<[^>]+>/g, "").replace(/&[a-z]+;|&#\d+;/g, "").toLowerCase().trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
+const addHeadingIds = (html, pageId) => {
+  const seen = new Set();
+  return html.replace(/<h2>(.*?)<\/h2>/g, (_, inner) => {
+    let id = slugify(inner) || "section";
+    let n = 1;
+    while (seen.has(id)) id = `${slugify(inner) || "section"}-${n++}`;
+    seen.add(id);
+    return `<h2 id="${id}">${inner}</h2>`;
+  });
+};
+const renderDoc = (relPath, pageId) => {
   const { text, spans } = extractMath(readDoc(relPath));
-  return marked
-    .parse(text, { gfm: true })
-    .replace(/MATHSPANPLACEHOLDER(\d+)ENDMATHSPAN/g, (_, i) => spans[Number(i)]);
+  return addHeadingIds(
+    marked
+      .parse(text, { gfm: true })
+      .replace(/MATHSPANPLACEHOLDER(\d+)ENDMATHSPAN/g, (_, i) => spans[Number(i)]),
+    pageId,
+  );
 };
 
-const pageHtml = Object.fromEntries(pages.map((p) => [p.id, renderDoc(p.source)]));
+const pageHtml = Object.fromEntries(pages.map((p) => [p.id, renderDoc(p.source, p.id)]));
 
 // Standalone interactive documents (filters, cross-reference scrolling) —
 // copied next to help.html and embedded via iframe rather than inlined, so
