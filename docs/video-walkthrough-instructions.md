@@ -26,7 +26,11 @@ minutes including setup.
    the standard dev keys). Account #0 selected.
 3. **Browser.** Tab A: `http://localhost:3000` (dark theme, 1440×900 or
    wider — the ladder and the chart need width). Tab B:
-   `https://thegraph.com/studio/subgraph/smile-sepolia` playground, and
+   `https://thegraph.com/explorer/subgraphs/Bf9T8wuSLwvNSR9oTx2uuSjoL2P5kCagWAitFgykyes2?view=Query&chain=arbitrum-one`
+   — `smile-sepolia` **published on The Graph Network** (the Explorer page
+   shows the network deployment, its signal and the query URL; use this,
+   not only the Studio playground, so "live data from a Graph provider"
+   is on screen). Tab C: `https://thegraph.com/studio/subgraph/smile-sepolia` playground, and
    `https://testnet.arcscan.app/tx/0x0938c5be639e8daf30b88d15b82d5ec80dd5d3a68096e5b796051f00791a4d02`
    ready in a third tab (the Arc margined-put fill), and
    `https://testnet.arcscan.app/tx/0x0f23f6a1042733952f44fb54c2640085d0d816ce848a807fe1304551fc9a237b`
@@ -38,7 +42,7 @@ minutes including setup.
 6. **Recording.** 1080p, 30 fps, system audio off, mic on. Speak the
    bold lines below; don't read the rest.
 
-## The run (≈4:30)
+## The run (≤ 4:00 — The Graph's rule is a two-to-four-minute video; the timings below sum to 3:55)
 
 ### 0:00 — Overview (30 s)
 
@@ -46,8 +50,11 @@ Land on **Overview**. Point at the chain card ("You are on Anvil").
 
 > **"Smile is on-chain options where the writer's collateral never leaves
 > their wallet until a buyer shows up — 1inch Aqua pulls it just-in-time
-> at the fill. On September 5 this was one vault. For EthOnline we added
-> three sibling vaults, a subgraph, and deployments on Sepolia and Arc."**
+> at the fill. This is a Continuity entry: on September 5 the repo had one
+> vault, the matrix and the copilot. For EthOnline we added three sibling
+> vaults, a subgraph on The Graph Network, and deployments on Sepolia and
+> Arc — the pre-existing part is listed in the README and on every help
+> page's feature table."**
 
 Hover the ladder bars: naked put $3,000 → credit spread $200 → margined
 put $1,500 → signed quote.
@@ -55,7 +62,7 @@ put $1,500 → signed quote.
 > **"Same premium surface on every rung; only the collateral rule
 > changes. Blue was there before, green is the continuation track."**
 
-### 0:30 — Trade: the chart and the builder (45 s)
+### 0:30 — Trade: the chart and the builder (30 s)
 
 Click **Trade**. The TradingView-engine chart shows real ETH candles.
 Scroll to the **Strategy Builder**, click *Neutral* → *Iron Condor*.
@@ -70,7 +77,7 @@ chart. Then click the bars in the builder's collateral panel and say:
 > **"Short call 3,200 with a long above it: 1 ETH on the main vault,
 > 0.06 ETH on SpreadVault. That's the whole thesis in one row."**
 
-### 1:15 — Spreads: a real fill (40 s)
+### 1:00 — Spreads: a real fill (35 s)
 
 Click **Spreads**. Account #0: *Call Credit*, K1 3000 / K2 3200, 1 unit,
 **Approve Aqua & Open Spread → Open Structure → Ship to Aqua** (three
@@ -85,7 +92,7 @@ change / the "You hold 1 unit" line.
 > **"The taker paid the net premium; exactly 0.0625 WETH left the writer's
 > wallet at that block. Nothing was deposited in advance."**
 
-### 1:55 — Margin: crash, margin call, backstop (75 s) — the wow moment
+### 1:35 — Margin: crash, margin call, backstop (60 s) — the wow moment
 
 Click **Risk Monitor** and leave it on screen. In the terminal:
 
@@ -113,7 +120,7 @@ the edit if long).
 Optional second take: `MODE=takeover ./script/margin-lifecycle.sh` — a
 second writer takes the position over instead.
 
-### 3:10 — RFQ: a signed quote (35 s)
+### 2:35 — RFQ: a signed quote (25 s)
 
 Click **RFQ**. Account #0: ship a call range (capacity 1), then in card 2
 set *100 bps inside the formula*, **Sign Quote** (MetaMask signature, no
@@ -124,11 +131,13 @@ gas). Switch to account #1, the quote is already in card 3, **Fill**.
 > the expiry, and pulls the collateral through the identical Aqua
 > allowance. A signed quote changes the price, never the custody model."**
 
-### 3:45 — It's real: Sepolia, The Graph, Arc (35 s)
+### 3:00 — It's real: Sepolia, The Graph, Arc (45 s) — the load-bearing Graph minute
 
 Switch MetaMask to **Sepolia**. The app follows: **Overview** now shows the
-Sepolia receipts. Click the `buy` tx → Etherscan. Tab B: the Studio
-playground — run
+Sepolia receipts and the line **"● indexed by The Graph — no range cap,
+the copilot trades off it"**. Click the `buy` tx → Etherscan. Tab B: the
+**Explorer page of the published subgraph** (network, not Studio) — three
+seconds on it, then its Query tab; or Tab C, the Studio playground — run
 
 ```graphql
 { fills(first: 3) { buyer strike amount premium blockNumber } }
@@ -187,7 +196,7 @@ insurance fund); click one → arcscan.
 > signs for, and Gateway bringing USDC in from Sepolia — no treasury key
 > in the repo."**
 
-### 4:20 — Close (15 s)
+### 3:45 — Close (10 s)
 
 Back to **Overview**; open **Help ↗** — it lands on the Screens section
 for the tab you were on, with the page's sections listed under it in the
@@ -239,6 +248,17 @@ code, limitations, plans).
   say "the surface's σ parameter". It prices about 2.5× a Black-Scholes IV
   at the money (Overview §2 says so); the chart's IV line is the
   back-solved Black-Scholes number.
+
+## The Graph requirements → where they are on screen
+
+| Requirement | Where in the run | What proves it |
+|---|---|---|
+| The Graph is load-bearing: the app/agent uses Subgraphs / the Subgraph MCP as its blockchain data source | 3:00 | Overview's "● indexed by The Graph" line; the narration "on Sepolia and Arc the app and the copilot read **only** from it — no RPC scan"; the copilot's answers cite *The Graph* as source; the ⚙ → MCP servers menu with The Graph's Subgraph MCP preset and the `search subgraphs for uniswap` call |
+| Live data from a Graph provider (Studio API key / gateway), not mocked or local | 3:00 | The Explorer page of `smile-sepolia` published on The Graph Network (Tab B); the narration "published to The Graph Network, served through the gateway with an API key the browser never sees"; the fill indexed one block after the Sepolia buy |
+| Meaningful work with the data: reasoning, decisions, automation, natural language | 3:00 and 1:35 | `find_opportunities` (Smile IV vs Deribit vs last fill → a trade card), `liquidity_map` → a prefilled Write-a-Range card, `portfolio_greeks` → `hedge_suggestion`; "Explain with the copilot" on the Risk Monitor |
+| Open source, README / SKILL.md a judge can run | 3:45 | Help ↗ (README = Overview; the subgraph's own skill file and the eight trader skills are mentioned in the Skills menu at 3:00); the end card's repo URL |
+| Two-to-four-minute video | whole run | timings above sum to 3:55 — cut, don't overrun |
+| Continuity pool: pre-existing work documented | 0:00 | the opening line names what existed on September 5; the README's Continuation Track section and every help page's "Pre-existing or EthOnline 2026" column list it |
 
 ## Editing notes
 
