@@ -89,6 +89,9 @@ importers:
       next:
         specifier: 16.2.9
         version: 16.2.9(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      plotly.js-dist-min:
+        specifier: ^4.1.0
+        version: 4.1.0
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -5359,6 +5362,9 @@ packages:
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
+
+  plotly.js-dist-min@4.1.0:
+    resolution: {integrity: sha512-OUeeE0z2csk0pYwKtT8zqBLZoCVQOcxxnbM2+V1SwLNVu7cSFNelWaGVhdhag2js6KvlcHDTrLAwrCG8odSUqA==}
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -13810,6 +13816,8 @@ snapshots:
   pirates@4.0.7: {}
 
   pkce-challenge@5.0.1: {}
+
+  plotly.js-dist-min@4.1.0: {}
 
   pluralize@8.0.0: {}
 

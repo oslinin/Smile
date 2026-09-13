@@ -275,19 +275,18 @@ Per chain. On a public chain without a subgraph this tab shows no range; there i
 <a id="tab-surface"></a>
 ## Vol Surface
 
-A three-dimensional rendering of the implied-volatility surface, produced by the Python service in `volsurface/` and updated as trades execute.
+A three-dimensional rendering of the implied-volatility surface, drawn in the browser with Plotly and updated as trades execute. No server: it works on the static, Vercel and local builds alike.
 
 | Element | What it shows | Where it comes from |
 |---|---|---|
-| Formula caption `σ(K,T) = σ_tenor(T) · max(0.1, 1 + α·ln(K/S)² + β·ln(K/S))` | The multiparameter smile: a per-tenor level, a curvature α and a skew β. | Literal; α = 2.0 and β = 0 are passed to the renderer. |
-| The surface image | Volatility (height) over strike and tenor at the current spot; rotated by the **rotate** slider (azimuth −120 to 30). | `GET /surface.png?spot=…&alpha=…&beta=…&azim=…` from `NEXT_PUBLIC_VOLSURFACE_URL` (default `http://localhost:8000`); re-rendered 400 ms after the spot changes. |
-| `σ tenor: 0–7d N% · 7–30d N% · 30–90d N% · 90d+ N%` | The per-tenor sigma levels the service currently holds. | `GET /state`. |
-| `γ=N%/trade` | The bump applied to the traded tenor bucket per trade: up on a buy, down on a sellback. | `GET /state`. |
-| `N trades` | How many trades the service has absorbed since the last reset. | `GET /state`. |
-| **Reset σ** | Resets the service's sigma buckets to their initial level. | `POST /reset`. |
-| **Vol-surface renderer offline** with `./volsurface/run.sh` | The service is not running. | Image load error. |
+| Formula caption `σ(K,T) = σ_tenor(T) · max(0.1, 1 + α·ln(K/S)² + β·ln(K/S))` | The multiparameter smile: a per-tenor level, a curvature α and a skew β. | Literal; α = 2.0 and β = 0. |
+| The surface | Volatility (height) over strike and tenor at the current spot, with the ATM term-structure ridge highlighted; drag to rotate. | Computed in `VolSurface.tsx` from spot and the σ buckets, plotted by Plotly; re-renders when spot or the buckets change. |
+| `σ tenor: 0–7d N% · 7–30d N% · 30–90d N% · 90d+ N%` | The per-tenor sigma levels currently held (in component state). | `VolSurface.tsx` state. |
+| `γ=N%/trade` | The bump applied to the traded tenor bucket per trade: up on a buy, down on a sellback. | Constant (0.5%). |
+| `N trades` | How many trades have moved the surface since the last reset. | `VolSurface.tsx` state. |
+| **Reset σ** | Resets the sigma buckets to their initial term structure. | Local state. |
 
-Notes. The service mirrors the feedback loop of the on-chain `OptionPricingHook` (each confirmed buy or sell on the Trade tab is posted to `/trade` with the leg's tenor); it does not read the hook's state. It runs only where the Python service runs, normally `./local.sh`; the static GitHub Pages build and the Vercel deployment show the offline card.
+Notes. The surface mirrors the feedback loop of the on-chain `OptionPricingHook` (each confirmed buy or sell on the Trade tab bumps the leg's tenor bucket by ±γ); it does not read the hook's state. The bucket math (`SmileMath.sol`'s smile, the tenor edges, the ±γ step) is reproduced in TypeScript, so the surface renders identically everywhere with no Python service. (`volsurface/` — the former Flask/matplotlib renderer — is retained for reference but no longer used by the app.)
 
 <a id="tab-proof"></a>
 ## Receipts
