@@ -174,8 +174,14 @@ show.)
 
 Then the copilot, on the tape (Sepolia or Anvil with the seeded 100
 trades): open it, click **Skills** (show the list and the "add a skill"
-box for two seconds), then the **gear → MCP servers** (The Graph Subgraph
-MCP is already there on the live app — two seconds), then type
+box for two seconds), then the **gear → MCP servers** (two seconds — this
+is where a viewer can plug in their *own* MCP server with their own key;
+the copilot already uses The Graph's Subgraph MCP **server-side** on the
+live app via a Vercel env key, so its tools work with no setup — don't rely
+on this list to prove it, the "search subgraphs" query below does that).
+This list is browser-local, so on the presenter's machine The Graph entry
+may already show because it was added once; a fresh browser starts empty
+and the copilot still works. Then type
 **"what's cheap right now?"** — it calls
 `find_opportunities`, cites *The Graph* as the source and Deribit as the
 reference, and proposes a trade card. Follow with **"where is liquidity
