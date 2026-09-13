@@ -80,6 +80,10 @@ contract SpreadVault is AquaApp, Ownable {
 
     address public immutable weth;
     address public immutable usdc;
+    /// @notice True when deployed with no WETH (a USDC-native chain such as
+    /// Arc): call credit spreads then escrow K2−K1 USDC per unit and settle
+    /// the intrinsic in USDC — the same dollar max loss, cash numéraire.
+    bool public immutable cashSettledCalls;
     uint8 public immutable usdcDecimals;
     IPriceOracle public immutable oracle;
     address public immutable hook;
@@ -132,6 +136,7 @@ contract SpreadVault is AquaApp, Ownable {
         hook = hook_;
         weth = weth_;
         usdc = usdc_;
+        cashSettledCalls = weth_ == address(0);
         usdcDecimals = IERC20Metadata(usdc_).decimals();
     }
 
@@ -247,8 +252,10 @@ contract SpreadVault is AquaApp, Ownable {
             // Taker: long the K1 call at Ask, short the K2 call at Bid.
             (ask,) = SmilePremiumLib.quote(_terms(authId, s.strikes[2], true), units, true, usdcDecimals, 0);
             (bid,) = SmilePremiumLib.quote(_terms(authId, s.strikes[3], true), units, false, usdcDecimals, 0);
-            // (K2-K1)/K2 WETH per unit.
-            escrow = Math.mulDiv(units, s.strikes[3] - s.strikes[2], s.strikes[3], Math.Rounding.Ceil);
+            // (K2-K1)/K2 WETH per unit — or K2-K1 USDC when cash-settled.
+            escrow = cashSettledCalls
+                ? SmileMath.scaleFromWad(Math.ceilDiv(units * (s.strikes[3] - s.strikes[2]), 1e18), usdcDecimals, true)
+                : Math.mulDiv(units, s.strikes[3] - s.strikes[2], s.strikes[3], Math.Rounding.Ceil);
         } else if (s.kind == Kind.PutCredit) {
             // Taker: long the K2 put at Ask, short the K1 put at Bid.
             (ask,) = SmilePremiumLib.quote(_terms(authId, s.strikes[1], false), units, true, usdcDecimals, 0);
@@ -344,6 +351,7 @@ contract SpreadVault is AquaApp, Ownable {
     /// table's single floored expression per structure, so both legs settle
     /// at ONE price through ONE formula (no per-leg rounding drift):
     ///   call credit (short K1, long K2): units · (clamp(S, K1, K2) − K1) / S    WETH
+    ///                     cash-settled: units · (clamp(S, K1, K2) − K1) / 1e30 USDC
     ///   put credit  (short K2, long K1): units · (K2 − clamp(S, K1, K2)) / 1e30  USDC
     /// Its maximum over S is exactly the escrow {quote} charges, so escrow
     /// always covers it — solvency is the same fully-collateralized property
@@ -354,6 +362,7 @@ contract SpreadVault is AquaApp, Ownable {
             uint256 k1 = s.strikes[2];
             uint256 k2 = s.strikes[3];
             uint256 c = settlementPrice < k1 ? k1 : settlementPrice > k2 ? k2 : settlementPrice;
+            if (cashSettledCalls) return (units * (c - k1)) / 1e30;
             return settlementPrice == 0 ? 0 : (units * (c - k1)) / settlementPrice;
         }
         if (s.kind == Kind.PutCredit) {
@@ -493,10 +502,11 @@ contract SpreadVault is AquaApp, Ownable {
     }
 
     /// @dev Call credit spreads escrow WETH (the S12 table's `(K2-K1)/K2`
-    /// WETH); put credit escrows USDC. Iron condor's max-not-sum requirement
-    /// isn't wired yet — it inherits the USDC slot for now.
+    /// WETH) unless the vault is cash-settled; put credit escrows USDC. Iron
+    /// condor's max-not-sum requirement isn't wired yet — it inherits the
+    /// USDC slot for now.
     function _collateralToken(Kind kind) internal view returns (address) {
-        return kind == Kind.CallCredit ? weth : usdc;
+        return kind == Kind.CallCredit && !cashSettledCalls ? weth : usdc;
     }
 
     function _terms(uint256 authId, uint256 strike, bool isCall)
