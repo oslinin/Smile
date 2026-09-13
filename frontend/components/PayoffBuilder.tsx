@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useChainId } from "wagmi";
 import {
   ComposedChart,
   Area,
@@ -155,12 +156,16 @@ function HeatMap({ legs, spot }: { legs: Leg[]; spot: number }) {
 
 // ── What the writer locks, rung by rung ──────────────────────────────────────
 
-function CollateralPanel({ legs, spot }: { legs: Leg[]; spot: number }) {
-  const rows = useMemo(() => writerCollateral(legs, spot), [legs, spot]);
+function CollateralPanel({ legs, spot, chainId }: { legs: Leg[]; spot: number; chainId?: number }) {
+  const rows = useMemo(() => writerCollateral(legs, spot, chainId), [legs, spot, chainId]);
   if (rows.length === 0) return null;
+  const usdcNative = chainId === 5042002;
+  const writable = rows.filter((r) => r.spread);
+  const sellSpread = (s: NonNullable<(typeof rows)[number]["spread"]>) =>
+    window.dispatchEvent(new CustomEvent("smile:sell-spread", { detail: { ...s, key: Date.now() } }));
   return (
-    <div className="rounded-lg bg-gray-950 p-2">
-      <div className="text-[9px] uppercase tracking-wide text-gray-600 mb-1">What the writer locks on Smile, per unit</div>
+    <div className="rounded-lg bg-gray-950 p-2 space-y-2">
+      <div className="text-[9px] uppercase tracking-wide text-gray-600 mb-1">What the writer locks on Smile, per unit — collateral token per chain</div>
       <table className="text-[11px] w-full">
         <thead><tr className="text-gray-600"><th className="text-left font-normal">sell leg</th><th className="text-right font-normal">main vault</th><th className="text-right font-normal">SpreadVault</th><th className="text-right font-normal">MarginVault</th></tr></thead>
         <tbody>
@@ -174,6 +179,27 @@ function CollateralPanel({ legs, spot }: { legs: Leg[]; spot: number }) {
           ))}
         </tbody>
       </table>
+      <p className="text-[10px] text-gray-600">
+        {usdcNative
+          ? "On Arc every leg settles in USDC — call credit spreads are cash-settled, so no WETH. The main-vault covered call is a WETH stand-in (Arc has no ether)."
+          : "Calls collateralize in WETH, puts in USDC. Switch to Arc Testnet and every leg is USDC."}
+      </p>
+      {writable.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {writable.map(({ leg, spread }, i) => (
+            <button
+              key={i}
+              onClick={() => spread && sellSpread(spread)}
+              className="text-[11px] px-2.5 py-1 rounded-md bg-green-700 hover:bg-green-600 text-white font-medium"
+            >
+              Sell {leg.isCall ? "call" : "put"} spread ${spread!.k1.toLocaleString()}/${spread!.k2.toLocaleString()} →
+            </button>
+          ))}
+          {writable.length > 1 && (
+            <span className="text-[10px] text-gray-500 self-center">an iron condor is both — write each wing as its own range</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -228,6 +254,7 @@ interface PayoffBuilderProps {
 }
 
 export function PayoffBuilder({ spot, confirmedLegs = [], proposal, onLegsChange }: PayoffBuilderProps) {
+  const chainId = useChainId();
   const [legs, setLegs] = useState<Leg[]>([]);
   useEffect(() => { onLegsChange?.(legs); }, [legs]);
   const [outlook, setOutlook] = useState<Outlook>("bullish");
@@ -397,7 +424,7 @@ export function PayoffBuilder({ spot, confirmedLegs = [], proposal, onLegsChange
           <PayoffChart legs={legs} spot={spot} />
           <StatsStrip legs={legs} spot={spot} />
           <HeatMap legs={legs} spot={spot} />
-          <CollateralPanel legs={legs} spot={spot} />
+          <CollateralPanel legs={legs} spot={spot} chainId={chainId} />
         </>
       ) : (
         <div className="h-44 rounded-lg bg-gray-950 flex items-center justify-center text-gray-700 text-sm">

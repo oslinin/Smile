@@ -223,22 +223,60 @@ export function pnlMatrix(legs: BuilderLeg[], spot: number, rows = 15, cols = 8)
  * (SpreadVault, S12), and margined for puts (MarginVault, S13 — intrinsic
  * plus a 50% buffer of spot, capped at the strike).
  */
-export function writerCollateral(legs: BuilderLeg[], spot: number): { leg: BuilderLeg; naked: string; netted: string | null; margined: string | null }[] {
+/** A sell leg that pairs with a long into a credit spread writable on the Spreads tab. */
+export interface SpreadPrefill {
+  isCall: boolean;
+  k1: number; // lower strike
+  k2: number; // higher strike
+  units: number;
+}
+
+export interface WriterCollateralRow {
+  leg: BuilderLeg;
+  naked: string;
+  netted: string | null;
+  margined: string | null;
+  /** Present when this sell leg has a matching long → a writable credit spread. */
+  spread: SpreadPrefill | null;
+}
+
+/**
+ * What a writer locks per unit for each sell leg, per vault, in the collateral
+ * token of the connected chain. On a USDC-native chain (Arc, chainId 5042002)
+ * the SpreadVault is cash-settled, so a call credit spread escrows USDC, not
+ * WETH; the main vault's naked covered call still needs the asset itself, a
+ * WETH stand-in on Arc since the chain has no ether.
+ */
+export function writerCollateral(legs: BuilderLeg[], spot: number, chainId?: number): WriterCollateralRow[] {
+  const usdcNative = chainId === 5042002; // Arc testnet
   return legs
     .filter((l) => l.direction === "sell")
-    .map((leg) => {
+    .map((leg): WriterCollateralRow => {
       const longs = legs.filter((l) => l.direction === "buy" && l.isCall === leg.isCall && l.amount >= leg.amount);
       let netted: string | null = null;
+      let spread: SpreadPrefill | null = null;
+      const units = leg.amount || 1;
       if (leg.isCall) {
         const cap = longs.filter((l) => l.strike > leg.strike).sort((a, b) => a.strike - b.strike)[0];
-        if (cap) netted = `${((cap.strike - leg.strike) / cap.strike).toFixed(4)} ETH`;
+        if (cap) {
+          // Cash-settled on Arc: K2−K1 USDC. Otherwise (K2−K1)/K2 WETH.
+          netted = usdcNative
+            ? `$${(cap.strike - leg.strike).toLocaleString()} USDC`
+            : `${((cap.strike - leg.strike) / cap.strike).toFixed(4)} WETH`;
+          spread = { isCall: true, k1: leg.strike, k2: cap.strike, units };
+        }
       } else {
         const cap = longs.filter((l) => l.strike < leg.strike).sort((a, b) => b.strike - a.strike)[0];
-        if (cap) netted = `$${(leg.strike - cap.strike).toLocaleString()}`;
+        if (cap) {
+          netted = `$${(leg.strike - cap.strike).toLocaleString()} USDC`;
+          spread = { isCall: false, k1: cap.strike, k2: leg.strike, units };
+        }
       }
-      const naked = leg.isCall ? "1 ETH" : `$${leg.strike.toLocaleString()}`;
-      const margined = leg.isCall ? null : `$${Math.min(leg.strike, Math.max(leg.strike - spot, 0) + spot * 0.5).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-      return { leg, naked, netted, margined };
+      const naked = leg.isCall
+        ? (usdcNative ? "1 WETH (mock on Arc)" : "1 WETH")
+        : `$${leg.strike.toLocaleString()} USDC`;
+      const margined = leg.isCall ? null : `$${Math.min(leg.strike, Math.max(leg.strike - spot, 0) + spot * 0.5).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC`;
+      return { leg, naked, netted, margined, spread };
     });
 }
 

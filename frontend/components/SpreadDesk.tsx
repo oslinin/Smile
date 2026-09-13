@@ -86,7 +86,7 @@ function fmtUnits(v: bigint, decimals: number, digits = 4) {
   return (Number(v) / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: digits });
 }
 
-export function SpreadDesk({ spot }: { spot: number }) {
+export function SpreadDesk({ spot, prefill }: { spot: number; prefill?: { isCall: boolean; k1: number; k2: number; units: number; key: number } | null }) {
   const { address, isConnected } = useAccount();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -98,6 +98,15 @@ export function SpreadDesk({ spot }: { spot: number }) {
   const [k2, setK2] = useState(grid(spot) + 200);
   const [expiryOffset, setExpiryOffset] = useState(30 * 86_400);
   const [units, setUnits] = useState("1");
+
+  // A "Sell spread" click in the Strategy Builder lands here: fill the form.
+  useEffect(() => {
+    if (!prefill) return;
+    setIsCall(prefill.isCall);
+    setK1(prefill.k1);
+    setK2(prefill.k2);
+    setUnits(String(prefill.units || 1));
+  }, [prefill?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const [step, setStep] = useState<"idle" | "approving" | "approved" | "opening" | "opened" | "shipping" | "done">("idle");
   const [authIdToShip, setAuthIdToShip] = useState<bigint | null>(null);
   const openCalledRef = useRef(false);

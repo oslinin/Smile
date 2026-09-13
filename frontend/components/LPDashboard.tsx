@@ -158,11 +158,13 @@ export function LPDashboard() {
     );
   }
 
-  const walletEth = ethBalance ? (Number(ethBalance.value) / 1e18) : null;
+  // The native asset differs per chain — ETH on Sepolia/Anvil, USDC on Arc.
+  const nativeSymbol = ethBalance?.symbol ?? "ETH";
+  const walletEth = ethBalance ? (Number(ethBalance.value) / 10 ** ethBalance.decimals) : null;
 
   const isCall = activeAuth?.isCall ?? true;
   const decimals = isCall ? 1e18 : 1e6;
-  const symbol = isCall ? "ETH" : "USDC";
+  const symbol = isCall ? "WETH" : "USDC";
 
   const maxCollateral = auth?.[4] !== undefined ? Number(auth[4]) / decimals : null;
   const usedCollateral = auth?.[5] !== undefined ? Number(auth[5]) / decimals : null;
@@ -186,8 +188,8 @@ export function LPDashboard() {
       {/* Wallet */}
       <div className="grid grid-cols-2 gap-3">
         <Stat
-          label="Wallet ETH"
-          value={walletEth !== null ? `${fmt(walletEth)} ETH` : "…"}
+          label={`Wallet ${nativeSymbol}`}
+          value={walletEth !== null ? `${fmt(walletEth)} ${nativeSymbol}` : "…"}
           sub="Self-custodied — earning until called"
         />
         <Stat
@@ -274,7 +276,7 @@ export function LPDashboard() {
       <div className="grid grid-cols-2 gap-3">
         <Stat
           label="Total Value Backing Quotes"
-          value={walletEth !== null ? `${fmt(walletEth)} ETH` : "…"}
+          value={walletEth !== null ? `${fmt(walletEth)} ${nativeSymbol}` : "…"}
           sub="Available to back new options"
           highlight
         />

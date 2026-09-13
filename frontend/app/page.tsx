@@ -135,11 +135,21 @@ export default function Home() {
   const [builderLegs, setBuilderLegs] = useState<Leg[]>([]);
   const [surfaceTrade, setSurfaceTrade] = useState<SurfaceTrade | null>(null);
   const [activeTab, setActiveTab] = useState<"story" | "income" | "lp-auth" | "spreads" | "margin" | "risk" | "rfq" | "chain" | "surface" | "lp-position" | "proof">("story");
+  // The builder's "Sell spread" button prefills the Spreads form and jumps to it.
+  const [spreadPrefill, setSpreadPrefill] = useState<{ isCall: boolean; k1: number; k2: number; units: number; key: number } | null>(null);
   // The copilot's prepare_* cards switch to the form they prefill.
   useEffect(() => {
     const onGoto = (ev: Event) => setActiveTab((ev as CustomEvent<typeof activeTab>).detail);
+    const onSellSpread = (ev: Event) => {
+      setSpreadPrefill((ev as CustomEvent<{ isCall: boolean; k1: number; k2: number; units: number; key: number }>).detail);
+      setActiveTab("spreads");
+    };
     window.addEventListener("smile:goto", onGoto);
-    return () => window.removeEventListener("smile:goto", onGoto);
+    window.addEventListener("smile:sell-spread", onSellSpread);
+    return () => {
+      window.removeEventListener("smile:goto", onGoto);
+      window.removeEventListener("smile:sell-spread", onSellSpread);
+    };
   }, []);
   const spot = useUniswapSpot(chainId);
   const spotPrice = spot.status === "loading" ? null : spot.price;
@@ -445,7 +455,7 @@ export default function Home() {
 
         {activeTab === "spreads" && (
           <section>
-            <SpreadDesk spot={spotPrice ?? 3420} />
+            <SpreadDesk spot={spotPrice ?? 3420} prefill={spreadPrefill} />
           </section>
         )}
 
