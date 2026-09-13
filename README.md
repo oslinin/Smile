@@ -596,7 +596,7 @@ Two builds of the same code:
 | `COPILOT_PROVIDER`, `COPILOT_MODEL` | Which LLM backs the copilot (`anthropic` / `openai` / `google` / `openrouter`) and the model id |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENROUTER_API_KEY` | The one key matching the provider |
 | `NEXT_PUBLIC_COPILOT=1` | Shows the copilot button (unset on the static build) |
-| `SUBGRAPH_URL` | The Graph gateway URL with its API key, used only by `/api/subgraph` |
+| `SUBGRAPH_URL_11155111`, `SUBGRAPH_URL_5042002` (or one `SUBGRAPH_URL` for all chains) | The Graph gateway URL per chain, carrying the API key; used only by `/api/subgraph` |
 | `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect project id for phone wallets |
 | `COPILOT_RPC_SEPOLIA`, `COPILOT_RPC_ARC` (optional) | RPCs the copilot's server-side reads use |
 | `COPILOT_MCP_SERVERS` (optional) | JSON seed of MCP servers offered in the copilot's ⚙ menu |
