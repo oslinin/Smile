@@ -86,50 +86,44 @@ LP1=$(call $USDC 'balanceOf(address)(uint256)' $LP | num)
 TOKEN=$(call $MV 'seriesOf(bytes32)(uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256,bool,uint256,uint16)' $SID | sed -n 3p)
 echo "→ writer locked $(usdc $(locked $LP)) of margin (wallet moved $(usdc $((LP0 - LP1))) net of the premium it earned) — the main vault would have cash-secured the full 3,000.00 USDC"
 
-echo; echo "── 3. ETH crashes to \$$CRASH_USD — the put is now in-the-money, so the writer owes more than it locked ──"
+echo; echo "── 3. ETH crashes to \$$CRASH_USD — the writer is now under-margined ──"
 warp 300; post $CRASH_USD
 read -r LOCKED MM IM <<<"$(call $MV 'health(bytes32,address)(uint256,uint256,uint256)' $SID $LP | num | tr '\n' ' ')"
-INTRINSIC=$(( (3000 - CRASH_USD) * 1000000 ))
-echo "   The put's intrinsic is now 3000 − $CRASH_USD = $(usdc $INTRINSIC) (what the writer will owe at this price)."
-echo "   Maintenance margin (MM) = that intrinsic + a 30% buffer on the \$$CRASH_USD mark = $(usdc $MM)."
-echo "   The writer locked $(usdc $LOCKED), which is now BELOW the $(usdc $MM) MM → undercollateralized, so anyone may flag it."
-echo "   (IM, the higher bar a fresh fill must meet, is $(usdc $IM).)"
+GAP=$(( MM > LOCKED ? MM - LOCKED : 0 ))
+echo "   writer's debt to the holder (put value) = 3000 − $CRASH_USD = $(usdc $(( (3000 - CRASH_USD) * 1000000 )))"
+echo "   margin needed now (maintenance) = $(usdc $MM)   ·   writer has locked = $(usdc $LOCKED)   →   short by $(usdc $GAP)"
+echo "   so anyone can flag it for liquidation:"
 echo "flag:               $(send $KEEPER_KEY $MV 'flag(bytes32,address)' $SID $LP)"
 
-echo; echo "── 4. one hour of grace to cure, a post-flag round still at \$$CRASH_USD confirms it, the auction opens ──"
+echo; echo "── 4. the writer gets 1 hour to add margin. It doesn't. The auction opens. ──"
 warp 3660; post $CRASH_USD
 echo "startAuction:       $(send $KEEPER_KEY $MV 'startAuction(bytes32,address)' $SID $LP)"
 
+echo; echo "── 5. the WATERFALL: the holder must stay covered, so someone takes the writer's place ──"
+echo "   order of who covers the gap: writer's own margin → an auction bidder → the backstop pool → the insurance fund"
 if [ "$MODE" = takeover ]; then
-  echo; echo "── 5. a second writer bids to take over the SHORT (not the option) — assumes the obligation, posts fresh margin ──"
-  echo "   The bidder isn't buying the holder's put; they step into the writer's shoes: they take on the"
-  echo "   obligation to pay the holder at expiry and bring the position back up to initial margin. In return"
-  echo "   they collect a bonus (rising 1%→10% across the 30-min auction) out of the OLD writer's locked"
-  echo "   collateral, plus a penalty is skimmed from it. The old writer is liquidated: their margin leaves."
+  echo "   this run: a BIDDER takes over. They take on the writer's obligation, post full margin, and get a"
+  echo "   discount (a bonus, 1%→10% over 30 min) paid out of the liquidated writer's margin."
   warp 900; post $CRASH_USD
   send $KEEPER_KEY $USDC "mint(address,uint256)" $KEEPER 5000000000 >/dev/null   # Anvil mock USDC: fund the bidder
   send $KEEPER_KEY $USDC "approve(address,uint256)" $MV $MAX >/dev/null
-  echo "takeOver (~5.5% bonus at 15 min in): $(send $KEEPER_KEY $MV 'takeOver(bytes32,address)' $SID $LP)"
+  echo "takeOver:           $(send $KEEPER_KEY $MV 'takeOver(bytes32,address)' $SID $LP)"
   NEWWRITER=$KEEPER
-  echo "→ bidder now backs the short with $(usdc $(locked $KEEPER)); old writer's locked margin is now $(usdc $(locked $LP)) (liquidated)"
+  echo "→ the bidder now backs the position with $(usdc $(locked $KEEPER)); the old writer is liquidated (margin now $(usdc $(locked $LP)))"
 else
-  echo; echo "── 5. nobody bids for 30 minutes: the backstop pool adopts the short, drawing only the shortfall ──"
-  echo "   No bidder appeared, so the mutualized backstop pool (seeded by LPs) becomes the counterparty"
-  echo "   behind the holder. It draws from itself only the gap needed to bring the position to maintenance —"
-  echo "   the old writer's collateral still applies; the pool covers the rest."
+  echo "   this run: NO bidder shows up in 30 min, so the next rung — the BACKSTOP POOL (LP-funded) — takes over,"
+  echo "   putting in the shortfall (the gap to maintenance plus a small keeper tip) so the holder stays covered."
   warp 1860; post $CRASH_USD
   P0=$(call $BACKSTOP 'totalAssets()(uint256)' | num)
   echo "absorb:             $(send $KEEPER_KEY $MV 'absorb(bytes32,address)' $SID $LP)"
   P1=$(call $BACKSTOP 'totalAssets()(uint256)' | num)
   NEWWRITER=$BACKSTOP
-  echo "→ backstop now backs the short with $(usdc $(locked $BACKSTOP)) after drawing $(usdc $((P0 - P1))) from the pool; old writer's margin is now $(usdc $(locked $LP))"
+  echo "→ the backstop now backs the position with $(usdc $(locked $BACKSTOP)) (it added $(usdc $((P0 - P1))) from the pool); the old writer is liquidated"
 fi
-echo "Throughout, the HOLDER's position never moved — they still hold $(python3 -c "print(int('$(call $TOKEN 'balanceOf(address)(uint256)' $HOLDER | num)')/1e18)") put; only who stands behind it changed."
+echo "   the HOLDER never had to do anything — they still hold their $(python3 -c "print(int('$(call $TOKEN 'balanceOf(address)(uint256)' $HOLDER | num)')/1e18)") put; only who stands behind it changed."
 
-echo; echo "── 6. expiry at \$$SETTLE_USD: settle off Chainlink, run the waterfall, the holder redeems ──"
-echo "   The put pays its INTRINSIC, not the strike: holder receives (3000 − $SETTLE_USD) = $(usdc $(python3 -c "print(max(0, 3000 - $SETTLE_USD) * 1000000)")) in cash."
-echo "   They are NOT paid \$3,000 — that's the strike, the price they had the right to sell at; the option is"
-echo "   worth the \$$(python3 -c "print(3000 - $SETTLE_USD)") difference between that right and the \$$SETTLE_USD market, and it's cash-settled so no ETH moves."
+echo; echo "── 6. expiry at \$$SETTLE_USD: the holder is paid the put's value in cash ──"
+echo "   payout = 3000 − $SETTLE_USD = $(usdc $(python3 -c "print(max(0, 3000 - $SETTLE_USD) * 1000000)")). (Not \$3,000 — that's the strike; the put is worth the gap to the \$$SETTLE_USD market, cash-settled, no ETH moves.)"
 NOW=$(cast block latest --rpc-url "$RPC" -f timestamp 2>/dev/null)
 warp $((EXPIRY - NOW + 60)); post $SETTLE_USD
 ROUND=$(call $ORACLE 'latestRound()(uint80)' | num)
