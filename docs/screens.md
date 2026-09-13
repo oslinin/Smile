@@ -167,12 +167,12 @@ Per chain. Identical on every chain; on Arc the USDC is Circle's native USDC (18
 
 | Element | What it shows | Where it comes from |
 |---|---|---|
-| **Call** / **Put** | Structure type. Call credit spread: short K₁, long K₂ (collateral WETH). Put credit spread: short K₂, long K₁ (collateral USDC). | Local state; strikes reset to spot rounded to $50 and +$200. |
+| **Call** / **Put** | Structure type. Call credit spread: short K₁, long K₂ (collateral WETH, or USDC on a cash-settled vault such as Arc's). Put credit spread: short K₂, long K₁ (collateral USDC). | Local state; strikes reset to spot rounded to $50 and +$200. |
 | **K1 (USD, lower)**, **K2 (USD, higher)** | The two strikes. | Inputs. |
 | **Capacity (units)** | Units the range may fill. | Input, as WAD. |
 | **Expiry** `7 / 30 / 90 days` | Days to expiry. | `EXPIRY_PRESETS`. |
-| **Escrow, netted (S12)** `N WETH` or `N USDC` | The collateral the range pulls in total: calls `units × (K₂ − K₁) / K₂` WETH; puts `units × (K₂ − K₁)` USDC, both rounded up. | `escrowFor()` in `SpreadDesk.tsx`, mirroring `SpreadVault.quote()`'s escrow arithmetic. |
-| **Main vault, naked short leg** `N WETH` or `N USDC` | What the main vault would lock for the same short leg: 1 WETH per unit, or K₂ USDC per unit. | `units` or `units × K₂`. |
+| **Escrow, netted (S12)** `N WETH` or `N USDC` | The collateral the range pulls in total: calls `units × (K₂ − K₁) / K₂` WETH; puts `units × (K₂ − K₁)` USDC, both rounded up. On a cash-settled vault (`SpreadVault.cashSettledCalls()` is true — Arc) calls use the USDC formula too. | `escrowFor()` in `SpreadDesk.tsx`, mirroring `SpreadVault.quote()`'s escrow arithmetic; `cashSettledCalls` read once from the vault. |
+| **Main vault, naked short leg** `N WETH` or `N USDC` | What the main vault would lock for the same short leg: 1 WETH per unit, or K₂ USDC per unit. On a cash-settled vault the call figure is shown in USDC at spot (`1 ETH per unit at spot`). | `units`, `units × K₂`, or `units × spot`. |
 | **Capital efficiency** `N× tighter` | Naked ÷ netted per unit: K₂/(K₂ − K₁) for calls, K₂/(K₂ − K₁) for puts (the example 3000/3200 gives 16×). "K2 must exceed K1" when the strikes are invalid. | Computed in the component. |
 | Progress and `Spread #N shipped — E WETH backing it, still in your wallet.` | approve → `SpreadVault.openStructure` → `Aqua.ship`. | `useWriteContract` chain. |
 | **Buy the Spread** — **Structure** `#N · call/put credit · $K₁ / $K₂`, **Expires**, **Status** `active`/`closed` | The latest structure on the vault. | `SpreadVault.structures(latest)`. |
@@ -183,7 +183,7 @@ Per chain. Identical on every chain; on Arc the USDC is Circle's native USDC (18
 | **Writer's escrow pulled on fill** `N WETH` / `N USDC` | The netted escrow for this many units, pulled just in time from the writer's wallet at the fill. | Third output of `quote`. |
 | `SpreadToken: 0x…` and `You hold N units` | The ERC-20 minted per structure and your balance. | `SpreadVault.buy` return value; `balanceOf`. |
 
-Per chain. Sepolia and Arc both have a `SpreadVault`; the Arc receipt shows the 0.000625 WETH pull for 0.01 units of a 3000/3200 call credit spread (16× less than the naked 0.01 WETH).
+Per chain. Sepolia's `SpreadVault` collateralizes call credits in WETH. Arc's is cash-settled (no WETH on the chain): the Arc receipt shows exactly 2.00 USDC pulled for 0.01 units of a 2600/2800 call credit spread, K₂−K₁ per unit, where a naked call would need 0.01 ETH.
 
 <a id="tab-margin"></a>
 ## Margin

@@ -12,8 +12,12 @@ the full stack cost ~0.46 USDC in gas.
   the 6-decimal ERC-20 view of the chain's native asset. Premiums,
   protocol fees, and put collateral all move in it, and gas is paid from
   the same balance. That is the point of deploying here.
-- **WETH is a mock** (`MockERC20`, freely mintable): Arc has no canonical
-  WETH.
+- **WETH is a mock** (`MockERC20`, freely mintable): Arc has no ether, so
+  the only product that needs the asset itself — a covered call in the main
+  vault or `RfqVault` — collateralizes with a stand-in. Everything else is
+  USDC, and since 2026-09-13 the `SpreadVault` is cash-settled: a call credit
+  spread escrows K2−K1 USDC per unit and settles in USDC, so no product on
+  the Spreads tab touches the mock at all. ETH is the reference price only.
 - **The ETH/USD spot oracle is a mock** (`MockV3Aggregator`; since 2026-09-12
   it mirrors Sepolia's Chainlink ETH/USD every 30 minutes, see "Oracle tick"
   below):
@@ -38,7 +42,9 @@ the full stack cost ~0.46 USDC in gas.
 | AquaOptionSettlement | `0xA52Dc13F4E05807bB316Bc39604cC099Cc7B29af` |
 | SmileQuoteLens | `0x009d818CeBEB8a6F11d6f73912794D638bcf080b` |
 | FirmEscrowFactory | `0xC59C38081bDaDd08f32F024C2588D40705953dFa` |
-| SpreadVault (S12) | `0x70E2639b5F374eB023aFaaC0647b0bDee84A227e` |
+| SpreadVault (S12, cash-settled — no WETH, 2026-09-13) | `0xAb362d74d339C416D457705792D877201D0e0D0f` |
+| SpreadVault settlement (`AquaOptionSettlement`) | `0xd2AaC98f5445db58881C4647cda440B7d03149E9` |
+| SpreadVault, first deploy (WETH-collateralized, retired 2026-09-13) | `0x70E2639b5F374eB023aFaaC0647b0bDee84A227e` |
 
 Transaction hashes are in `broadcast/Deploy.s.sol/5042002/run-latest.json`.
 
@@ -94,6 +100,28 @@ was the vault's 1 USDC floor (0.01 units of a ~45 USDC/unit spread is
 below it), fee 0.010102 USDC. The whole run cost about 0.07 USDC net
 because premium and fee circle back to the same address; only gas is
 consumed.
+
+### Cash-settled SpreadVault (2026-09-13)
+
+Redeployed with `weth = address(0)`, which flips `cashSettledCalls` on: a
+call credit spread now escrows K2−K1 USDC per unit and pays the intrinsic
+in USDC (`test/SpreadVaultCash.t.sol`). Deployer as LP, taker and fee
+recipient; every amount is real USDC; the fill is a self-fill (L15).
+
+| Step | Tx |
+|---|---|
+| `forge create SpreadVault(aqua, oracle, hook, deployer, 0x0, USDC)` → `0xAb362d74d339C416D457705792D877201D0e0D0f` | `0xcf69c13be6c9d114fb60378ba4773d581fc88d4d7c9d33681e6869f2729e69ec` |
+| `forge create AquaOptionSettlement(deployer, deployer, oracle)` → `0xd2AaC98f5445db58881C4647cda440B7d03149E9` | `0xdb7f8c0b91d6789e6594b2c86e00651550ce1c69714a3dd884ad46d3d125b705` |
+| `setRegistrar` / `setSettlement` / `setPricingDefaults(50, 25, 0.001e18)` / `setProtocolFee(1%, deployer)` | `0x5e2afc87…7dedfe` · `0xc423f256…fd28cf` · `0x26d75932…7831c` · `0x20136546…0fc48c` |
+| `openStructure` #0 — 2600/2800 call credit, 30 days, 10 USDC capacity | `0xeb290197c714252535a279c9c689a1b859440acf973c05038a34737654ad3c92` |
+| `USDC.approve(Aqua)` then `Aqua.ship` — tokens `[USDC]`, amounts `[10 USDC]` | `0x93c24e8c…da0471` · `0xa53c7b9c96c6ffa995db9c3a5c78c44885e713294e23be068a0e1d9a6a9127a8` |
+| `USDC.approve(SpreadVault)` then `buy` 0.01 units → `SpreadToken` `0x70d585622DDc12887e180B44BC2574cd18d0FBF2` (`CALL-SPREAD-2600-2800`) | `0xdfb7592e…c57e6de` · `0x0f23f6a1042733952f44fb54c2640085d0d816ce848a807fe1304551fc9a237b` |
+
+The fill pulled **exactly 2.000000 USDC** from the writer (0.01 × (2800−2600)),
+the vault's 1 USDC premium floor plus 0.010102 USDC fee, 1,001,719 gas. A
+naked short call on the main vault would have needed 0.01 ETH — an asset
+Arc does not have. The subgraph indexes only the main vault, so no
+subgraph change.
 
 ### Margin + RFQ demo (`script/arc-siblings-smoke.sh`, 2026-09-10, `UNITS=1e15`)
 

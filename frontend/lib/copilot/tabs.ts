@@ -48,7 +48,7 @@ export const TABS: Record<TabId, TabBriefing> = {
   },
   spreads: {
     label: "Spreads",
-    shows: "SpreadVault: the writer's strategy is a credit spread and the escrow pulled through Aqua is the structure's true max loss (0.0625 WETH instead of 1 WETH on a 3000/3200 call spread — 16×).",
+    shows: "SpreadVault: the writer's strategy is a credit spread and the escrow pulled through Aqua is the structure's true max loss (0.0625 WETH instead of 1 WETH on a 3000/3200 call spread — 16×). On Arc the vault is cash-settled: a call credit escrows K2−K1 USDC per unit and settles in USDC, no WETH anywhere.",
     docs: ["guide/spreads-spreadvault", "readme/spreadvault-in-one-table"],
     suggest: "Explain defined-risk netting with live numbers: price_strategy on the spread vs the naked leg, and the per-leg collateral panel. Propose a spread with propose_trade when the user has a view.",
     starters: ["Explain the 16× with today's numbers", "Build me a call credit spread around spot", "Why is a spread cheaper to write here than a naked call?"],

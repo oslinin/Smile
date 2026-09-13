@@ -4,6 +4,7 @@
 // spread whose Aqua strategy backs only the structure's true max loss, and a
 // taker buys it. The number this tab exists to show is the escrow ratio —
 // 0.0625 WETH instead of 1 WETH for a 3000/3200 call credit spread (16x),
+// or K2-K1 USDC where the vault is cash-settled (Arc: no ether on the chain),
 // 200 USDC instead of 3,200 for the put-credit twin — computed live from the
 // strikes, exactly as SpreadVault.quote() computes it on-chain.
 //
@@ -74,11 +75,11 @@ const USDC_UNIT = BigInt(1_000_000);
 
 /// Mirrors SpreadVault.quote()'s escrow math (ceil), so the capacity the LP
 /// ships is never a wei short of what the first fill pulls.
-function escrowFor(isCall: boolean, k1: number, k2: number, unitsWad: bigint): bigint {
+function escrowFor(isCall: boolean, k1: number, k2: number, unitsWad: bigint, cashCalls: boolean): bigint {
   if (k2 <= k1) return ZERO_BI;
   const gap = BigInt(k2 - k1);
-  if (isCall) return (unitsWad * gap + BigInt(k2) - ONE_BI) / BigInt(k2);   // (K2-K1)/K2 WETH per unit
-  return (unitsWad * gap * USDC_UNIT + WAD - ONE_BI) / WAD;                // K2-K1 USDC per unit
+  if (isCall && !cashCalls) return (unitsWad * gap + BigInt(k2) - ONE_BI) / BigInt(k2);   // (K2-K1)/K2 WETH per unit
+  return (unitsWad * gap * USDC_UNIT + WAD - ONE_BI) / WAD;                // K2-K1 USDC per unit (puts, and calls when cash-settled)
 }
 
 function fmtUnits(v: bigint, decimals: number, digits = 4) {
@@ -103,12 +104,21 @@ export function SpreadDesk({ spot }: { spot: number }) {
   const shipCalledRef = useRef(false);
 
   const unitsWad = BigInt(Math.round((Number(units) || 0) * 1e18));
-  const collateralToken = isCall ? CONTRACTS.weth : CONTRACTS.usdc;
-  const collateralDecimals = isCall ? 18 : 6;
-  const collateralSymbol = isCall ? "WETH" : "USDC";
-  const escrow = escrowFor(isCall, k1, k2, unitsWad);
-  const nakedPerUnit = isCall ? 1 : k2;                       // what the main vault locks per unit
-  const nettedPerUnit = isCall ? (k2 - k1) / k2 : k2 - k1;
+  // A vault deployed without WETH (Arc) escrows and settles call credits in USDC.
+  const { data: cashCallsRead } = useReadContract({
+    address: CONTRACTS.spreadVault as `0x${string}`,
+    abi: [{ name: "cashSettledCalls", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "bool" }] }] as const,
+    functionName: "cashSettledCalls",
+    query: { enabled: !!CONTRACTS.spreadVault },
+  });
+  const cashCalls = cashCallsRead === true;
+  const wethCall = isCall && !cashCalls;
+  const collateralToken = wethCall ? CONTRACTS.weth : CONTRACTS.usdc;
+  const collateralDecimals = wethCall ? 18 : 6;
+  const collateralSymbol = wethCall ? "WETH" : "USDC";
+  const escrow = escrowFor(isCall, k1, k2, unitsWad, cashCalls);
+  const nakedPerUnit = isCall ? (cashCalls ? spot : 1) : k2;  // what the main vault locks per unit (1 ETH ≈ spot USDC)
+  const nettedPerUnit = wethCall ? (k2 - k1) / k2 : k2 - k1;
   const ratio = nettedPerUnit > 0 ? nakedPerUnit / nettedPerUnit : 0;
   const expiry = BigInt(Math.floor(Date.now() / 1000) + expiryOffset);
   const strikes: readonly [bigint, bigint, bigint, bigint] = isCall
@@ -359,7 +369,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
           <div className="flex justify-between">
             <span className="text-gray-400">Main vault, naked short leg</span>
             <span className="font-mono text-gray-500 line-through">
-              {validStrikes ? `${isCall ? (Number(units) || 0).toLocaleString() : ((Number(units) || 0) * k2).toLocaleString()} ${collateralSymbol}` : "—"}
+              {validStrikes ? `${((Number(units) || 0) * nakedPerUnit).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${collateralSymbol}${isCall && cashCalls ? " (1 ETH per unit at spot)" : ""}` : "—"}
             </span>
           </div>
           <div className="flex justify-between border-t border-green-900/60 pt-1">
@@ -451,7 +461,7 @@ export function SpreadDesk({ spot }: { spot: number }) {
               <div className="flex justify-between"><span className="text-gray-400">Net premium (Ask long − Bid short)</span><span className="font-mono text-white">{quoteData ? `${fmtUnits(premium, 6, 2)} USDC` : quoteError ? "—" : "…"}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Protocol fee</span><span className="font-mono text-gray-300">{quoteData ? `${fmtUnits(fee, 6, 2)} USDC` : "…"}</span></div>
               <div className="flex justify-between border-t border-gray-700 pt-1"><span className="text-gray-300">You pay</span><span className="font-mono text-white font-semibold">{quoteData ? `${fmtUnits(totalCost, 6, 2)} USDC` : "…"}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Writer&apos;s escrow pulled on fill</span><span className="font-mono text-green-400">{quoteData ? `${fmtUnits(fillEscrow, structIsCall ? 18 : 6)} ${structIsCall ? "WETH" : "USDC"}` : "…"}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Writer&apos;s escrow pulled on fill</span><span className="font-mono text-green-400">{quoteData ? `${fmtUnits(fillEscrow, structIsCall && !cashCalls ? 18 : 6)} ${structIsCall && !cashCalls ? "WETH" : "USDC"}` : "…"}</span></div>
               {quoteError && <div className="text-red-400">{quoteError.message.split("\n")[0]}</div>}
             </div>
 

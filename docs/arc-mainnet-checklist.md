@@ -23,7 +23,9 @@ Prepared on 2026-09-12: the env-driven branch in `script/Deploy.s.sol`
   `Deploy.s.sol` defaults to that and `ARC_MAINNET_USDC` overrides it.
 - Canonical WETH on Arc mainnet: docs.arc.io contract addresses; Uniswap Labs
   is named as a day-one protocol in Circle's launch announcement, so a WETH
-  may exist. If it does, set `ARC_MAINNET_WETH` — calls become a real market
+  may exist. If it does, set `ARC_MAINNET_WETH` — covered calls on the main
+  vault and `RfqVault` become a real market (the `SpreadVault` is deployed
+  cash-settled on Arc either way: call credits escrow K2−K1 USDC, no WETH)
   instead of a mock demo.
 - Chainlink ETH/USD on Arc mainnet: data.chain.link, network list. If a feed
   exists, set `ARC_MAINNET_ETH_USD_FEED` — quoting and permissionless

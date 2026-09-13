@@ -286,8 +286,11 @@ contract Deploy is Script, StdCheats {
         if (bondBps > 0) vault.setFirmnessBondBps(bondBps);
 
         // ── S12 SpreadVault: sibling AquaApp, own settlement ─────────────
+        // On Arc (no ether on the chain) the vault gets no WETH, which makes
+        // call credit spreads cash-settled in USDC (SpreadVault.cashSettledCalls).
+        bool usdcNative = block.chainid == 5042002 || (arcMainnetId != 0 && block.chainid == arcMainnetId);
         address spreadAddr = _deploySpread(
-            aquaAddr, oracleAddr, address(hook), wethAddr, usdcAddr, chainlinkFeed, dao, deployer
+            aquaAddr, oracleAddr, address(hook), usdcNative ? address(0) : wethAddr, usdcAddr, chainlinkFeed, dao, deployer
         );
 
         // ── S13 MarginVault: opt-in margin tier, own settlement + backstop ─

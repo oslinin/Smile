@@ -107,7 +107,7 @@ export function Story({ spot, onGo }: { spot: number; onGo: (tab: TabId) => void
 
   const ladder = [
     { title: "Naked put", sub: "the main vault · cash-secured", value: k, note: `${usd0(k)} USDC locked per unit`, color: "bg-blue-700", cta: "Trade", tab: "chain" as TabId, tone: "old" as const },
-    { title: "Credit spread", sub: `SpreadVault · ${usd0(k)}/${usd0(k2)}`, value: k2 - k, note: `${usd0(k2 - k)} USDC — the true max loss, ${(k / (k2 - k)).toFixed(0)}× less`, color: "bg-green-600", cta: "Spreads", tab: "spreads" as TabId, tone: "new" as const },
+    { title: "Credit spread", sub: `SpreadVault · ${usd0(k)}/${usd0(k2)}${chainId === 5042002 ? " · calls cash-settled in USDC too" : ""}`, value: k2 - k, note: `${usd0(k2 - k)} USDC — the true max loss, ${(k / (k2 - k)).toFixed(0)}× less`, color: "bg-green-600", cta: "Spreads", tab: "spreads" as TabId, tone: "new" as const },
     { title: "Margined put", sub: "MarginVault · opt-in, IM off the worst-of-hour mark", value: imUsd, note: `${usd0(imUsd)} USDC initial margin — ${(k / Math.max(imUsd, 1)).toFixed(1)}× less, liquidation-backed`, color: "bg-emerald-600", cta: "Margin", tab: "margin" as TabId, tone: "new" as const },
     { title: "Signed quote", sub: "RfqVault · LP-signed price, same collateral rules", value: k, note: "any price the LP signs — the custody model never changes", color: "bg-teal-700", cta: "RFQ", tab: "rfq" as TabId, tone: "new" as const },
   ];
@@ -123,6 +123,7 @@ export function Story({ spot, onGo }: { spot: number; onGo: (tab: TabId) => void
               Smile prices ETH options on-chain and pulls a writer&apos;s collateral <em>just in time</em> through 1inch Aqua — at the fill, not at deposit.
               EthOnline 2026 added three sibling vaults on the same registry: spreads that escrow only their true max loss, opt-in margin with a
               liquidation waterfall, and LP-signed RFQ quotes — plus a Graph subgraph and deployments on Sepolia and Circle&apos;s Arc.
+              On Arc the whole venue runs in USDC — premiums, collateral, spreads, margin, gas — and ETH is only the price being traded.
             </p>
           </div>
           <div className="rounded-xl border border-gray-700 bg-gray-950/60 p-4 min-w-[220px]">

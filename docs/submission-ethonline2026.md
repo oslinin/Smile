@@ -225,6 +225,10 @@ lists every address (Aqua `0x6419…bb7d`, vault `0xE37E…C789`, SpreadVault
 
 Full hashes in `arc-testnet-deployment.md`. The spread fill pulled 0.000625
 WETH where a naked leg would have locked 0.01 — the same 16× on Arc.
+On 2026-09-13 the `SpreadVault` was redeployed **cash-settled**
+(`0xAb362d74…`): Arc has no ether, so call credit spreads now escrow K₂−K₁
+USDC per unit and settle in USDC — the 2600/2800 fill (`0x0f23f6a1…`)
+pulled exactly 2.00 USDC, no WETH anywhere on the Spreads tab.
 
 **Added the same evening — MarginVault + RfqVault on Arc** (`0x98AE8EA4…`,
 `0x269E7008…`, backstop `0x65e3aeDD…`): the backstop pool and insurance

@@ -10,7 +10,7 @@ Four vaults are live on Arc and each has executed at least one real fill: the si
 
 Two keeper scripts added on 2026-09-11 use Circle's App Kits to fund the margin tier's safety funds without any private key for the treasury living in this repository: `keeper/insurance-gateway.mjs` moves USDC from Sepolia to Arc through Circle Gateway and deposits it into the insurance fund, and `keeper/backstop-wallet.mjs` operates a Circle developer-controlled wallet on Arc that deposits into the backstop pool.
 
-What is deliberately mock on Arc is stated plainly throughout: wrapped ether (WETH) and the ETH/USD price feed, because Arc testnet has neither a canonical WETH nor a Chainlink-compatible price feed at the time of writing.
+Arc has no ether, so on Arc ETH is the reference price only. Puts, put spreads, margined puts, premiums, fees and gas were USDC from the first deploy; on 2026-09-13 the `SpreadVault` was redeployed cash-settled, so call credit spreads escrow K2−K1 USDC per unit and settle in USDC as well. What remains mock is stated plainly throughout: the ETH/USD price feed (a keeper mirrors Sepolia's Chainlink answer into it every 30 minutes) and, for the covered calls of the main vault and `RfqVault` only, a WETH stand-in, because a covered call needs the asset itself and Arc has none.
 
 ## Features used
 
@@ -18,6 +18,7 @@ What is deliberately mock on Arc is stated plainly throughout: wrapped ether (WE
 |---|---|---|
 | Arc testnet chain branch in the deploy script (real USDC, mock WETH, mock oracle) | `script/Deploy.s.sol`, chain id `5042002` branch | EthOnline 2026 (`108e25d`, `7d409bc`) |
 | Full stack deployed on Arc: Aqua registry, router, pricing engine and hook, `AquaCollateralVault`, `AquaOptionSettlement`, `SpreadVault` | `docs/arc-testnet-deployment.md`, `broadcast/Deploy.s.sol/5042002/` | EthOnline 2026 |
+| Cash-settled `SpreadVault` on Arc: deployed with no WETH, call credit spreads escrow and settle in USDC (`cashSettledCalls`) | `src/periphery/SpreadVault.sol`, `test/SpreadVaultCash.t.sol`, `docs/arc-testnet-deployment.md` "Cash-settled SpreadVault" | EthOnline 2026 (2026-09-13) |
 | `MarginVault`, `MarginBackstop`, `RfqVault` and their settlement contracts on Arc | `script/DeployArcSiblings.s.sol`, `docs/arc-testnet-deployment.md` | EthOnline 2026 (`588ff9f`) |
 | Real-USDC demo transactions as `cast send` calls | `script/arc-smoke.sh`, `script/arc-siblings-smoke.sh` | EthOnline 2026 |
 | Arc network entry in the wallet configuration and the per-chain address map | `frontend/config/wagmi.ts`, `frontend/lib/deployments.ts`, `.env.arc.example` | EthOnline 2026 |
@@ -93,7 +94,8 @@ The recorded run on 2026-09-10 (deployer as LP, buyer and fee recipient, 0.01 un
 |---|---|
 | `authorizeRange` for calls at $2,800–$3,200 with real-USDC premium | tx `0x586eb3a4…aa6aae` |
 | `buy` 0.01 units at $3,000 | `OptionToken` `0x9b12…e128` minted |
-| `SpreadVault.openStructure` 3000/3200 call credit, then `buy` 0.01 units | `SpreadToken` `0xFAEe…ea70` minted; 0.000625 WETH pulled where a naked leg would lock 0.01 WETH |
+| `SpreadVault.openStructure` 3000/3200 call credit, then `buy` 0.01 units (first, WETH-collateralized vault, 2026-09-10) | `SpreadToken` `0xFAEe…ea70` minted; 0.000625 WETH pulled where a naked leg would lock 0.01 WETH |
+| `SpreadVault.openStructure` 2600/2800 call credit on the cash-settled vault, then `buy` 0.01 units (2026-09-13) | `SpreadToken` `0x70d5…FBF2` minted; exactly 2.00 USDC pulled — K2−K1 per unit — where a naked call would need 0.01 ETH, which Arc does not have |
 | `MarginBackstop.deposit` and `MarginVault.fundInsurance` seeded in USDC | pool holds 30 USDC, fund holds 4 USDC |
 | `MarginVault.buy` 0.001 units of the $3,000 put | 1.50 USDC of initial margin pulled, not the 3.00 USDC strike |
 | `RfqVault.fill` of an LP-signed quote at 0.688860 USDC | formula Ask was 0.695819; 0.001 WETH pulled just in time |
@@ -184,7 +186,7 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 
 ## Limitations
 
-- **WETH is a mock on Arc.** Arc testnet has no canonical wrapped ether, so the call side's collateral is a freely mintable `MockERC20`. Calls on Arc are therefore demonstrations of the mechanism, not of a market.
+- **Covered calls need the asset, and Arc has none.** A covered call is backed by ether itself, and Arc has no ether: its native asset is USDC. So the main vault's and `RfqVault`'s calls on Arc collateralize with a freely mintable `MockERC20` standing in for WETH, and those calls are demonstrations of the mechanism, not of a market. The `SpreadVault` no longer has this limitation: since 2026-09-13 it is cash-settled on Arc, a call credit spread escrows K2−K1 USDC per unit and settles in USDC (`cashSettledCalls`). Removing WETH from the last two places means USDC-margined calls in `MarginVault`, which is put-only by design today; that is the post-event step.
 - **The ETH/USD price feed is a mock on Arc.** No Chainlink-compatible feed is documented on Arc testnet (Pyth does not list Arc; Chainlink and RedStone show nothing; Arc's contract page lists no oracles). Quoting and settlement both read a `MockV3Aggregator`. Since 2026-09-12 a keeper (`keeper/arc-oracle-tick.sh`, a systemd timer on the dev box) mirrors Sepolia's Chainlink ETH/USD answer into it every 30 minutes, so Arc's spot tracks the real ETH price and the staleness checks in `MarginVault.buy` (90 minutes) and `RfqVault.formulaQuote` (one hour) pass; if the keeper stops, anyone may post a fresh round. The feed remains a contract anyone can set, so Arc demonstrates the mechanism, not the oracle trust model.
 - **`forge script` cannot simulate Arc's USDC.** Deploys that do not call USDC work through `forge script`; anything that calls USDC must be sent with `cast send`. The frontend is unaffected because MetaMask does not simulate locally.
 - **No liquidation run on a live chain.** The margined put fill is on Arc, but the crash-to-auction-to-settlement path relies on time warps and lives in the Anvil script `script/margin-lifecycle.sh`.
@@ -200,7 +202,8 @@ The Graph Studio subgraph `smile-arc-testnet` indexes `AquaCollateralVault` at `
 - **FX options on Arc (USDC/EURC).** Mechanically the same engine pointed at a EUR/USD feed with EURC in the call-collateral slot. Task X1 of the Arc plan found the only oracle with a documented Arc testnet deployment to be Stork (`0xacC0a0cF13571d30B4b8637996F5D6D774d4fd62`), a pull-model oracle that requires an adapter in the shape of the existing `PythSpotAdapter`, an update-posting flow and an API key. It is recorded as the lead for the 2026-09-16 to 2026-09-30 window.
 - **Arc mainnet.** Task X6 of the plan is the mainnet deploy of the same script against Arc's mainnet RPC once Circle publishes it, treated with the care of a real-money deploy. The bounty's additional $2,000 for a mainnet deployment is a post-submission follow-up because mainnet launches after the submission deadline.
 - **Keep the treasury funded and automate the top-ups.** Both keepers have run once (2026-09-12; hashes in `docs/arc-testnet-deployment.md` and on the Margin tab). The next step is scheduling them: a cron or CRE trigger that tops up the backstop from the Circle wallet when `totalAssets` falls below a floor and refills the insurance fund through Gateway when a haircut draws it down, so the treasury is an automated money flow rather than a manual keeper run.
-- **A real feed and real WETH when Arc provides them.** Replacing the two mocks is a one-branch change in `script/Deploy.s.sol`.
+- **A real feed when Arc provides one.** Replacing the mock aggregator is a one-branch change in `script/Deploy.s.sol`.
+- **USDC-margined calls.** Extend `MarginVault` from puts to calls so that no product on Arc needs a WETH stand-in: the last step to a fully USDC-native venue.
 - **Gateway onboarding in the application.** Task X4 scopes a frontend flow that lets a user with USDC on another chain act on Smile-on-Arc through Gateway's unified balance rather than a manual bridge step.
 
 ## Glossary

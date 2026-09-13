@@ -115,7 +115,7 @@ const DEPLOYED_ADDRESSES: Record<number, ContractMap> = {
     settlement:       "0xA52Dc13F4E05807bB316Bc39604cC099Cc7B29af",
     aqua:             "0x641970C7D4534d983Aa7BB9E2c7700ea3007bb7d",
     swapvmRouter:     "0x8B295cfB8276b5044A95b4b8BA9eFa28b8F17cA5",
-    spreadVault:      "0x70E2639b5F374eB023aFaaC0647b0bDee84A227e",
+    spreadVault:      "0xAb362d74d339C416D457705792D877201D0e0D0f",   // cash-settled (no WETH), 2026-09-13
     marginVault:      "0x98AE8EA40e1DB38360a7DE4e547F1Ccb516415Ce",
     marginBackstop:   "0x65e3aeDD095b5735C5eeF046AFe107B3552f19a6",
     marginSettlement: "0x92e66758Fdd79A592aF2443e7A9Ce299743419aD",
