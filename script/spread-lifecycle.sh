@@ -58,7 +58,7 @@ echo "writer $LP  holder $HOLDER  units $UNITS  escrow $ESCROW wei"
 echo; echo "── 1. writer opens + ships a 3000/3200 call credit spread (expires in 1h) ──"
 AUTH=$(call $SPREAD 'nextAuthId()(uint256)' | num)
 echo "openStructure #$AUTH: $(send $LP_KEY $SPREAD 'openStructure(uint8,uint256[4],uint256,uint256)' 0 "[0,0,$K1,$K2]" $EXPIRY $ESCROW)"
-send $LP_KEY $WETH "approve(address,uint256)" $AQUA $ESCROW >/dev/null
+send $LP_KEY $WETH "approve(address,uint256)" $AQUA $MAX >/dev/null   # max, not the exact escrow — leaving a tight allowance on the shared Anvil deployer starves a later main-vault pull (breaks ./local.sh reseeds)
 mapfile -t S < <(call $SPREAD 'getShipParams(uint256)(address,bytes,address[],uint256[])' $AUTH --json | ship_args)
 echo "aqua.ship:        $(send $LP_KEY $AQUA 'ship(address,bytes,address[],uint256[])' "${S[0]}" "${S[1]}" "${S[2]}" "${S[3]}")"
 
