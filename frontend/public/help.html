@@ -56,6 +56,14 @@
   .nav-link:hover { background: #111827; color: #d1d5db; }
   .nav-link.active { background: #1e293b; color: #fff; font-weight: 600; }
   /* Section TOC, built at runtime from the active page's h2 headings. */
+  .search { display: block; width: 100%; margin: 0 0 12px; padding: 7px 10px; border-radius: 6px; border: 1px solid #1f2937; background: #030712; color: #e5e7eb; font: inherit; font-size: 0.85rem; }
+  .search:focus { outline: none; border-color: #3b82f6; }
+  .results { margin: 0 0 12px; }
+  .results .hit { display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer; padding: 6px 10px; border-radius: 6px; color: #d1d5db; font: inherit; font-size: 0.8rem; line-height: 1.35; }
+  .results .hit:hover { background: #111827; }
+  .results .hit .where { color: #6b7280; font-size: 0.7rem; display: block; }
+  .results .hit mark { background: #1d4ed8; color: #fff; border-radius: 2px; padding: 0 1px; }
+  .results .none { color: #6b7280; font-size: 0.78rem; padding: 6px 10px; }
   .toc { margin: 2px 0 8px 18px; border-left: 1px solid #1f2937; }
   .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
   .toc a:hover { color: #d1d5db; background: #111827; }
@@ -108,7 +116,8 @@
     }
     .sidebar h2, .sidebar h3 { display: none; }
     .nav-link { width: auto; white-space: nowrap; margin-right: 4px; margin-bottom: 0; }
-    .toc { display: none; }
+    .toc, .results { display: none; }
+    .search { width: 160px; margin: 0 8px 0 0; flex: 0 0 auto; }
     .page-reference { height: 80vh; }
   }
 </style>
@@ -117,6 +126,8 @@
   <div class="wiki">
     <nav class="sidebar">
       <h2>Smile Docs</h2>
+      <input class="search" type="search" placeholder="Search docs… ( / )" aria-label="Search docs" />
+      <div class="results" hidden></div>
       <button class="nav-link" data-page="overview">Overview</button>
         <button class="nav-link" data-page="guide">User Guide</button>
         <button class="nav-link" data-page="screens">Screens</button>
@@ -6738,6 +6749,68 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
       var cur = toc.querySelector(".current");
       if (cur) cur.scrollIntoView({ block: "nearest" });
     }
+    // Search: every page is already in the DOM, so index each h2 section's
+    // text once and substring-match on it. Plain and instant; no library.
+    var INDEX = null;
+    function buildIndex() {
+      INDEX = [];
+      document.querySelectorAll("section.page").forEach(function (section) {
+        var pageId = section.id.replace(/^page-/, "");
+        var link = document.querySelector('.nav-link[data-page="' + pageId + '"]');
+        var label = link ? link.textContent : pageId;
+        var body = section.querySelector("article") || section;
+        var cur = { page: pageId, label: label, anchor: "", heading: label, parts: [] };
+        var entries = [cur];
+        Array.prototype.forEach.call(body.children, function (el) {
+          if (el.tagName === "H2") {
+            var prev = el.previousElementSibling;
+            if (prev && prev.tagName === "P" && prev.children.length === 1) prev = prev.children[0];
+            var anchor = prev && prev.tagName === "A" && prev.id ? prev.id : el.id;
+            cur = { page: pageId, label: label, anchor: anchor, heading: el.textContent.trim(), parts: [] };
+            entries.push(cur);
+          } else {
+            cur.parts.push(el.textContent);
+          }
+        });
+        entries.forEach(function (e) {
+          e.text = e.parts.join(" ").replace(/\s+/g, " ");
+          e.lower = (e.heading + " " + e.text).toLowerCase();
+          delete e.parts;
+          if (e.text) INDEX.push(e);
+        });
+      });
+    }
+    function escapeHtml(s) { return s.replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+    function snippet(e, q) {
+      var i = e.text.toLowerCase().indexOf(q);
+      if (i < 0) return escapeHtml(e.text.slice(0, 90)) + "…";
+      var a = Math.max(0, i - 40), b = Math.min(e.text.length, i + q.length + 50);
+      return (a > 0 ? "…" : "") + escapeHtml(e.text.slice(a, i)) + "<mark>" + escapeHtml(e.text.slice(i, i + q.length)) + "</mark>" + escapeHtml(e.text.slice(i + q.length, b)) + (b < e.text.length ? "…" : "");
+    }
+    var searchBox = document.querySelector(".search");
+    var resultsBox = document.querySelector(".results");
+    function runSearch() {
+      var q = searchBox.value.trim().toLowerCase();
+      if (q.length < 2) { resultsBox.hidden = true; resultsBox.innerHTML = ""; return; }
+      if (!INDEX) buildIndex();
+      var hits = INDEX.filter(function (e) { return e.lower.indexOf(q) !== -1; });
+      // Heading matches first, then in sidebar order.
+      hits.sort(function (a, b) { return (b.heading.toLowerCase().indexOf(q) !== -1) - (a.heading.toLowerCase().indexOf(q) !== -1); });
+      resultsBox.innerHTML = hits.length
+        ? hits.slice(0, 30).map(function (e, i) {
+            return '<button class="hit" data-i="' + i + '"><span class="where">' + escapeHtml(e.label) + (e.anchor ? " › " + escapeHtml(e.heading) : "") + "</span>" + snippet(e, q) + "</button>";
+          }).join("") + (hits.length > 30 ? '<div class="none">' + (hits.length - 30) + " more — narrow the search</div>" : "")
+        : '<div class="none">No matches</div>';
+      resultsBox.hidden = false;
+      resultsBox.querySelectorAll(".hit").forEach(function (btn, i) {
+        btn.addEventListener("click", function () { var e = hits[i]; showPage(e.page, e.anchor || undefined); });
+      });
+    }
+    searchBox.addEventListener("input", runSearch);
+    searchBox.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { searchBox.value = ""; runSearch(); searchBox.blur(); } });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "/" && document.activeElement !== searchBox && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { ev.preventDefault(); searchBox.focus(); }
+    });
     function showHash(hash) {
       var parts = (hash || "#overview").slice(1).split("/");
       showPage(parts[0], parts[1]);
