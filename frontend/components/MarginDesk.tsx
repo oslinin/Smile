@@ -453,7 +453,7 @@ export function MarginDesk({ spot }: { spot: number }) {
             <div className="text-gray-500 pt-1">Waterfall: writer margin → free balance → takeover bidder → backstop → insurance → (haircut, loudly).</div>
             {treasury.length > 0 && dep && (
               <div className="pt-2 border-t border-gray-700 space-y-1">
-                <div className="text-gray-400">Funded through Circle App Kits</div>
+                <div className="text-gray-300 font-semibold">Treasury Workflow <span className="text-gray-500 font-normal">· Circle App Kits</span></div>
                 {treasury.map((t) => {
                   const kit = /wallet/i.test(t.label) ? "Circle Wallets" : "Circle Gateway";
                   return (
@@ -472,8 +472,8 @@ export function MarginDesk({ spot }: { spot: number }) {
             {treasury.length === 0 && dep && (
               <div className="pt-2 border-t border-gray-700">
                 <div className="text-gray-500 text-[11px]">
-                  <span className="inline-block text-[10px] px-1.5 py-0.5 mr-1.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-800 align-middle">Circle App Kits</span>
-                  The backstop and insurance fund are funded through Circle Wallets and Gateway on <span className="text-gray-300">Arc Testnet</span> — switch networks to see the receipts. On {dep.name} these pools are seeded directly.
+                  <span className="inline-block text-[10px] px-1.5 py-0.5 mr-1.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-800 align-middle">Treasury Workflow</span>
+                  The backstop and insurance fund are funded through Circle Wallets and Gateway on <span className="text-gray-300">Arc Testnet</span> — Circle custodies the signer, so <span className="text-gray-300">no treasury private key lives in the repo</span>. Switch networks to see the receipts. On {dep.name} these pools are seeded directly.
                 </div>
               </div>
             )}
