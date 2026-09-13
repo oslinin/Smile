@@ -68,8 +68,15 @@
   .toc a { display: block; color: #6b7280; font-size: 0.78rem; line-height: 1.35; padding: 4px 10px; text-decoration: none; border-radius: 4px; }
   .toc a:hover { color: #d1d5db; background: #111827; }
   .toc a.current { color: #93c5fd; }
-  .toc a.sub { padding-left: 22px; font-size: 0.72rem; color: #4b5563; }
+  .toc a.sub { padding-left: 26px; font-size: 0.72rem; color: #4b5563; }
   .toc a.sub:hover, .toc a.sub.current { color: #93c5fd; }
+  .toc-row { display: flex; align-items: stretch; }
+  .toc-row > a { flex: 1; min-width: 0; }
+  .toc-caret { flex: 0 0 auto; width: 22px; border: none; background: none; color: #6b7280; cursor: pointer; font-size: 0.7rem; line-height: 1; padding: 0; border-radius: 4px; }
+  .toc-caret:hover { color: #d1d5db; background: #111827; }
+  .toc-caret::before { content: "\25B8"; display: inline-block; transition: transform 0.12s; }
+  .toc-caret[aria-expanded="true"]::before { transform: rotate(90deg); }
+  .toc-children[hidden] { display: none; }
   .content { flex: 1; min-width: 0; }
   .page { display: none; }
   .page.active { display: block; }
@@ -6787,6 +6794,8 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
     // heading's own id. Pages without addressable h2s get no TOC.
     function buildToc(id, section, anchor) {
       document.querySelectorAll(".toc").forEach(function (el) { el.remove(); });
+      // Flat list of {id, text, sub}, then grouped so each h3 nests under the
+      // preceding h2 as a collapsible child (default closed).
       var items = [];
       section.querySelectorAll("h2, h3").forEach(function (h) {
         // marked wraps a bare <a id> line in a <p>: <p><a id="tab-margin"></a></p><h2>Margin</h2>
@@ -6796,15 +6805,39 @@ export async function readTape(opts: TapeOpts): Promise&lt;Tape&gt; {
         if (target) items.push({ id: target, text: h.textContent.trim(), sub: h.tagName === "H3" });
       });
       if (items.length < 2) return;
+      var groups = [];
+      items.forEach(function (it) {
+        if (!it.sub || groups.length === 0) groups.push({ head: it, children: [] });
+        else groups[groups.length - 1].children.push(it);
+      });
       var toc = document.createElement("div");
       toc.className = "toc";
-      items.forEach(function (it) {
+      function mkLink(it) {
         var a = document.createElement("a");
         a.href = "#" + id + "/" + it.id;
         a.textContent = it.text;
         a.className = (it.sub ? "sub" : "") + (it.id === anchor ? " current" : "");
         a.addEventListener("click", function (e) { e.preventDefault(); showPage(id, it.id); });
-        toc.appendChild(a);
+        return a;
+      }
+      groups.forEach(function (g) {
+        if (g.children.length === 0) { toc.appendChild(mkLink(g.head)); return; }
+        var openHere = g.children.some(function (c) { return c.id === anchor; });
+        var row = document.createElement("div"); row.className = "toc-row";
+        var caret = document.createElement("button");
+        caret.className = "toc-caret"; caret.type = "button";
+        caret.setAttribute("aria-expanded", openHere ? "true" : "false");
+        caret.setAttribute("aria-label", "Toggle " + g.head.text + " subsections");
+        row.appendChild(caret); row.appendChild(mkLink(g.head));
+        toc.appendChild(row);
+        var kids = document.createElement("div"); kids.className = "toc-children"; kids.hidden = !openHere;
+        g.children.forEach(function (c) { kids.appendChild(mkLink(c)); });
+        toc.appendChild(kids);
+        caret.addEventListener("click", function () {
+          var open = caret.getAttribute("aria-expanded") === "true";
+          caret.setAttribute("aria-expanded", open ? "false" : "true");
+          kids.hidden = open;
+        });
       });
       var link = document.querySelector('.nav-link[data-page="' + id + '"]');
       link.insertAdjacentElement("afterend", toc);
